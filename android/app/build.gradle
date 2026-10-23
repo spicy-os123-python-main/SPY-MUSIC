@@ -23,7 +23,8 @@ if (flutterVersionName == null) {
 }
 
 android {
-    compileSdkVersion flutter.compileSdkVersion
+    compileSdk 36
+    compileSdkVersion 36
     //ndkVersion flutter.ndkVersion
     ndkVersion = "26.1.10909125"
 

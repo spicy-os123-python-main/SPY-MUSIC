@@ -35,6 +35,21 @@ jobs:
       - name: Get Flutter Packages
         run: flutter pub get
 
+      - name: Patch media_kit_video for Flutter compatibility
+        run: |
+          python3 -c "
+          import glob
+          files = glob.glob('/home/runner/.pub-cache/hosted/pub.dev/media_kit_video-*/android/src/main/java/com/alexmercerind/media_kit_video/VideoOutput.java')
+          for f in files:
+              with open(f, 'r') as fp:
+                  content = fp.read()
+              content = content.replace('@Override\n    public void onSurfaceAvailable()', 'public void onSurfaceCreated() { onSurfaceAvailable(); }\n    public void onSurfaceDestroyed() { onSurfaceCleanup(); }\n    public void onSurfaceAvailable()')
+              content = content.replace('@Override\n    public void onSurfaceCleanup()', 'public void onSurfaceCleanup()')
+              with open(f, 'w') as fp:
+                  fp.write(content)
+              print('Successfully patched', f)
+          "
+
       - name: Build Android APK (Release)
         run: |
           flutter build apk --release
