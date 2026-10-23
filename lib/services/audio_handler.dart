@@ -14,6 +14,8 @@ import 'package:audio_service/audio_service.dart';
 // ignore: depend_on_referenced_packages
 import 'package:rxdart/rxdart.dart';
 
+import 'soundcloud_service.dart';
+import 'platform_search_service.dart';
 import '/models/album.dart';
 import '../models/playlist.dart';
 import '/services/equalizer.dart';
@@ -289,6 +291,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   AudioSource _createAudioSource(MediaItem mediaItem) {
     final url = mediaItem.extras!['url'] as String;
+    if (mediaItem.id.startsWith("sc_") ||
+        (mediaItem.extras?['isSoundCloud'] == true) ||
+        url.contains('.m3u8') ||
+        url.contains('soundcloud.cloud')) {
+      printINFO("Playing SoundCloud Track via AudioSource.uri");
+      isPlayingUsingLockCachingSource = false;
+      return AudioSource.uri(
+        Uri.parse(url),
+        tag: mediaItem,
+      );
+    }
     if (url.contains('/cache') ||
         (Get.find<SettingsScreenController>().cacheSongs.isTrue &&
             url.contains("http"))) {
@@ -787,6 +800,49 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   Future<HMStreamingData> checkNGetUrl(String songId,
       {bool generateNewUrl = false, bool offlineReplacementUrl = false}) async {
     printINFO("Requested id : $songId");
+
+    // SoundCloud Native Song Handling
+    if (songId.startsWith("sc_")) {
+      printINFO("Resolving SoundCloud track: $songId");
+      final targetSong =
+          queue.value.firstWhereOrNull((item) => item.id == songId);
+      final transcodingUrl = targetSong?.extras?['transcodingUrl'] as String?;
+      final scStreamUrl = await SoundCloudService.resolveStreamUrl(songId,
+          transcodingUrl: transcodingUrl);
+
+      if (scStreamUrl != null && scStreamUrl.isNotEmpty) {
+        final audio = Audio(
+          audioCodec: Codec.mp4a,
+          bitrate: 160000,
+          loudnessDb: 0,
+          duration: targetSong?.duration?.inMilliseconds ?? 0,
+          size: 0,
+          url: scStreamUrl,
+          itag: 140,
+        );
+        return HMStreamingData(
+          playable: true,
+          statusMSG: "OK",
+          lowQualityAudio: audio,
+          highQualityAudio: audio,
+        );
+      }
+    }
+
+    // Spotify or Amazon Native Track Stream Matching
+    if (songId.startsWith("sp_") || songId.startsWith("az_")) {
+      printINFO("Resolving Spotify/Amazon track stream for: $songId");
+      final targetSong =
+          queue.value.firstWhereOrNull((item) => item.id == songId);
+      final query = (targetSong?.extras?['searchQuery'] as String?) ??
+          '${targetSong?.title} ${targetSong?.artist}';
+      final matchedId =
+          await PlatformSearchService.resolveMatchedStreamId(songId, query);
+      if (matchedId != null && matchedId.isNotEmpty) {
+        return checkNGetUrl(matchedId, generateNewUrl: generateNewUrl);
+      }
+    }
+
     final songDownloadsBox = Hive.box("SongDownloads");
     if (!offlineReplacementUrl &&
         (await Hive.openBox("SongsCache")).containsKey(songId)) {
@@ -851,7 +907,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     } else {
       //check if song stream url is cached and allocate url accordingly
       final songsUrlCacheBox = Hive.box("SongsUrlCache");
-      final qualityIndex = Hive.box('AppPrefs').get('streamingQuality') ?? 1;
+      final dataSaverMode =
+          Hive.box('AppPrefs').get('dataSaverMode', defaultValue: 0) as int;
+      final qualityIndex = dataSaverMode.clamp(0, 2);
       HMStreamingData? streamInfo;
       if (songsUrlCacheBox.containsKey(songId) && !generateNewUrl) {
         final streamInfoJson = songsUrlCacheBox.get(songId);
@@ -870,7 +928,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         if (streamInfo.playable) songsUrlCacheBox.put(songId, streamInfoJson);
       }
 
-      streamInfo.setQualityIndex(qualityIndex as int);
+      streamInfo.setQualityIndex(qualityIndex);
       return streamInfo;
     }
   }

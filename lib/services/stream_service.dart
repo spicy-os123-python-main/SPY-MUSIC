@@ -63,6 +63,25 @@ class StreamProvider {
     }
   }
 
+  static Future<String?> getVideoUrl(String videoId) async {
+    final yt = YoutubeExplode();
+    try {
+      final manifest = await yt.videos.streamsClient.getManifest(videoId);
+      final muxed = manifest.muxed;
+      if (muxed.isNotEmpty) {
+        return muxed.withHighestBitrate().url.toString();
+      }
+      final videoOnly = manifest.videoOnly;
+      if (videoOnly.isNotEmpty) {
+        return videoOnly.withHighestBitrate().url.toString();
+      }
+    } catch (_) {
+    } finally {
+      yt.close();
+    }
+    return null;
+  }
+
   Audio? get highestQualityAudio =>
       audioFormats?.lastWhere((item) => item.itag == 251 || item.itag == 140,
           orElse: () => audioFormats!.first);
@@ -79,11 +98,16 @@ class StreamProvider {
       audioFormats?.lastWhere((item) => item.itag == 249 || item.itag == 139,
           orElse: () => audioFormats!.first);
 
+  Audio? get midQualityAudio => audioFormats?.lastWhere(
+      (item) => item.itag == 250 || item.itag == 140,
+      orElse: () => lowQualityAudio ?? audioFormats!.first);
+
   Map<String, dynamic> get hmStreamingData {
     return {
       "playable": playable,
       "statusMSG": statusMSG,
       "lowQualityAudio": lowQualityAudio?.toJson(),
+      "midQualityAudio": midQualityAudio?.toJson(),
       "highQualityAudio": highestQualityAudio?.toJson()
     };
   }

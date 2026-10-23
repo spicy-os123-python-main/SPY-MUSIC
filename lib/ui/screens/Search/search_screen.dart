@@ -34,9 +34,10 @@ class SearchScreen extends StatelessWidget {
                             icon: Icon(
                               Icons.arrow_back_ios_new,
                               color: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium!
-                                  .color,
+                                      .textTheme
+                                      .titleMedium
+                                      ?.color ??
+                                  Colors.white,
                             ),
                             onPressed: () {
                               Get.nestedKey(ScreenNavigationSetup.id)!
@@ -83,7 +84,9 @@ class SearchScreen extends StatelessWidget {
                       },
                       autofocus: settingsScreenController
                           .isBottomNavBarEnabled.isFalse,
-                      cursorColor: Theme.of(context).textTheme.bodySmall!.color,
+                      cursorColor:
+                          Theme.of(context).textTheme.bodySmall?.color ??
+                              Colors.white70,
                       decoration: InputDecoration(
                           contentPadding: const EdgeInsets.only(left: 5),
                           focusColor: Colors.white,

@@ -19,7 +19,7 @@ class DiscordService {
 
   void init() {
     try {
-      final box = Hive.box('appPrefs');
+      final box = Hive.box('AppPrefs');
       isEnabled = box.get('discordRpcEnabled', defaultValue: true);
       debugPrint('[SPY MUSIC Discord] Service initialized. Enabled: $isEnabled');
     } catch (e) {
@@ -30,7 +30,7 @@ class DiscordService {
   void toggleStatus(bool enable) {
     isEnabled = enable;
     try {
-      Hive.box('appPrefs').put('discordRpcEnabled', enable);
+      Hive.box('AppPrefs').put('discordRpcEnabled', enable);
     } catch (_) {}
     if (!enable) {
       clearPresence();

@@ -18,15 +18,31 @@ class LinkPiped extends StatelessWidget {
     return CommonDialog(
         child: Obx(() => Container(
               height: pipedLinkedController.selectedInst.value == "custom"
-                  ? 400
-                  : 365,
-              padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 30),
+                  ? 450
+                  : 415,
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "Piped".tr,
+                    "Piped (Optional)",
                     style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00D2FF).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFF00D2FF).withOpacity(0.2),
+                      ),
+                    ),
+                    child: const Text(
+                      "Hinweis: Ein Account ist rein optional. In SPY MUSIC werden alle Favoriten & Playlists automatisch lokal gespeichert – kein Login nötig!",
+                      style: TextStyle(fontSize: 11, color: Colors.white70),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 15.0, bottom: 10),

@@ -5,7 +5,7 @@ import 'package:get/get.dart';
 import '../screens/Search/search_result_screen_controller.dart';
 import '/models/album.dart';
 import '/models/artist.dart';
-// import '/models/playlist.dart';
+import '/models/playlist.dart';
 import '/ui/widgets/content_list_widget.dart';
 import 'separate_tab_item_widget.dart';
 
@@ -58,34 +58,63 @@ class ResultWidget extends StatelessWidget {
   List<Widget> generateWidgetList(
       SearchResultScreenController searchResScrController) {
     List<Widget> list = [];
-    for (dynamic item in searchResScrController.resultContent.entries) {
-      if (item.key == "Songs" || item.key == "Videos") {
-        list.add(SeparateTabItemWidget(
-          items: List<MediaItem>.from(item.value),
-          title: item.key,
-          isCompleteList: false,
-        ));
-      } else if (item.key == "Albums") {
+    final content = searchResScrController.resultContent;
+
+    // 1. Top Result Artists
+    if (content.containsKey("Artists") &&
+        content["Artists"] is List &&
+        (content["Artists"] as List).isNotEmpty) {
+      list.add(SeparateTabItemWidget(
+        items: List<Artist>.from(content["Artists"]),
+        title: "Artists",
+        isCompleteList: false,
+      ));
+    }
+
+    // 2. Songs
+    if (content.containsKey("Songs") &&
+        content["Songs"] is List &&
+        (content["Songs"] as List).isNotEmpty) {
+      list.add(SeparateTabItemWidget(
+        items: List<MediaItem>.from(content["Songs"]),
+        title: "Songs",
+        isCompleteList: false,
+      ));
+    }
+
+    // 3. Videos
+    if (content.containsKey("Videos") &&
+        content["Videos"] is List &&
+        (content["Videos"] as List).isNotEmpty) {
+      list.add(SeparateTabItemWidget(
+        items: List<MediaItem>.from(content["Videos"]),
+        title: "Videos",
+        isCompleteList: false,
+      ));
+    }
+
+    // 4. Albums
+    if (content.containsKey("Albums") &&
+        content["Albums"] is List &&
+        (content["Albums"] as List).isNotEmpty) {
+      list.add(ContentListWidget(
+        content: AlbumContent(
+            title: "Albums", albumList: List<Album>.from(content["Albums"])),
+        isHomeContent: false,
+      ));
+    }
+
+    // 5. Playlists (Community and Featured)
+    for (String key in ["Featured playlists", "Community playlists"]) {
+      if (content.containsKey(key) &&
+          content[key] is List &&
+          (content[key] as List).isNotEmpty) {
         list.add(ContentListWidget(
-          content: AlbumContent(
-              title: item.key, albumList: List<Album>.from(item.value)),
+          content: PlaylistContent(
+            title: key,
+            playlistList: List<Playlist>.from(content[key]),
+          ),
           isHomeContent: false,
-        ));
-      } 
-      // else if (item.key.contains("playlist")) {
-      //   list.add(ContentListWidget(
-      //     content: PlaylistContent(
-      //       title: item.key,
-      //       playlistList: List<Playlist>.from(item.value),
-      //     ),
-      //     isHomeContent: false,
-      //   ));
-      // } 
-      else if (item.key.contains("Artist")) {
-        list.add(SeparateTabItemWidget(
-          items: List<Artist>.from(item.value),
-          title: item.key,
-          isCompleteList: false,
         ));
       }
     }

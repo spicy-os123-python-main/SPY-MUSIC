@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '/ui/screens/Settings/settings_screen_controller.dart';
 import '/ui/widgets/piped_sync_widget.dart';
 import '../../widgets/create_playlist_dialog.dart';
+import '../../widgets/import_playlist_dialog.dart';
 import 'library.dart';
 
 class CombinedLibrary extends StatelessWidget {
@@ -25,12 +26,34 @@ class CombinedLibrary extends StatelessWidget {
                   padding: EdgeInsets.only(right: 10, top: 50))
               : const SizedBox.shrink()),
           Padding(
+            padding: const EdgeInsets.only(top: 50.0, right: 10),
+            child: SizedBox(
+              height: 40,
+              width: 50,
+              child: FittedBox(
+                child: FloatingActionButton(
+                    heroTag: 'importPlaylistBtn',
+                    elevation: 0,
+                    tooltip: 'Playlist importieren',
+                    backgroundColor: const Color(0xFF00D2FF),
+                    onPressed: () {
+                      showDialog(
+                          context: context,
+                          builder: (context) =>
+                              const ImportPlaylistDialog());
+                    },
+                    child: const Icon(Icons.cloud_download_rounded, color: Colors.black)),
+              ),
+            ),
+          ),
+          Padding(
             padding: const EdgeInsets.only(top: 50.0, right: 25),
             child: SizedBox(
               height: 40,
               width: 50,
               child: FittedBox(
                 child: FloatingActionButton.extended(
+                    heroTag: 'createPlaylistBtn',
                     elevation: 0,
                     onPressed: () {
                       showDialog(

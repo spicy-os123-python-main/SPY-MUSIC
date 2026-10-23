@@ -14,6 +14,8 @@ import '/services/music_service.dart';
 import '../Settings/settings_screen_controller.dart';
 import '/ui/widgets/new_version_dialog.dart';
 import '../../../models/music_source.dart';
+import '../../../services/soundcloud_service.dart';
+import '../../../services/platform_search_service.dart';
 
 class HomeScreenController extends GetxController {
   final MusicServices _musicServices = Get.find<MusicServices>();
@@ -44,37 +46,58 @@ class HomeScreenController extends GetxController {
 
     isContentFetched.value = false;
     try {
+      if (source == MusicSource.soundcloud) {
+        final scTracks = await SoundCloudService().getTrendingTracks(limit: 25);
+        if (scTracks.isNotEmpty) {
+          quickPicks.value =
+              QuickPicks(scTracks, title: "☁️ SoundCloud Viral & Remixes");
+          middleContent.clear();
+          fixedContent.clear();
+          return;
+        }
+      } else if (source == MusicSource.spotify) {
+        final spTracks =
+            await PlatformSearchService.getSpotifyTopHits(limit: 25);
+        if (spTracks.isNotEmpty) {
+          quickPicks.value =
+              QuickPicks(spTracks, title: "🟢 Spotify Top 50 Hits");
+          middleContent.clear();
+          fixedContent.clear();
+          return;
+        }
+      } else if (source == MusicSource.amazon) {
+        final azTracks =
+            await PlatformSearchService.getAmazonTopTracks(limit: 25);
+        if (azTracks.isNotEmpty) {
+          quickPicks.value =
+              QuickPicks(azTracks, title: "🔵 Amazon Music Top Hits");
+          middleContent.clear();
+          fixedContent.clear();
+          return;
+        }
+      }
+
       String query = "";
       String displayTitle = "";
       switch (source) {
-        case MusicSource.spotify:
-          query = "Spotify Top 50 Hits";
-          displayTitle = "🟢 Spotify Top Hits";
-          break;
-        case MusicSource.soundcloud:
-          query = "SoundCloud Trending Remixes";
-          displayTitle = "🟠 SoundCloud Viral & Remixes";
-          break;
-        case MusicSource.amazon:
-          query = "Amazon Music Best of 2024";
-          displayTitle = "🔵 Amazon Music Top Tracks";
-          break;
         case MusicSource.youtube:
           query = "YouTube Music Trending";
           displayTitle = "🔴 YouTube Trending Music";
           break;
-        case MusicSource.all:
+        default:
           break;
       }
 
       final results =
           await _musicServices.search(query, filter: "songs", limit: 25);
-      if (results.containsKey("Songs") &&
-          (results["Songs"] as List).isNotEmpty) {
-        final songList = List<MediaItem>.from(results["Songs"]);
-        quickPicks.value = QuickPicks(songList, title: displayTitle);
-        middleContent.clear();
-        fixedContent.clear();
+      final rawSongs = (results["Songs"] as List?) ?? (results["mixed"] as List?);
+      if (rawSongs != null && rawSongs.isNotEmpty) {
+        final songList = List<MediaItem>.from(rawSongs.whereType<MediaItem>());
+        if (songList.isNotEmpty) {
+          quickPicks.value = QuickPicks(songList, title: displayTitle);
+          middleContent.clear();
+          fixedContent.clear();
+        }
       }
     } catch (e) {
       printERROR("Platform filter error: $e");

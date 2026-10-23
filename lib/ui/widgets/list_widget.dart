@@ -35,7 +35,8 @@ class ListWidget extends StatelessWidget with RemoveSongFromPlaylistMixin {
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
+    final List<dynamic> safeItems = items;
+    if (safeItems.isEmpty) {
       return Expanded(
         child: Center(
           child: Text(
@@ -47,7 +48,7 @@ class ListWidget extends StatelessWidget with RemoveSongFromPlaylistMixin {
     } else if (title == "Videos" || title.contains("Songs")) {
       return isCompleteList
           ? Expanded(
-              child: listViewSongVid(items,
+              child: listViewSongVid(safeItems,
                   isPlaylistOrAlbum: isPlaylistOrAlbum,
                   playlist: playlist,
                   album: album,
@@ -55,19 +56,19 @@ class ListWidget extends StatelessWidget with RemoveSongFromPlaylistMixin {
                   sc: scrollController,
                   isArtistSongs: isArtistSongs))
           : SizedBox(
-              height: items.length * 75.0,
-              child: listViewSongVid(items),
+              height: safeItems.length * 75.0,
+              child: listViewSongVid(safeItems),
             );
     } else if (title.contains("playlists")) {
-      return listViewPlaylists(items, sc: scrollController);
+      return listViewPlaylists(safeItems, sc: scrollController);
     } else if (title == "Albums" || title == "Singles") {
-      return listViewAlbums(items, sc: scrollController);
+      return listViewAlbums(safeItems, sc: scrollController);
     } else if (title.contains('Artists')) {
       return isCompleteList
-          ? Expanded(child: listViewArtists(items, sc: scrollController))
+          ? Expanded(child: listViewArtists(safeItems, sc: scrollController))
           : SizedBox(
-              height: items.length * 95.0,
-              child: listViewArtists(items),
+              height: safeItems.length * 95.0,
+              child: listViewArtists(safeItems),
             );
     }
     return const SizedBox.shrink();
@@ -96,23 +97,27 @@ class ListWidget extends StatelessWidget with RemoveSongFromPlaylistMixin {
       itemBuilder: (context, index) => SongListTile(
         song: items[index] as MediaItem,
         onTap: () {
-          isArtistSongs
-              // if song is from artist then play from artist
-              ? playerController.playPlayListSong(
-                  List<MediaItem>.from(items), index,
-                  playfrom: PlaylingFrom(
-                      type: PlaylingFromType.ARTIST,
-                      name: artist?.name ?? "........."))
-              :
-              // if playlist is not null then play from playlist else play from album
-              playlist != null && album == null
-                  ? playerController.playPlayListSong(
-                      List<MediaItem>.from(items), index,
-                      playfrom: PlaylingFrom(
-                        type: PlaylingFromType.PLAYLIST,
-                        name: playlist.title,
-                      ))
-                  : playerController.pushSongToQueue(items[index] as MediaItem);
+          if (title == "Videos") {
+            playerController.pushSongToQueue(items[index] as MediaItem);
+            playerController.startVideoForSong(items[index] as MediaItem);
+          } else if (isArtistSongs) {
+            // if song is from artist then play from artist
+            playerController.playPlayListSong(
+                List<MediaItem>.from(items), index,
+                playfrom: PlaylingFrom(
+                    type: PlaylingFromType.ARTIST,
+                    name: artist?.name ?? "........."));
+          } else if (playlist != null && album == null) {
+            // if playlist is not null then play from playlist else play from album
+            playerController.playPlayListSong(
+                List<MediaItem>.from(items), index,
+                playfrom: PlaylingFrom(
+                  type: PlaylingFromType.PLAYLIST,
+                  name: playlist.title,
+                ));
+          } else {
+            playerController.pushSongToQueue(items[index] as MediaItem);
+          }
         },
       ),
     );

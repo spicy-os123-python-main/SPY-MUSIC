@@ -100,7 +100,7 @@ class SeparateTabItemWidget extends StatelessWidget {
                   ? GetX<SearchResultScreenController>(builder: (controller) {
                       if (controller.isSeparatedResultContentFetced.isTrue) {
                         return ListWidget(
-                          controller.separatedResultContent[title],
+                          controller.separatedResultContent[title] ?? [],
                           title,
                           isCompleteList,
                           scrollController: scrollController,

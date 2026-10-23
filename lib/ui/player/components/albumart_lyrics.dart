@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '/ui/player/components/lyrics_widget.dart';
 import '/ui/player/player_controller.dart';
+import 'spy_video_player.dart';
 import '../../widgets/image_widget.dart';
 import '../../widgets/sleep_timer_bottom_sheet.dart';
 import '../../widgets/songinfo_bottom_sheet.dart';
@@ -16,8 +17,14 @@ class AlbumArtNLyrics extends StatelessWidget {
     final PlayerController playerController = Get.find<PlayerController>();
     //final size = MediaQuery.of(context).size;
     //double playerArtImageSize = size.width - ((size.height < 750) ? 90 : 60);
-    return Obx(() => playerController.currentSong.value != null
-        ? Stack(
+    return Obx(() {
+      if (playerController.currentSong.value == null) {
+        return const SizedBox.shrink();
+      }
+      if (playerController.isVideoMode.isTrue) {
+        return SpyVideoPlayer(size: playerArtImageSize);
+      }
+      return Stack(
             children: [
               GestureDetector(
                 onLongPress: () {
@@ -145,7 +152,7 @@ class AlbumArtNLyrics extends StatelessWidget {
                   ),
                 )
             ],
-          )
-        : Container());
+          );
+    });
   }
 }

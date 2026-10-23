@@ -11,7 +11,7 @@ class SpyMusicHeaderWidget extends StatelessWidget {
     final playerController = Get.find<PlayerController>();
 
     return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 4, right: 16),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,

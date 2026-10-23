@@ -20,6 +20,12 @@ import '../Home/home_screen_controller.dart';
 import '/ui/utils/theme_controller.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+enum DataSaverMode {
+  normal,
+  mid,
+  ultra,
+}
+
 class SettingsScreenController extends GetxController {
   late String _supportDir;
   final cacheSongs = false.obs;
@@ -29,6 +35,7 @@ class SettingsScreenController extends GetxController {
   final loudnessNormalizationEnabled = false.obs;
   final noOfHomeScreenContent = 3.obs;
   final streamingQuality = AudioQuality.High.obs;
+  final dataSaverMode = DataSaverMode.normal.obs;
   final playerUi = 0.obs;
   final slidableActionEnabled = true.obs;
   final isIgnoringBatteryOptimizations = false.obs;
@@ -103,8 +110,11 @@ class SettingsScreenController extends GetxController {
     restorePlaybackSession.value =
         setBox.get("restrorePlaybackSession") ?? false;
     cacheHomeScreenData.value = setBox.get("cacheHomeScreenData") ?? true;
+    final savedDataSaver = setBox.get('dataSaverMode') ?? 0;
+    dataSaverMode.value =
+        DataSaverMode.values[(savedDataSaver as int).clamp(0, 2)];
     streamingQuality.value =
-        AudioQuality.values[setBox.get('streamingQuality')];
+        AudioQuality.values[setBox.get('streamingQuality') ?? 1];
     playerUi.value = isDesktop ? 0 : (setBox.get('playerUi') ?? 0);
     backgroundPlayEnabled.value = setBox.get("backgroundPlayEnabled") ?? true;
     keepScreenAwake.value =
@@ -145,6 +155,18 @@ class SettingsScreenController extends GetxController {
   void setContentNumber(int? no) {
     noOfHomeScreenContent.value = no!;
     setBox.put("noOfHomeScreenContent", no);
+  }
+
+  void setDataSaverMode(DataSaverMode mode) {
+    dataSaverMode.value = mode;
+    setBox.put('dataSaverMode', mode.index);
+    if (mode == DataSaverMode.ultra) {
+      setBox.put('streamingQuality', 0);
+      streamingQuality.value = AudioQuality.Low;
+    } else {
+      setBox.put('streamingQuality', 1);
+      streamingQuality.value = AudioQuality.High;
+    }
   }
 
   void setStreamingQuality(dynamic val) {

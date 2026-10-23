@@ -20,6 +20,9 @@ import '../screens/Home/home_screen_controller.dart';
 import '../widgets/sliding_up_panel.dart';
 import '/models/durationstate.dart';
 import '/services/music_service.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
+import '../../services/stream_service.dart';
 
 class PlayerController extends GetxController
     with GetSingleTickerProviderStateMixin {
@@ -60,6 +63,13 @@ class PlayerController extends GetxController
   final currentSong = Rxn<MediaItem>();
   final isCurrentSongFav = false.obs;
   final playinfrom = PlaylingFrom(type: PlaylingFromType.SELECTION).obs;
+
+  // Video Mode State
+  final isVideoMode = false.obs;
+  final isVideoLoading = false.obs;
+  final currentVideoUrl = "".obs;
+  Player? videoPlayer;
+  VideoController? videoController;
   final showLyricsflag = false.obs;
   final isLyricsLoading = false.obs;
   final lyricsMode = 0.obs;
@@ -271,6 +281,9 @@ class PlayerController extends GetxController
         showLyricsflag.value = false;
         if (isDesktopLyricsDialogOpen) {
           Navigator.pop(Get.context!);
+        }
+        if (isVideoMode.isTrue) {
+          startVideoForSong(mediaItem);
         }
 
         // reset player visible state when player is in gesture mode
@@ -561,16 +574,157 @@ class PlayerController extends GetxController
     isQueueReorderingInProcess.value = false;
   }
 
+  void initVideoPlayer() {
+    videoPlayer ??= Player();
+    videoController ??= VideoController(videoPlayer!);
+    videoPlayer!.stream.completed.listen((completed) {
+      if (completed && isVideoMode.isTrue) {
+        next();
+      }
+    });
+    videoPlayer!.stream.position.listen((pos) {
+      if (isVideoMode.isTrue) {
+        progressBarStatus.update((val) {
+          if (val != null) val.current = pos;
+        });
+      }
+    });
+    videoPlayer!.stream.duration.listen((dur) {
+      if (isVideoMode.isTrue && dur != Duration.zero) {
+        progressBarStatus.update((val) {
+          if (val != null) val.total = dur;
+        });
+      }
+    });
+    videoPlayer!.stream.playing.listen((playing) {
+      if (isVideoMode.isTrue) {
+        buttonState.value =
+            playing ? PlayButtonState.playing : PlayButtonState.paused;
+      }
+    });
+  }
+
+  Future<void> startVideoForSong(MediaItem song) async {
+    final dataSaver =
+        Hive.box('AppPrefs').get('dataSaverMode', defaultValue: 0);
+    if (dataSaver == 2) {
+      if (Get.context != null) {
+        ScaffoldMessenger.of(Get.context!).showSnackBar(
+          snackbar(Get.context!,
+              "🛡️ Ultra-Datensparmodus aktiv: Video deaktiviert.",
+              size: SanckBarSize.MEDIUM),
+        );
+      }
+      return;
+    }
+    isVideoMode.value = true;
+    isVideoLoading.value = true;
+    initVideoPlayer();
+    _audioHandler.pause();
+    try {
+      final vUrl = await StreamProvider.getVideoUrl(song.id);
+      if (vUrl != null && vUrl.isNotEmpty) {
+        currentVideoUrl.value = vUrl;
+        await videoPlayer!.open(Media(vUrl));
+      } else {
+        isVideoMode.value = false;
+        _audioHandler.play();
+        if (Get.context != null) {
+          ScaffoldMessenger.of(Get.context!).showSnackBar(
+            snackbar(Get.context!, "Kein Video für diesen Track verfügbar.",
+                size: SanckBarSize.MEDIUM),
+          );
+        }
+      }
+    } catch (e) {
+      printINFO("Error loading video: $e");
+      isVideoMode.value = false;
+      _audioHandler.play();
+    } finally {
+      isVideoLoading.value = false;
+    }
+  }
+
+  Future<void> toggleVideoMode() async {
+    if (currentSong.value == null) return;
+    if (isVideoMode.isTrue) {
+      // Turn Video OFF -> resume Audio
+      isVideoMode.value = false;
+      final pos = videoPlayer?.state.position ?? Duration.zero;
+      await videoPlayer?.pause();
+      seek(pos);
+      play();
+    } else {
+      final dataSaver =
+          Hive.box('AppPrefs').get('dataSaverMode', defaultValue: 0);
+      if (dataSaver == 2) {
+        if (Get.context != null) {
+          ScaffoldMessenger.of(Get.context!).showSnackBar(
+            snackbar(Get.context!,
+                "🛡️ Ultra-Datensparmodus aktiv: Video deaktiviert.",
+                size: SanckBarSize.MEDIUM),
+          );
+        }
+        return;
+      }
+      // Turn Video ON -> pause Audio, start Video at current audio position
+      isVideoMode.value = true;
+      isVideoLoading.value = true;
+      initVideoPlayer();
+      final pos = progressBarStatus.value.current;
+      _audioHandler.pause();
+      try {
+        final vUrl = await StreamProvider.getVideoUrl(currentSong.value!.id);
+        if (vUrl != null && vUrl.isNotEmpty) {
+          currentVideoUrl.value = vUrl;
+          await videoPlayer!.open(Media(vUrl, start: pos));
+        } else {
+          isVideoMode.value = false;
+          _audioHandler.play();
+          if (Get.context != null) {
+            ScaffoldMessenger.of(Get.context!).showSnackBar(
+              snackbar(Get.context!,
+                  "Kein Video-Stream für diesen Track verfügbar.",
+                  size: SanckBarSize.MEDIUM),
+            );
+          }
+        }
+      } catch (e) {
+        printINFO("Error toggling video: $e");
+        isVideoMode.value = false;
+        _audioHandler.play();
+      } finally {
+        isVideoLoading.value = false;
+      }
+    }
+  }
+
   void play() {
-    _audioHandler.play();
+    if (isVideoMode.isTrue && videoPlayer != null) {
+      videoPlayer!.play();
+      buttonState.value = PlayButtonState.playing;
+    } else {
+      _audioHandler.play();
+    }
   }
 
   void pause() {
-    _audioHandler.pause();
+    if (isVideoMode.isTrue && videoPlayer != null) {
+      videoPlayer!.pause();
+      buttonState.value = PlayButtonState.paused;
+    } else {
+      _audioHandler.pause();
+    }
   }
 
   void playPause() {
     if (initFlagForPlayer) return;
+    if (isVideoMode.isTrue && videoPlayer != null) {
+      videoPlayer!.playOrPause();
+      buttonState.value =
+          videoPlayer!.state.playing ? PlayButtonState.paused : PlayButtonState.playing;
+      return;
+    }
     _audioHandler.playbackState.value.playing ? pause() : play();
     // for gesture player
     if (Get.find<SettingsScreenController>().playerUi.value == 1) {
@@ -590,6 +744,9 @@ class PlayerController extends GetxController
   }
 
   void seek(Duration position) {
+    if (isVideoMode.isTrue && videoPlayer != null) {
+      videoPlayer!.seek(position);
+    }
     _audioHandler.seek(position);
   }
 
@@ -816,6 +973,7 @@ class PlayerController extends GetxController
 
   @override
   void dispose() {
+    videoPlayer?.dispose();
     _audioHandler.customAction('dispose');
     keyboardSubscription.cancel();
     scrollController.dispose();

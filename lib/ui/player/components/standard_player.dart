@@ -10,6 +10,7 @@ import 'albumart_lyrics.dart';
 import 'backgroud_image.dart';
 import 'lyrics_switch.dart';
 import 'player_control.dart';
+import 'player_mode_switch.dart';
 
 /// Standard player widget
 ///
@@ -100,8 +101,14 @@ class StandardPlayer extends StatelessWidget {
                         child: Padding(
                           padding: const EdgeInsets.only(top: 40),
                           child: Center(
-                            child: AlbumArtNLyrics(
-                              playerArtImageSize: size.width * .29,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const PlayerModeSwitch(),
+                                AlbumArtNLyrics(
+                                  playerArtImageSize: size.width * .29,
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -140,6 +147,7 @@ class StandardPlayer extends StatelessWidget {
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        const PlayerModeSwitch(),
                         const LyricsSwitch(),
                         ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 500),

@@ -143,20 +143,7 @@ class SettingsScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  ListTile(
-                    contentPadding: const EdgeInsets.only(left: 5, right: 10),
-                    title: const Text("Discord Status"),
-                    subtitle: Text("Song-Aktivität in Discord anzeigen (SPY MUSIC)",
-                        style: Theme.of(context).textTheme.bodyMedium),
-                    trailing: Obx(
-                      () => CustSwitch(
-                        value: settingsController.discordRpcEnabled.value,
-                        onChanged: (val) {
-                          settingsController.toggleDiscordRpc(val);
-                        },
-                      ),
-                    ),
-                  ),
+
                   if (!isDesktop)
                     ListTile(
                       contentPadding: const EdgeInsets.only(left: 5, right: 10),
@@ -216,6 +203,111 @@ class SettingsScreen extends StatelessWidget {
                                 settingsController.slidableActionEnabled.isTrue,
                             onChanged: settingsController.toggleSlidableAction),
                       )),
+                ],
+              ),
+              CustomExpansionTile(
+                title: "Discord Status (Rich Presence)",
+                icon: Icons.discord_rounded,
+                children: [
+                  Container(
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF101422),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFF5865F2).withOpacity(0.4),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF5865F2).withOpacity(0.12),
+                          blurRadius: 16,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF5865F2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.music_note_rounded,
+                                      color: Colors.white, size: 18),
+                                ),
+                                const SizedBox(width: 10),
+                                const Text(
+                                  "Discord Song-Aktivität",
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Obx(
+                              () => CustSwitch(
+                                value:
+                                    settingsController.discordRpcEnabled.value,
+                                onChanged: (val) {
+                                  settingsController.toggleDiscordRpc(val);
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          "Zeigt deinen Freunden in Discord in Echtzeit an, welchen Song du gerade auf SPY MUSIC hörst ('Listening to ... on SPY MUSIC').",
+                          style:
+                              TextStyle(fontSize: 12.5, color: Colors.white70),
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.black26,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white10),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.info_outline_rounded,
+                                  color: Color(0xFF5865F2), size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Obx(() {
+                                  final isEnabled = settingsController
+                                      .discordRpcEnabled.value;
+                                  return Text(
+                                    isEnabled
+                                        ? "Status: Aktiv • Sobald Discord auf deinem PC, Pi oder Vesktop läuft, wird dein Song übertragen."
+                                        : "Status: Deaktiviert",
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: isEnabled
+                                          ? const Color(0xFF5865F2)
+                                          : Colors.white38,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
               CustomExpansionTile(

@@ -34,35 +34,51 @@ class ScreenNavigation extends StatelessWidget {
         onGenerateRoute: (settings) {
           Get.routing.args = settings.arguments;
           switch (settings.name) {
-
             case ScreenNavigationSetup.homeScreen:
               return GetPageRoute(
-                  page: () => const HomeScreen(), settings: settings);
-            
+                  page: () => const HomeScreen(),
+                  transition: Transition.fadeIn,
+                  transitionDuration: const Duration(milliseconds: 250),
+                  settings: settings);
+
             case ScreenNavigationSetup.albumScreen:
               final id = (settings.arguments as (Album?, String)).$2;
               return GetPageRoute(
                   page: () => AlbumScreen(
                         key: Key(id),
                       ),
+                  transition: Transition.rightToLeftWithFade,
+                  curve: Curves.easeOutCubic,
+                  transitionDuration: const Duration(milliseconds: 300),
                   settings: settings);
-            
+
             case ScreenNavigationSetup.playlistScreen:
-             final id = (settings.arguments as List)[1] as String;
+              final id = (settings.arguments as List)[1] as String;
               return GetPageRoute(
                   page: () => PlaylistScreen(
                         key: Key(id),
                       ),
+                  transition: Transition.rightToLeftWithFade,
+                  curve: Curves.easeOutCubic,
+                  transitionDuration: const Duration(milliseconds: 300),
                   settings: settings);
-            
+
             case ScreenNavigationSetup.searchScreen:
               return GetPageRoute(
-                  page: () => const SearchScreen(), settings: settings);
-            
+                  page: () => const SearchScreen(),
+                  transition: Transition.fadeIn,
+                  curve: Curves.easeOutCubic,
+                  transitionDuration: const Duration(milliseconds: 250),
+                  settings: settings);
+
             case ScreenNavigationSetup.searchResultScreen:
               return GetPageRoute(
-                  page: () => const SearchResultScreen(), settings: settings);
-            
+                  page: () => const SearchResultScreen(),
+                  transition: Transition.rightToLeftWithFade,
+                  curve: Curves.easeOutCubic,
+                  transitionDuration: const Duration(milliseconds: 300),
+                  settings: settings);
+
             case ScreenNavigationSetup.artistScreen:
               final args = settings.arguments as List;
               final id = args[0] ? args[1] : (args[1] as Artist).browseId;
@@ -70,6 +86,9 @@ class ScreenNavigation extends StatelessWidget {
                   page: () => ArtistScreen(
                         key: Key(id),
                       ),
+                  transition: Transition.rightToLeftWithFade,
+                  curve: Curves.easeOutCubic,
+                  transitionDuration: const Duration(milliseconds: 300),
                   settings: settings);
             
             default:

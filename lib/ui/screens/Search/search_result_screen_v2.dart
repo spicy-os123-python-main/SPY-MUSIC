@@ -83,7 +83,7 @@ class SearchResultScreenBN extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Padding(
-                            padding: const EdgeInsets.only(left: 15.0, top: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8),
                             child: ButtonsTabBar(
                               onTap:
                                   searchResScrController.onDestinationSelected,
@@ -92,9 +92,10 @@ class SearchResultScreenBN extends StatelessWidget {
                               contentPadding:
                                   const EdgeInsets.only(left: 15, right: 15),
                               backgroundColor: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.color!,
+                                      .textTheme
+                                      .titleMedium
+                                      ?.color ??
+                                  Colors.white,
                               unselectedBackgroundColor:
                                   Theme.of(context).colorScheme.secondary,
                               borderWidth: 0,
@@ -107,9 +108,10 @@ class SearchResultScreenBN extends StatelessWidget {
                               ),
                               unselectedLabelStyle: TextStyle(
                                 color: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
-                                    ?.color!,
+                                        .textTheme
+                                        .titleMedium
+                                        ?.color ??
+                                    Colors.white70,
                                 fontWeight: FontWeight.bold,
                               ),
                               // Add your tabs here
@@ -127,7 +129,7 @@ class SearchResultScreenBN extends StatelessWidget {
                           ),
                           Expanded(
                             child: Padding(
-                              padding: const EdgeInsets.only(left: 15.0),
+                              padding: const EdgeInsets.symmetric(horizontal: 14.0),
                               child: TabBarView(
                                 controller:
                                     searchResScrController.tabController,

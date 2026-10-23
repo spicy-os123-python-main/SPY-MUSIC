@@ -1,0 +1,4 @@
+#!/bin/bash
+cd /home/marlon/Desktop/spicysapp
+DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 ./build/linux/arm64/debug/bundle/harmonymusic
+

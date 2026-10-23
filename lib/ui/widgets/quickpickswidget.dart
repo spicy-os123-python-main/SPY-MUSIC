@@ -71,26 +71,40 @@ class QuickPicksWidget extends StatelessWidget {
                               () => Get.delete<SongInfoController>());
                         }
                       },
-                      child: ListTile(
-                          contentPadding: const EdgeInsets.only(left: 5),
-                          leading: ImageWidget(
-                            song: content.songList[item],
-                            size: 55,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF141829).withOpacity(0.45),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.07),
+                            width: 0.8,
                           ),
-                          title: Text(
-                            content.songList[item].title,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          subtitle: Text(
-                            "${content.songList[item].artist}",
-                            maxLines: 1,
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          onTap: () {
-                            playerController
-                                .pushSongToQueue(content.songList[item]);
-                          },
+                        ),
+                        child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 6),
+                            leading: ImageWidget(
+                              song: content.songList[item],
+                              size: 55,
+                            ),
+                            title: Text(
+                              content.songList[item].title,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                            subtitle: Text(
+                              "${content.songList[item].artist}",
+                              maxLines: 1,
+                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    color: Colors.white60,
+                                  ),
+                            ),
+                            onTap: () {
+                              playerController
+                                  .pushSongToQueue(content.songList[item]);
+                            },
                           onLongPress: () {
                             showModalBottomSheet(
                               constraints: const BoxConstraints(maxWidth: 500),
@@ -132,10 +146,12 @@ class QuickPicksWidget extends StatelessWidget {
                                   },
                                   icon: const Icon(Icons.more_vert))
                               : null),
-                    );
-                  }),
-            ),
-          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
           const SizedBox(height: 20)
         ],
       ),

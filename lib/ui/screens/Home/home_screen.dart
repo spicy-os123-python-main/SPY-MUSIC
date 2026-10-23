@@ -120,11 +120,11 @@ class Body extends StatelessWidget {
         : context.isLandscape
             ? 50.0
             : 16.0;
-    final leftPadding =
-        settingsScreenController.isBottomNavBarEnabled.isTrue ? 20.0 : 5.0;
+    final horizontalPadding =
+        settingsScreenController.isBottomNavBarEnabled.isTrue ? 14.0 : 8.0;
     if (homeScreenController.tabIndex.value == 0) {
       return Padding(
-        padding: EdgeInsets.only(left: leftPadding),
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
         child: Stack(
           children: [
             GestureDetector(

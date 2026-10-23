@@ -7,6 +7,8 @@ import 'package:get/get.dart' as getx;
 import 'package:hive/hive.dart';
 
 import '/models/album.dart';
+import '/models/artist.dart';
+import '/models/playlist.dart';
 import '/services/utils.dart';
 import '../utils/helper.dart';
 import 'constant.dart';
@@ -514,23 +516,58 @@ class MusicServices extends getx.GetxService {
   }
 
   Future<List<String>> getSearchSuggestion(String queryStr) async {
-    final data = Map.from(_context);
-    data['input'] = queryStr;
-    final res = nav(
-            (await _sendRequest("music/get_search_suggestions", data)).data,
-            ['contents', 0, 'searchSuggestionsSectionRenderer', 'contents']) ??
-        [];
-    return res
-        .map<String?>((item) {
-          return (nav(item, [
-            'searchSuggestionRenderer',
-            'navigationEndpoint',
-            'searchEndpoint',
-            'query'
-          ])).toString();
-        })
-        .whereType<String>()
-        .toList();
+    final Set<String> suggestions = {};
+    try {
+      final data = Map.from(_context);
+      data['input'] = queryStr;
+      final res = nav(
+              (await _sendRequest("music/get_search_suggestions", data)).data,
+              ['contents', 0, 'searchSuggestionsSectionRenderer', 'contents']) ??
+          [];
+      for (var item in res) {
+        final q = nav(item, [
+          'searchSuggestionRenderer',
+          'navigationEndpoint',
+          'searchEndpoint',
+          'query'
+        ])?.toString();
+        if (q != null && q.trim().isNotEmpty) {
+          suggestions.add(q.trim());
+        }
+      }
+    } catch (_) {}
+
+    // Universal broad suggestions
+    if (suggestions.length < 8) {
+      try {
+        final ytResp = await dio.get(
+          "https://suggestqueries-clients6.youtube.com/complete/search",
+          queryParameters: {
+            "client": "youtube",
+            "ds": "yt",
+            "q": queryStr,
+          },
+        );
+        final raw = ytResp.data.toString();
+        final jsonStart = raw.indexOf('[');
+        final jsonEnd = raw.lastIndexOf(']');
+        if (jsonStart != -1 && jsonEnd != -1) {
+          final parsed = jsonDecode(raw.substring(jsonStart, jsonEnd + 1));
+          if (parsed is List && parsed.length > 1 && parsed[1] is List) {
+            for (var item in parsed[1]) {
+              if (item is List && item.isNotEmpty) {
+                final text = item[0].toString().trim();
+                if (text.isNotEmpty) {
+                  suggestions.add(text);
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    return suggestions.toList();
   }
 
   ///Specially created for deep-links
@@ -654,46 +691,136 @@ class MusicServices extends getx.GetxService {
 
     results = nav(results, ['sectionListRenderer', 'contents']);
 
-    if (results.length == 1 && results[0]['itemSectionRenderer'] != null) {
+    if (results == null) {
       return searchResults;
     }
 
     String? type;
 
     for (var res in results) {
-      String category;
+      String category = "mixed";
+      List<dynamic> itemResults = [];
+      String? typeFilter = filter;
+
       if (res['musicShelfRenderer'] != null) {
-        dynamic itemResults = res['musicShelfRenderer']['contents'];
-        String? typeFilter = filter;
-        category = "mixed"; // Just a default value
-        final mixedItems = parseSearchResults(itemResults,
-            ['artist', 'playlist', 'song', 'video', 'station'], type, category);
-        if (filter == null) {
-          for (var item in mixedItems) {
-            final itemType = item.runtimeType == MediaItem
-                ? (item.artist.split(",")[0]) + "s"
-                : "${item.runtimeType}s";
-            if (searchResults.containsKey(itemType) &&
-                (searchResults[itemType]).length < 3) {
-              (searchResults[itemType] as List).add(item);
-            } else if (!searchResults.containsKey(itemType)) {
-              searchResults[itemType] = [item];
-            }
-          }
-        } else {
-          category = nav(res, ['musicShelfRenderer', ...title_text]);
-          searchResults[category] = parseSearchResults(
-              res['musicShelfRenderer']['contents'],
-              ['artist', 'playlist', 'song', 'video', 'station'],
-              type,
-              category);
+        itemResults = res['musicShelfRenderer']['contents'] ?? [];
+        if (filter != null) {
+          category = nav(res, ['musicShelfRenderer', ...title_text]) ?? "Songs";
         }
-        type = typeFilter?.substring(0, typeFilter.length - 1).toLowerCase();
-      } else {
+      } else if (res['itemSectionRenderer'] != null &&
+          res['itemSectionRenderer']['contents'] != null) {
+        itemResults = res['itemSectionRenderer']['contents'];
+        if (filter != null) {
+          category = "Songs";
+        }
+      } else if (res['musicCardShelfRenderer'] != null) {
+        final card = res['musicCardShelfRenderer'];
+        final cardTitle = nav(card, ['title', 'runs', 0, 'text'])?.toString() ?? "";
+        final cardSubtitle = nav(card, ['subtitle', 'runs']) != null
+            ? (card['subtitle']['runs'] as List).map((r) => r['text'] ?? '').join('')
+            : "";
+        final thumbs = nav(card, ['thumbnail', 'musicThumbnailRenderer', 'thumbnail', 'thumbnails']);
+        final cardThumbUrl = (thumbs != null && thumbs is List && thumbs.isNotEmpty)
+            ? thumbs.last['url']?.toString() ?? ""
+            : "";
+        final browseEndpoint = nav(card, ['onTap', 'browseEndpoint']);
+        final watchEndpoint = nav(card, ['onTap', 'watchEndpoint']);
+
+        if (browseEndpoint != null) {
+          final browseId = browseEndpoint['browseId']?.toString();
+          if (browseId != null && browseId.isNotEmpty) {
+            final artist = Artist(
+              name: cardTitle,
+              browseId: browseId,
+              thumbnailUrl: cardThumbUrl,
+              subscribers: cardSubtitle,
+            );
+            if (!searchResults.containsKey("Artists")) {
+              searchResults["Artists"] = [];
+            }
+            (searchResults["Artists"] as List).insert(0, artist);
+          }
+        } else if (watchEndpoint != null) {
+          final videoId = watchEndpoint['videoId']?.toString();
+          if (videoId != null && videoId.isNotEmpty) {
+            final song = MediaItem(
+              id: videoId,
+              title: cardTitle,
+              artist: cardSubtitle.contains('•')
+                  ? cardSubtitle.split('•')[1].trim()
+                  : cardSubtitle,
+              artUri: Uri.tryParse(cardThumbUrl),
+            );
+            if (!searchResults.containsKey("Songs")) {
+              searchResults["Songs"] = [];
+            }
+            (searchResults["Songs"] as List).insert(0, song);
+          }
+        }
+
+        if (card['contents'] != null && card['contents'] is List) {
+          itemResults = card['contents'];
+        }
+      }
+
+      if (itemResults.isEmpty) {
         continue;
       }
 
-      if (filter != null) {
+      final mixedItems = parseSearchResults(itemResults,
+          ['artist', 'playlist', 'song', 'video', 'station'], type, category);
+
+      if (filter == null) {
+        for (var item in mixedItems) {
+          if (item == null) continue;
+          String itemType;
+          if (item is MediaItem) {
+            itemType = "Songs";
+          } else if (item is Album) {
+            itemType = "Albums";
+          } else if (item is Playlist) {
+            itemType = "Community playlists";
+          } else if (item is Artist) {
+            itemType = "Artists";
+          } else {
+            itemType = "${item.runtimeType}s";
+          }
+          if (searchResults.containsKey(itemType)) {
+            (searchResults[itemType] as List).add(item);
+          } else {
+            searchResults[itemType] = [item];
+          }
+        }
+      } else {
+        String targetKey = category;
+        final fLower = filter.toLowerCase();
+        if (fLower == "songs") {
+          targetKey = "Songs";
+        } else if (fLower == "videos") {
+          targetKey = "Videos";
+        } else if (fLower == "albums") {
+          targetKey = "Albums";
+        } else if (fLower == "artists") {
+          targetKey = "Artists";
+        }
+
+        if (!searchResults.containsKey(targetKey)) {
+          searchResults[targetKey] = [];
+        }
+        (searchResults[targetKey] as List).addAll(mixedItems);
+        // Also alias into Songs if target was mixed and contains MediaItems
+        if (targetKey != "Songs" &&
+            mixedItems.isNotEmpty &&
+            mixedItems.first is MediaItem) {
+          if (!searchResults.containsKey("Songs")) {
+            searchResults["Songs"] = [];
+          }
+          (searchResults["Songs"] as List).addAll(mixedItems);
+        }
+      }
+      type = typeFilter?.substring(0, typeFilter.length - 1).toLowerCase();
+
+      if (filter != null && res['musicShelfRenderer'] != null) {
         requestFunc(additionalParams) async =>
             (await _sendRequest("search", data,
                     additionalParams: additionalParams))

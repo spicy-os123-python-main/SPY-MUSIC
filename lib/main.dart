@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +18,7 @@ import '/services/music_service.dart';
 import '/ui/home.dart';
 import '/ui/player/player_controller.dart';
 import 'ui/screens/Settings/settings_screen_controller.dart';
+import 'package:media_kit/media_kit.dart';
 import '/ui/utils/theme_controller.dart';
 import 'ui/screens/Home/home_screen_controller.dart';
 import 'ui/screens/Library/library_controller.dart';
@@ -25,6 +27,7 @@ import 'utils/update_check_flag_file.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   await initHive();
   _setAppInitPrefs();
   startApplicationServices();
@@ -33,6 +36,18 @@ Future<void> main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   TerminateRestart.instance.initialize();
   runApp(const MyApp());
+}
+
+class SpyScrollBehavior extends MaterialScrollBehavior {
+  const SpyScrollBehavior();
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.unknown,
+      };
 }
 
 class MyApp extends StatelessWidget {
@@ -45,8 +60,11 @@ class MyApp extends StatelessWidget {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     return GetMaterialApp(
         title: 'SPY MUSIC',
+        scrollBehavior: const SpyScrollBehavior(),
         home: const Home(),
         debugShowCheckedModeBanner: false,
+        defaultTransition: Transition.fadeIn,
+        transitionDuration: const Duration(milliseconds: 260),
         translations: Languages(),
         locale:
             Locale(Hive.box("AppPrefs").get('currentAppLanguageCode') ?? "en"),
@@ -126,6 +144,7 @@ void _setAppInitPrefs() {
       "cacheSongs": false,
       "skipSilenceEnabled": false,
       'streamingQuality': 1,
+      'dataSaverMode': 0,
       'themePrimaryColor': 4278199603,
       'discoverContentType': "QP",
       'newVersionVisibility': updateCheckFlag,
