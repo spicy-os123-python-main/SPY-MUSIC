@@ -50,3 +50,4 @@ flutter run -d linux
 ## 🎨 Branding
 - **Logo & Icons:** Zu finden unter `assets/logo/` (inklusive SVG-Vektor und 512x512 PNG).
 - **Package ID:** `com.spymusic.app`
+

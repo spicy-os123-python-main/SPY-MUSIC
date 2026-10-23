@@ -16,6 +16,8 @@ import '../../widgets/content_list_widget.dart';
 import '../../widgets/quickpickswidget.dart';
 import '../../widgets/shimmer_widgets/home_shimmer.dart';
 import 'home_screen_controller.dart';
+import '../../widgets/platform_selector_widget.dart';
+import '../../widgets/spy_music_header_widget.dart';
 import '../Settings/settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -198,6 +200,8 @@ class Body extends StatelessWidget {
                         final items = homeScreenController
                                 .isContentFetched.value
                             ? [
+                                const SpyMusicHeaderWidget(),
+                                const PlatformSelectorWidget(),
                                 Obx(() {
                                   final scrollController = ScrollController();
                                   homeScreenController.contentScrollControllers

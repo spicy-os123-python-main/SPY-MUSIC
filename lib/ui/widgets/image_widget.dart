@@ -59,7 +59,20 @@ class ImageWidget extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         shape: artist != null ? BoxShape.circle : BoxShape.rectangle,
-        borderRadius: artist != null ? null : BorderRadius.circular(5),
+        borderRadius: artist != null ? null : BorderRadius.circular(isPlayerArtImage ? 18 : 10),
+        boxShadow: isPlayerArtImage
+            ? [
+                BoxShadow(
+                  color: const Color(0xFFFF0055).withOpacity(0.45),
+                  blurRadius: 24,
+                  spreadRadius: 2,
+                ),
+                BoxShadow(
+                  color: const Color(0xFF00D2FF).withOpacity(0.35),
+                  blurRadius: 16,
+                ),
+              ]
+            : null,
       ),
       child: offlineAvailable
           ? Image.file(

@@ -33,7 +33,22 @@ class MiniPlayer extends StatelessWidget {
           child: Container(
             height: playerController.playerPanelMinHeight.value,
             width: size.width,
-            color: Theme.of(context).bottomSheetTheme.backgroundColor,
+            decoration: BoxDecoration(
+              color: const Color(0xEE0A0C16),
+              border: Border(
+                top: BorderSide(
+                  color: const Color(0xFFFF0055).withOpacity(0.45),
+                  width: 1.2,
+                ),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF0055).withOpacity(0.18),
+                  blurRadius: 14,
+                  offset: const Offset(0, -3),
+                ),
+              ],
+            ),
             child: Center(
               child: Column(
                 children: [

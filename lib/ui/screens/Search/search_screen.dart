@@ -6,6 +6,7 @@ import '/ui/screens/Settings/settings_screen_controller.dart';
 import '../../widgets/modified_text_field.dart';
 import '/ui/navigator.dart';
 import 'search_screen_controller.dart';
+import '../../widgets/platform_selector_widget.dart';
 
 class SearchScreen extends StatelessWidget {
   const SearchScreen({super.key});
@@ -94,6 +95,7 @@ class SearchScreen extends StatelessWidget {
                             iconSize: 19,
                           )),
                     ),
+                    const PlatformSelectorWidget(),
                     Expanded(
                       child: Obx(() {
                         final isEmpty = searchScreenController

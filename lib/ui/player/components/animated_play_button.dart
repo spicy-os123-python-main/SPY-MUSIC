@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:spymusic/ui/player/player_controller.dart';
-
 import '../../widgets/loader.dart';
 
-/// A button that animates between a play and pause icon.
-///
-/// It also shows a loading indicator when the audio is in a loading state.
+/// A button that animates between a play and pause icon with glowing neon fire pulse.
 class AnimatedPlayButton extends StatefulWidget {
-  /// size of the icon.
   final double iconSize;
 
   const AnimatedPlayButton({super.key, this.iconSize = 40.0});
@@ -20,7 +16,7 @@ class AnimatedPlayButton extends StatefulWidget {
 class _AnimatedPlayButtonState extends State<AnimatedPlayButton>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  
+
   @override
   void initState() {
     super.initState();
@@ -49,19 +45,38 @@ class _AnimatedPlayButtonState extends State<AnimatedPlayButton>
         _controller.reverse();
       }
 
-      return IconButton(
-        iconSize: widget.iconSize,
-        onPressed: () {
-          isPlaying ? controller.pause() : controller.play();
-        },
-        icon: isLoading
-            ? const LoadingIndicator(
-                dimension: 20,
-              )
-            : AnimatedIcon(
-                icon: AnimatedIcons.play_pause,
-                progress: _controller,
-              ),
+      return Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: isPlaying
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFFF0055).withOpacity(0.55),
+                    blurRadius: 16,
+                    spreadRadius: 2,
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFF00D2FF).withOpacity(0.35),
+                    blurRadius: 8,
+                  ),
+                ]
+              : [],
+        ),
+        child: IconButton(
+          iconSize: widget.iconSize,
+          onPressed: () {
+            isPlaying ? controller.pause() : controller.play();
+          },
+          icon: isLoading
+              ? const LoadingIndicator(
+                  dimension: 20,
+                )
+              : AnimatedIcon(
+                  icon: AnimatedIcons.play_pause,
+                  progress: _controller,
+                  color: isPlaying ? const Color(0xFF00D2FF) : Colors.white,
+                ),
+        ),
       );
     });
   }

@@ -22,7 +22,7 @@ class ThemeController extends GetxController {
         WidgetsBinding.instance.platformDispatcher.platformBrightness;
 
     primaryColor.value =
-        Color(Hive.box('appPrefs').get("themePrimaryColor") ?? 4278199603);
+        Color(Hive.box('appPrefs').get("themePrimaryColor") ?? 4294901845);
 
     changeThemeModeType(
         ThemeType.values[Hive.box('appPrefs').get("themeModeType") ?? 0]);
@@ -115,7 +115,7 @@ class ThemeController extends GetxController {
           primaryColorDark: primarySwatch[700],
           //secondaryHeaderColor: primarySwatch[50],
           canvasColor: primarySwatch[700],
-          //scaffoldBackgroundColor: primarySwatch[700],
+          scaffoldBackgroundColor: Colors.transparent,
           bottomSheetTheme: BottomSheetThemeData(
               backgroundColor: primarySwatch[600],
               modalBarrierColor: primarySwatch[400]),

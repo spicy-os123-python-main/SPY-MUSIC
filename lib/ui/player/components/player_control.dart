@@ -128,7 +128,30 @@ class PlayerControlWidget extends StatelessWidget {
                                 .withOpacity(0.2),
                       ))),
               _previousButton(playerController, context),
-              const CircleAvatar(radius: 35, child: AnimatedPlayButton(key: Key("playButton"),)),
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF00D2FF), Color(0xFFFF0055)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF0055).withOpacity(0.55),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFF00D2FF).withOpacity(0.4),
+                      blurRadius: 14,
+                    ),
+                  ],
+                ),
+                child: const CircleAvatar(
+                  radius: 35,
+                  backgroundColor: Colors.transparent,
+                  child: AnimatedPlayButton(key: Key("playButton")),
+                ),
+              ),
               _nextButton(playerController, context),
               Obx(() {
                 return IconButton(

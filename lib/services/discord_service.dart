@@ -59,3 +59,4 @@ class DiscordService {
     debugPrint('[SPY MUSIC Discord] Presence cleared');
   }
 }
+

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/material.dart';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:get/get.dart';
@@ -23,6 +24,11 @@ class DesktopSystemTray extends GetxService with TrayListener {
         : 'assets/icons/icon.png';
 
     await windowManager.ensureInitialized();
+    if (GetPlatform.isDesktop) {
+      await windowManager.setSize(const Size(412, 860));
+      await windowManager.setMinimumSize(const Size(380, 720));
+      await windowManager.setMaximumSize(const Size(480, 920));
+    }
     final playerController = Get.find<PlayerController>();
 
     await trayManager.setIcon(path);

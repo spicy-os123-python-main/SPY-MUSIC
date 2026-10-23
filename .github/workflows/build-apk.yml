@@ -57,3 +57,4 @@ jobs:
           files: output/*.apk
           name: "SPY MUSIC ${{ github.ref_name }}"
           generate_release_notes: true
+

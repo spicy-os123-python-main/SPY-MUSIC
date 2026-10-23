@@ -16,6 +16,7 @@ import 'widgets/scroll_to_hide.dart';
 import 'widgets/sliding_up_panel.dart';
 import 'widgets/snackbar.dart';
 import 'widgets/up_next_queue.dart';
+import 'widgets/glowing_fire_background.dart';
 
 class Home extends StatelessWidget {
   const Home({super.key});
@@ -186,7 +187,8 @@ class Home extends StatelessWidget {
                     )
                   : null,
               drawerScrimColor: Colors.transparent,
-              body: Obx(() => SlidingUpPanel(
+              body: GlowingFireBackground(
+                child: Obx(() => SlidingUpPanel(
                     onPanelSlide: playerController.panellistener,
                     controller: playerController.playerPanelController,
                     minHeight: playerController.playerPanelMinHeight.value,
@@ -204,8 +206,9 @@ class Home extends StatelessWidget {
                           )
                         : const MiniPlayer(),
                   ))),
+            ),
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
-}
