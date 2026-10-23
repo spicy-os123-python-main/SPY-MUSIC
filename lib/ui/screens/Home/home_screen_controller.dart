@@ -13,6 +13,7 @@ import '/models/quick_picks.dart';
 import '/services/music_service.dart';
 import '../Settings/settings_screen_controller.dart';
 import '/ui/widgets/new_version_dialog.dart';
+import '../../../models/music_source.dart';
 
 class HomeScreenController extends GetxController {
   final MusicServices _musicServices = Get.find<MusicServices>();
@@ -33,6 +34,53 @@ class HomeScreenController extends GetxController {
     super.onInit();
     loadContent();
     if (updateCheckFlag) _checkNewVersion();
+  }
+
+  Future<void> filterByPlatform(MusicSource source) async {
+    if (source == MusicSource.all) {
+      loadContentFromNetwork();
+      return;
+    }
+
+    isContentFetched.value = false;
+    try {
+      String query = "";
+      String displayTitle = "";
+      switch (source) {
+        case MusicSource.spotify:
+          query = "Spotify Top 50 Hits";
+          displayTitle = "🟢 Spotify Top Hits";
+          break;
+        case MusicSource.soundcloud:
+          query = "SoundCloud Trending Remixes";
+          displayTitle = "🟠 SoundCloud Viral & Remixes";
+          break;
+        case MusicSource.amazon:
+          query = "Amazon Music Best of 2024";
+          displayTitle = "🔵 Amazon Music Top Tracks";
+          break;
+        case MusicSource.youtube:
+          query = "YouTube Music Trending";
+          displayTitle = "🔴 YouTube Trending Music";
+          break;
+        case MusicSource.all:
+          break;
+      }
+
+      final results =
+          await _musicServices.search(query, filter: "songs", limit: 25);
+      if (results.containsKey("Songs") &&
+          (results["Songs"] as List).isNotEmpty) {
+        final songList = List<MediaItem>.from(results["Songs"]);
+        quickPicks.value = QuickPicks(songList, title: displayTitle);
+        middleContent.clear();
+        fixedContent.clear();
+      }
+    } catch (e) {
+      printERROR("Platform filter error: $e");
+    } finally {
+      isContentFetched.value = true;
+    }
   }
 
   Future<void> loadContent() async {

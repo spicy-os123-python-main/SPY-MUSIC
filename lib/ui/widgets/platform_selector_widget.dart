@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../models/music_source.dart';
+import '../screens/Home/home_screen_controller.dart';
 
 class PlatformSelectorController extends GetxController {
   final selectedSource = MusicSource.all.obs;
 
   void selectSource(MusicSource source) {
     selectedSource.value = source;
+    if (Get.isRegistered<HomeScreenController>()) {
+      Get.find<HomeScreenController>().filterByPlatform(source);
+    }
   }
 }
 

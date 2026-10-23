@@ -114,13 +114,12 @@ class Body extends StatelessWidget {
     final homeScreenController = Get.find<HomeScreenController>();
     final settingsScreenController = Get.find<SettingsScreenController>();
     final size = MediaQuery.of(context).size;
-    final topPadding = GetPlatform.isDesktop
+    final isWideScreen = size.width > 800;
+    final topPadding = isWideScreen
         ? 85.0
         : context.isLandscape
             ? 50.0
-            : size.height < 750
-                ? 80.0
-                : 85.0;
+            : 16.0;
     final leftPadding =
         settingsScreenController.isBottomNavBarEnabled.isTrue ? 20.0 : 5.0;
     if (homeScreenController.tabIndex.value == 0) {
@@ -228,7 +227,7 @@ class Body extends StatelessWidget {
                       }),
               ),
             ),
-            if (GetPlatform.isDesktop)
+            if (isWideScreen)
               Align(
                 alignment: Alignment.topCenter,
                 child: LayoutBuilder(builder: (context, constraints) {

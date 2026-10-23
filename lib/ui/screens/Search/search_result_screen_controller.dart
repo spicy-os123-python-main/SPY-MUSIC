@@ -6,6 +6,8 @@ import '../../../utils/helper.dart';
 import '../Home/home_screen_controller.dart';
 import '/services/music_service.dart';
 import '/ui/widgets/sort_widget.dart';
+import '../../widgets/platform_selector_widget.dart';
+import '../../../models/music_source.dart';
 
 class SearchResultScreenController extends GetxController
     with GetTickerProviderStateMixin {
@@ -96,7 +98,19 @@ class SearchResultScreenController extends GetxController
     final args = Get.arguments;
     if (args != null) {
       queryString.value = args;
-      resultContent.value = await musicServices.search(args);
+      String finalQuery = args;
+      if (Get.isRegistered<PlatformSelectorController>()) {
+        final source =
+            Get.find<PlatformSelectorController>().selectedSource.value;
+        if (source == MusicSource.spotify) {
+          finalQuery = "$args (Spotify)";
+        } else if (source == MusicSource.soundcloud) {
+          finalQuery = "$args (SoundCloud Remix)";
+        } else if (source == MusicSource.amazon) {
+          finalQuery = "$args (Amazon Music)";
+        }
+      }
+      resultContent.value = await musicServices.search(finalQuery);
       final allKeys = resultContent.keys.where((element) => ([
             "Songs",
             "Videos",
