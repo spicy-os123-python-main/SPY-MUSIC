@@ -73,6 +73,15 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       JustAudioMediaKit.title = 'SPY MUSIC';
       JustAudioMediaKit.protocolWhitelist = const ['http', 'https', 'file'];
     }
+    _mediaLibrary = MediaLibrary();
+    _player = AudioPlayer(
+        audioLoadConfiguration: const AudioLoadConfiguration(
+            androidLoadControl: AndroidLoadControl(
+      minBufferDuration: Duration(seconds: 50),
+      maxBufferDuration: Duration(seconds: 120),
+      bufferForPlaybackDuration: Duration(milliseconds: 50),
+      bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
+    )));
     mediaItem.listen((item) {
       if (item != null) {
         DiscordService().updatePresence(item, isPlaying: _player.playing);
@@ -83,15 +92,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         DiscordService().updatePresence(mediaItem.value, isPlaying: playerState.playing);
       }
     });
-    _mediaLibrary = MediaLibrary();
-    _player = AudioPlayer(
-        audioLoadConfiguration: const AudioLoadConfiguration(
-            androidLoadControl: AndroidLoadControl(
-      minBufferDuration: Duration(seconds: 50),
-      maxBufferDuration: Duration(seconds: 120),
-      bufferForPlaybackDuration: Duration(milliseconds: 50),
-      bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
-    )));
     _createCacheDir();
     _addEmptyList();
     _notifyAudioHandlerAboutPlaybackEvents();
