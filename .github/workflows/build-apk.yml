@@ -1,0 +1,62 @@
+name: Build SPY MUSIC APK
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    name: Build Android Release APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+          cache: true
+
+      - name: Get Flutter Packages
+        run: flutter pub get
+
+      - name: Build Android APK (Release)
+        run: |
+          flutter build apk --release
+
+      - name: Prepare APK Outputs
+        run: |
+          mkdir -p output
+          cp build/app/outputs/flutter-apk/app-release.apk output/SPY-MUSIC.apk || cp build/app/outputs/flutter-apk/*.apk output/ || true
+          ls -la output/
+
+      - name: Upload APK as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SPY-MUSIC-Android-APK
+          path: output/*.apk
+          retention-days: 30
+
+      - name: Attach APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        with:
+          tag_name: v1.0.0
+          files: output/*.apk
+          name: "SPY MUSIC v1.0.0 (Android APK)"
+          generate_release_notes: true
