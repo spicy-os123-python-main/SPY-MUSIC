@@ -49,16 +49,39 @@ class AlbumArtNLyrics extends StatelessWidget {
                 },
                 onHorizontalDragEnd: (DragEndDetails details) {
                   if (playerController.showLyricsflag.isTrue) return;
-                  if (details.primaryVelocity! < 0) {
+                  final v = details.primaryVelocity ?? 0;
+                  if (v < -120) {
                     playerController.next();
-                  } else if (details.primaryVelocity! > 0) {
+                  } else if (v > 120) {
                     playerController.prev();
                   }
                 },
-                child: ImageWidget(
-                  size: playerArtImageSize,
-                  song: playerController.currentSong.value!,
-                  isPlayerArtImage: true,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00D2FF).withOpacity(0.35),
+                        blurRadius: 26,
+                        spreadRadius: 1,
+                        offset: const Offset(-3, 6),
+                      ),
+                      BoxShadow(
+                        color: const Color(0xFFFF0055).withOpacity(0.30),
+                        blurRadius: 30,
+                        spreadRadius: 2,
+                        offset: const Offset(3, 10),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: ImageWidget(
+                      size: playerArtImageSize,
+                      song: playerController.currentSong.value!,
+                      isPlayerArtImage: true,
+                    ),
+                  ),
                 ),
               ),
               Obx(() => playerController.showLyricsflag.isTrue

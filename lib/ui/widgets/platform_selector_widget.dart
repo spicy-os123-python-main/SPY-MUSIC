@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../models/music_source.dart';
 import '../screens/Home/home_screen_controller.dart';
+import '../screens/Search/search_result_screen_controller.dart';
 
 class PlatformSelectorController extends GetxController {
   final selectedSource = MusicSource.all.obs;
@@ -10,6 +11,9 @@ class PlatformSelectorController extends GetxController {
     selectedSource.value = source;
     if (Get.isRegistered<HomeScreenController>()) {
       Get.find<HomeScreenController>().filterByPlatform(source);
+    }
+    if (Get.isRegistered<SearchResultScreenController>()) {
+      Get.find<SearchResultScreenController>().onPlatformChanged(source);
     }
   }
 }

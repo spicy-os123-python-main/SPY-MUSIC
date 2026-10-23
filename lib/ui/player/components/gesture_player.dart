@@ -24,9 +24,10 @@ class GesturePlayer extends StatelessWidget {
           /// Full screen Background image is acting as album art
           child: const BackgroudImage(),
           onHorizontalDragEnd: (DragEndDetails details) {
-            if (details.primaryVelocity! < 0) {
+            final v = details.primaryVelocity ?? 0;
+            if (v < -120) {
               playerController.next();
-            } else if (details.primaryVelocity! > 0) {
+            } else if (v > 120) {
               playerController.prev();
             }
           },

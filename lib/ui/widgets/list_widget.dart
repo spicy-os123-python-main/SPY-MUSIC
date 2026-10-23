@@ -37,14 +37,24 @@ class ListWidget extends StatelessWidget with RemoveSongFromPlaylistMixin {
   Widget build(BuildContext context) {
     final List<dynamic> safeItems = items;
     if (safeItems.isEmpty) {
-      return Expanded(
-        child: Center(
-          child: Text(
-            "No ${title.toLowerCase().tr}!",
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
-        ),
-      );
+      return isCompleteList
+          ? Expanded(
+              child: Center(
+                child: Text(
+                  "No ${title.toLowerCase().tr}!",
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            )
+          : SizedBox(
+              height: 100,
+              child: Center(
+                child: Text(
+                  "No ${title.toLowerCase().tr}!",
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            );
     } else if (title == "Videos" || title.contains("Songs")) {
       return isCompleteList
           ? Expanded(

@@ -13,6 +13,7 @@ import '../../widgets/sleep_timer_bottom_sheet.dart';
 import '../../widgets/song_download_btn.dart';
 import '../../widgets/image_widget.dart';
 import '../../widgets/mini_player_progress_bar.dart';
+import '../../widgets/mini_equalizer.dart';
 import 'animated_play_button.dart';
 
 class MiniPlayer extends StatelessWidget {
@@ -34,18 +35,23 @@ class MiniPlayer extends StatelessWidget {
             height: playerController.playerPanelMinHeight.value,
             width: size.width,
             decoration: BoxDecoration(
-              color: const Color(0xEE0A0C16),
+              color: const Color(0xF2080A14),
               border: Border(
                 top: BorderSide(
-                  color: const Color(0xFFFF0055).withOpacity(0.45),
+                  color: const Color(0xFF00D2FF).withOpacity(0.40),
                   width: 1.2,
                 ),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFFF0055).withOpacity(0.18),
-                  blurRadius: 14,
+                  color: const Color(0xFF00D2FF).withOpacity(0.18),
+                  blurRadius: 16,
                   offset: const Offset(0, -3),
+                ),
+                BoxShadow(
+                  color: const Color(0xFFFF0055).withOpacity(0.12),
+                  blurRadius: 20,
+                  offset: const Offset(0, -1),
                 ),
               ],
             ),
@@ -56,16 +62,11 @@ class MiniPlayer extends StatelessWidget {
                       ? GetX<PlayerController>(
                           builder: (controller) => Container(
                               height: 3,
-                              color: Theme.of(context)
-                                  .progressIndicatorTheme
-                                  .color,
+                              color: Colors.transparent,
                               child: MiniPlayerProgressBar(
                                   progressBarStatus:
                                       controller.progressBarStatus.value,
-                                  progressBarColor: Theme.of(context)
-                                          .progressIndicatorTheme
-                                          .linearTrackColor ??
-                                      Colors.white)),
+                                  progressBarColor: const Color(0xFF00D2FF))),
                         )
                       : GetX<PlayerController>(builder: (controller) {
                           return Padding(
@@ -100,7 +101,7 @@ class MiniPlayer extends StatelessWidget {
                         }),
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 17.0, vertical: 7),
+                        horizontal: 14.0, vertical: 7),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -109,9 +110,26 @@ class MiniPlayer extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.start,
                           children: [
                             playerController.currentSong.value != null
-                                ? ImageWidget(
-                                    size: 50,
-                                    song: playerController.currentSong.value!,
+                                ? Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(10),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF00D2FF)
+                                              .withOpacity(0.25),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: ImageWidget(
+                                        size: 50,
+                                        song: playerController
+                                            .currentSong.value!,
+                                      ),
+                                    ),
                                   )
                                 : const SizedBox(
                                     height: 50,
@@ -125,9 +143,10 @@ class MiniPlayer extends StatelessWidget {
                         Expanded(
                           child: GestureDetector(
                             onHorizontalDragEnd: (DragEndDetails details) {
-                              if (details.primaryVelocity! < 0) {
+                              final v = details.primaryVelocity ?? 0;
+                              if (v < -120) {
                                 playerController.next();
-                              } else if (details.primaryVelocity! > 0) {
+                              } else if (v > 120) {
                                 playerController.prev();
                               }
                             },
@@ -140,21 +159,36 @@ class MiniPlayer extends StatelessWidget {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  SizedBox(
-                                    height: 20,
-                                    child: Text(
-                                      playerController.currentSong.value != null
-                                          ? playerController
-                                              .currentSong.value!.title
-                                          : "",
-                                      maxLines: 1,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          playerController.currentSong.value != null
+                                              ? playerController
+                                                  .currentSong.value!.title
+                                              : "",
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Obx(() => MiniEqualizer(
+                                            isPlaying: playerController
+                                                    .buttonState.value ==
+                                                PlayButtonState.playing,
+                                            height: 11,
+                                          )),
+                                    ],
                                   ),
+                                  const SizedBox(height: 2),
                                   SizedBox(
-                                    height: 20,
+                                    height: 18,
                                     child: Marquee(
                                       id: "${playerController.currentSong.value}_mini",
                                       delay: const Duration(milliseconds: 300),
@@ -168,7 +202,10 @@ class MiniPlayer extends StatelessWidget {
                                         maxLines: 1,
                                         style: Theme.of(context)
                                             .textTheme
-                                            .titleSmall,
+                                            .titleSmall
+                                            ?.copyWith(
+                                              color: Colors.white60,
+                                            ),
                                       ),
                                     ),
                                   ),

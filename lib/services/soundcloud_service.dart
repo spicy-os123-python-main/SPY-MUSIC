@@ -64,7 +64,7 @@ class SoundCloudService {
   }
 
   /// Search tracks on SoundCloud
-  Future<List<MediaItem>> searchTracks(String query, {int limit = 25}) async {
+  Future<List<MediaItem>> searchTracks(String query, {int limit = 25, bool isRetry = false}) async {
     try {
       final cid = await getClientId();
       final url =
@@ -147,8 +147,6 @@ class SoundCloudService {
           bestTranscodingUrl = transcodings.first['url']?.toString();
         }
 
-        if (bestTranscodingUrl == null) continue;
-
         items.add(MediaItem(
           id: 'sc_$id',
           title: title,
@@ -166,7 +164,20 @@ class SoundCloudService {
         ));
       }
 
+      if (items.isEmpty && query.contains(" - ") && !isRetry) {
+        final cleanQuery = query.replaceAll(" - ", " ").trim();
+        return await searchTracks(cleanQuery, limit: limit, isRetry: true);
+      }
+
       return items;
+    } on DioException catch (dioErr) {
+      if (dioErr.response?.statusCode == 401 && !isRetry) {
+        printINFO("SoundCloud 401 detected, refreshing client ID and retrying...");
+        await refreshClientId();
+        return await searchTracks(query, limit: limit, isRetry: true);
+      }
+      printERROR("SoundCloud search dio error: $dioErr");
+      return [];
     } catch (e) {
       printERROR("SoundCloud search error: $e");
       return [];
@@ -187,7 +198,7 @@ class SoundCloudService {
 
   /// Resolve the direct audio playback stream URL
   static Future<String?> resolveStreamUrl(String songId,
-      {String? transcodingUrl}) async {
+      {String? transcodingUrl, bool isRetry = false}) async {
     if (_streamCache.containsKey(songId)) {
       return _streamCache[songId];
     }
@@ -232,6 +243,13 @@ class SoundCloudService {
           return streamUrl;
         }
       }
+    } on DioException catch (dioErr) {
+      if (dioErr.response?.statusCode == 401 && !isRetry) {
+        printINFO("SoundCloud resolveStreamUrl 401, refreshing client ID...");
+        await SoundCloudService().refreshClientId();
+        return await resolveStreamUrl(songId, transcodingUrl: transcodingUrl, isRetry: true);
+      }
+      printERROR("SoundCloud resolveStreamUrl dio error: $dioErr");
     } catch (e) {
       printERROR("SoundCloud resolveStreamUrl error: $e");
     }

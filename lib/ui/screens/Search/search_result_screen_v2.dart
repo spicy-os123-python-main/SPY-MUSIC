@@ -5,6 +5,7 @@ import 'package:spymusic/ui/widgets/loader.dart';
 import 'package:spymusic/ui/widgets/search_related_widgets.dart';
 
 import '../../navigator.dart';
+import '../../widgets/platform_selector_widget.dart';
 import '../../widgets/separate_tab_item_widget.dart';
 import 'search_result_screen_controller.dart';
 
@@ -58,6 +59,10 @@ class SearchResultScreenBN extends StatelessWidget {
                     ),
                   ]))
                 ],
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 14.0),
+                child: PlatformSelectorWidget(),
               ),
               Expanded(
                 child: Obx(

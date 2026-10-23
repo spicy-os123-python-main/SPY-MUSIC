@@ -36,6 +36,23 @@ class SearchResultScreenController extends GetxController
     super.onReady();
   }
 
+  Future<void> onPlatformChanged(MusicSource source) async {
+    final query = queryString.value.isNotEmpty
+        ? queryString.value
+        : (Get.arguments?.toString() ?? '');
+    if (query.isEmpty) return;
+    queryString.value = query;
+    isResultContentFetced.value = false;
+    isSeparatedResultContentFetced.value = false;
+    navigationRailCurrentIndex.value = 0;
+    resultContent.clear();
+    separatedResultContent.clear();
+    railItems.clear();
+    tabController?.dispose();
+    tabController = null;
+    await _getInitSearchResult();
+  }
+
   Future<void> onDestinationSelected(int value,
       {bool ignoreTabCommand = false}) async {
     if (railItems.isEmpty) {
@@ -141,10 +158,10 @@ class SearchResultScreenController extends GetxController
 
   Future<void> _getInitSearchResult() async {
     isResultContentFetced.value = false;
-    final args = Get.arguments;
+    final args = queryString.value.isNotEmpty ? queryString.value : Get.arguments;
     if (args != null) {
-      queryString.value = args;
-      String finalQuery = args;
+      queryString.value = args.toString();
+      String finalQuery = args.toString();
 
       // Check if user has SoundCloud selected as platform
       MusicSource selectedPlatform = MusicSource.all;
