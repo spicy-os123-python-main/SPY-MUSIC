@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bg-radial" cx="50%" cy="45%" r="60%" fx="50%" fy="45%">
+      <stop offset="0%" stop-color="#151828" />
+      <stop offset="70%" stop-color="#08090E" />
+      <stop offset="100%" stop-color="#030406" />
+    </radialGradient>
+
+    <!-- Fire / Ice Gradient -->
+    <linearGradient id="fire-blue-red" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00E5FF" />
+      <stop offset="25%" stop-color="#0077FE" />
+      <stop offset="50%" stop-color="#8A00FF" />
+      <stop offset="75%" stop-color="#FF0055" />
+      <stop offset="100%" stop-color="#FF3D00" />
+    </linearGradient>
+
+    <linearGradient id="blue-flame" x1="0%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#0051FF" />
+      <stop offset="50%" stop-color="#00D2FF" />
+      <stop offset="100%" stop-color="#70FFFF" />
+    </linearGradient>
+
+    <linearGradient id="red-flame" x1="100%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#B3002D" />
+      <stop offset="50%" stop-color="#FF0055" />
+      <stop offset="100%" stop-color="#FF6B00" />
+    </linearGradient>
+
+    <!-- Glow Filter -->
+    <filter id="neon-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" result="blur1" />
+      <feGaussianBlur stdDeviation="24" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="subtle-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- App Icon Background: Rounded Squircle -->
+  <rect width="512" height="512" rx="115" fill="url(#bg-radial)" />
+  <rect width="504" height="504" x="4" y="4" rx="111" fill="none" stroke="url(#fire-blue-red)" stroke-width="4" opacity="0.6" />
+
+  <!-- Ambient Glow Behind Elements -->
+  <circle cx="170" cy="220" r="100" fill="#0077FE" opacity="0.2" filter="url(#neon-glow)" />
+  <circle cx="342" cy="220" r="100" fill="#FF0055" opacity="0.2" filter="url(#neon-glow)" />
+
+  <!-- Dynamic Fire Audio Flame Shapes -->
+  <g filter="url(#subtle-glow)">
+    <!-- Left Blue Wave Flame -->
+    <path d="M 140 310 C 120 260, 130 200, 170 150 C 185 190, 210 210, 200 250 C 195 270, 180 290, 170 310 Z" 
+          fill="url(#blue-flame)" opacity="0.85" />
+    
+    <!-- Right Red Wave Flame -->
+    <path d="M 372 310 C 392 260, 382 200, 342 150 C 327 190, 302 210, 312 250 C 317 270, 332 290, 342 310 Z" 
+          fill="url(#red-flame)" opacity="0.85" />
+
+    <!-- Center Blended High Flame (Audio Spike) -->
+    <path d="M 256 95 C 275 145, 290 170, 280 210 C 270 200, 260 190, 256 180 C 252 190, 242 200, 232 210 C 222 170, 237 145, 256 95 Z" 
+          fill="url(#fire-blue-red)" />
+          
+    <!-- Dynamic Audio Spectrum Bars as Flame Tongues -->
+    <rect x="195" y="215" width="8" height="65" rx="4" fill="#00D2FF" opacity="0.7" />
+    <rect x="215" y="190" width="8" height="90" rx="4" fill="#4E75FF" opacity="0.8" />
+    <rect x="289" y="190" width="8" height="90" rx="4" fill="#FF2A6D" opacity="0.8" />
+    <rect x="309" y="215" width="8" height="65" rx="4" fill="#FF6B00" opacity="0.7" />
+  </g>
+
+  <!-- Headphones Arc Framing the Fire -->
+  <path d="M 120 260 A 136 136 0 0 1 392 260" fill="none" stroke="url(#fire-blue-red)" stroke-width="14" stroke-linecap="round" filter="url(#subtle-glow)" />
+  
+  <!-- Headphone Earcups -->
+  <rect x="102" y="245" width="24" height="55" rx="12" fill="#00E5FF" filter="url(#subtle-glow)" />
+  <rect x="386" y="245" width="24" height="55" rx="12" fill="#FF0055" filter="url(#subtle-glow)" />
+
+  <!-- Bold Central SPY Typography -->
+  <g filter="url(#neon-glow)">
+    <text x="256" y="370" 
+          font-family="system-ui, -apple-system, sans-serif, 'Impact'" 
+          font-size="96" 
+          font-weight="900" 
+          letter-spacing="8" 
+          text-anchor="middle" 
+          fill="#FFFFFF">SPY</text>
+  </g>
+  
+  <text x="256" y="370" 
+        font-family="system-ui, -apple-system, sans-serif, 'Impact'" 
+        font-size="96" 
+        font-weight="900" 
+        letter-spacing="8" 
+        text-anchor="middle" 
+        fill="url(#fire-blue-red)">SPY</text>
+
+  <!-- MUSIC Subtitle with modern tracking -->
+  <text x="256" y="415" 
+        font-family="system-ui, -apple-system, sans-serif" 
+        font-size="24" 
+        font-weight="700" 
+        letter-spacing="14" 
+        text-anchor="middle" 
+        fill="#A0AABF">MUSIC</text>
+
+  <!-- Accent dot/flame between M U S I C -->
+  <circle cx="256" cy="438" r="3" fill="#FF0055" filter="url(#subtle-glow)" />
+</svg>
