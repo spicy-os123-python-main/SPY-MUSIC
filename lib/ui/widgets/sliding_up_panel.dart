@@ -180,7 +180,7 @@ class SlidingUpPanel extends StatefulWidget {
           color: Color.fromRGBO(0, 0, 0, 0.25),
         )
       ],
-      this.color = Colors.white,
+      this.color = const Color(0xFF070913),
       this.padding,
       this.margin,
       this.renderPanelSheet = true,

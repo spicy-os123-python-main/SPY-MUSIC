@@ -11,6 +11,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 // ignore: depend_on_referenced_packages
 import 'package:rxdart/rxdart.dart';
 
@@ -76,6 +77,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     }
     _mediaLibrary = MediaLibrary();
     _player = AudioPlayer(
+        handleInterruptions: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
       minBufferDuration: Duration(seconds: 50),
@@ -83,6 +85,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       bufferForPlaybackDuration: Duration(milliseconds: 50),
       bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
     )));
+    if (GetPlatform.isAndroid || GetPlatform.isIOS) {
+      _initAudioSession();
+    }
     mediaItem.listen((item) {
       if (item != null) {
         DiscordService().updatePresence(item, isPlaying: _player.playing);
@@ -110,6 +115,28 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _listenForDurationChanges();
     if (GetPlatform.isAndroid) {
       _listenSessionIdStream();
+    }
+  }
+
+  Future<void> _initAudioSession() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration(
+        avAudioSessionCategory: AVAudioSessionCategory.playback,
+        avAudioSessionCategoryOptions:
+            AVAudioSessionCategoryOptions.mixWithOthers,
+        avAudioSessionMode: AVAudioSessionMode.defaultMode,
+        androidAudioAttributes: AndroidAudioAttributes(
+          contentType: AndroidAudioContentType.music,
+          flags: AndroidAudioFlags.none,
+          usage: AndroidAudioUsage.media,
+        ),
+        androidAudioFocusGainType:
+            AndroidAudioFocusGainType.gainTransientMayDuck,
+        androidWillPauseWhenDucked: false,
+      ));
+    } catch (e) {
+      printINFO("AudioSession config error: $e");
     }
   }
 

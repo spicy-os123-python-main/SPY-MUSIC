@@ -129,14 +129,16 @@ class UpNextQueue extends StatelessWidget {
                       "${playerController.currentQueue[index].artist}",
                       maxLines: 1,
                       style: playerController.currentSongIndex.value == index
-                          ? Theme.of(homeScaffoldContext)
-                              .textTheme
-                              .titleSmall!
+                          ? (Theme.of(homeScaffoldContext)
+                                  .textTheme
+                                  .titleSmall ??
+                              const TextStyle())
                               .copyWith(
-                                  color: Theme.of(homeScaffoldContext)
-                                      .textTheme
-                                      .titleMedium!
-                                      .color!
+                                  color: (Theme.of(homeScaffoldContext)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.color ??
+                                          Colors.white)
                                       .withOpacity(0.35))
                           : Theme.of(homeScaffoldContext).textTheme.titleSmall,
                     ),

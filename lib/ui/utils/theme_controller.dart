@@ -194,17 +194,23 @@ class ThemeController extends GetxController {
               titleLarge: TextStyle(
                 fontSize: 23,
                 fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
               titleMedium: TextStyle(
                 fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
-              titleSmall: TextStyle(),
+              titleSmall: TextStyle(color: Colors.white70),
               labelMedium: TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 23,
+                color: Colors.white,
               ),
               labelSmall: TextStyle(
-                  fontSize: 15, letterSpacing: 0, fontWeight: FontWeight.bold),
+                  fontSize: 15,
+                  letterSpacing: 0,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white70),
               bodyMedium: TextStyle(color: Colors.grey)),
           navigationRailTheme: const NavigationRailThemeData(
               backgroundColor: Colors.black,

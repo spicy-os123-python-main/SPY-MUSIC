@@ -69,13 +69,17 @@ class SleepTimerBottomSheet extends StatelessWidget {
                       OutlinedButton(
                           onPressed: playerController.addFiveMinutes,
                           style: OutlinedButton.styleFrom(
-                            foregroundColor:
-                                Theme.of(context).textTheme.titleMedium!.color!,
+                            foregroundColor: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.color ??
+                                Colors.white,
                             side: BorderSide(
                               color: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium!
-                                  .color!,
+                                      .textTheme
+                                      .titleMedium
+                                      ?.color ??
+                                  Colors.white,
                             ),
                           ),
                           child: Text("add5Minutes".tr)),
@@ -89,11 +93,17 @@ class SleepTimerBottomSheet extends StatelessWidget {
                               size: SanckBarSize.BIG));
                         },
                         style: OutlinedButton.styleFrom(
-                          foregroundColor:
-                              Theme.of(context).textTheme.titleMedium!.color!,
+                          foregroundColor: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.color ??
+                              Colors.white,
                           side: BorderSide(
-                            color:
-                                Theme.of(context).textTheme.titleMedium!.color!,
+                            color: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.color ??
+                                Colors.white,
                           ),
                         ),
                         child: Text("cancelTimer".tr))

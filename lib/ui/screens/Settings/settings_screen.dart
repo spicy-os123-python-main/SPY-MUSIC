@@ -15,6 +15,7 @@ import '/ui/widgets/link_piped.dart';
 import '/services/music_service.dart';
 import '/services/discord_service.dart';
 import '/services/playlist_repair_service.dart';
+import '../../widgets/discord_login_dialog.dart';
 import '/ui/player/player_controller.dart';
 import '/ui/utils/theme_controller.dart';
 import 'components/custom_expansion_tile.dart';
@@ -1084,11 +1085,86 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
           ),
           const SizedBox(height: 6),
           Text(
-            "Trage optional deinen Discord-Token ein, damit dein Smartphone deinen Song live direkt an Discord sendet ('Hört SPY MUSIC').",
+            "Trage optional deinen Discord-Token ein oder melde dich direkt im Browser an, damit dein Smartphone deinen Song live direkt an Discord sendet ('Hört SPY MUSIC').",
             style: TextStyle(
               fontSize: 11.5,
               color: Colors.white.withOpacity(0.6),
             ),
+          ),
+          const SizedBox(height: 10),
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () async {
+              final result = await showDialog<bool>(
+                context: context,
+                builder: (context) => const DiscordLoginDialog(),
+              );
+              if (result == true) {
+                _controller.text = DiscordService().token;
+                setState(() {});
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF5865F2), Color(0xFF4752C4)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF5865F2).withOpacity(0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.discord_rounded, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    "🎮 1-Klick Discord Login",
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Divider(
+                  color: Colors.white.withOpacity(0.12),
+                  thickness: 0.8,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  "oder Token manuell einfügen",
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: Colors.white.withOpacity(0.4),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Divider(
+                  color: Colors.white.withOpacity(0.12),
+                  thickness: 0.8,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Row(

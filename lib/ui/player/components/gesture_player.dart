@@ -104,17 +104,14 @@ class GesturePlayer extends StatelessWidget {
                                     return Marquee(
                                       delay: const Duration(milliseconds: 300),
                                       duration: const Duration(seconds: 10),
-                                      id: "${playerController.currentSong.value}_title",
+                                      id: "${playerController.currentSong.value?.id ?? 'idle'}_title",
                                       child: Text(
-                                        playerController.currentSong.value !=
-                                                null
-                                            ? playerController
-                                                .currentSong.value!.title
-                                            : "NA",
+                                        playerController.currentSong.value?.title ?? "NA",
                                         textAlign: TextAlign.start,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium!
+                                        style: (Theme.of(context)
+                                                .textTheme
+                                                .titleMedium ??
+                                            const TextStyle())
                                             .copyWith(
                                                 color: Theme.of(context)
                                                     .primaryColor
@@ -129,18 +126,15 @@ class GesturePlayer extends StatelessWidget {
                                     return Marquee(
                                       delay: const Duration(milliseconds: 300),
                                       duration: const Duration(seconds: 10),
-                                      id: "${playerController.currentSong.value}_subtitle",
+                                      id: "${playerController.currentSong.value?.id ?? 'idle'}_subtitle",
                                       child: Text(
-                                        playerController.currentSong.value !=
-                                                null
-                                            ? controller
-                                                .currentSong.value!.artist!
-                                            : "NA",
+                                        controller.currentSong.value?.artist ?? "NA",
                                         textAlign: TextAlign.start,
                                         overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleSmall!
+                                        style: (Theme.of(context)
+                                                .textTheme
+                                                .titleSmall ??
+                                            const TextStyle())
                                             .copyWith(
                                                 color: Theme.of(context)
                                                     .primaryColor
@@ -169,15 +163,21 @@ class GesturePlayer extends StatelessWidget {
                                               ? Icons.favorite_border
                                               : Icons.favorite,
                                           color: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium!
-                                              .color,
+                                                  .textTheme
+                                                  .titleMedium
+                                                  ?.color ??
+                                              Colors.white,
                                         ))),
                                 Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceEvenly,
                                   children: [
                                     Obx(() {
+                                      final titleLargeColor = Theme.of(context)
+                                              .textTheme
+                                              .titleLarge
+                                              ?.color ??
+                                          Colors.white;
                                       return IconButton(
                                           splashRadius: 10,
                                           visualDensity: const VisualDensity(
@@ -189,14 +189,8 @@ class GesturePlayer extends StatelessWidget {
                                             Icons.all_inclusive,
                                             color: playerController
                                                     .isLoopModeEnabled.value
-                                                ? Theme.of(context)
-                                                    .textTheme
-                                                    .titleLarge!
-                                                    .color
-                                                : Theme.of(context)
-                                                    .textTheme
-                                                    .titleLarge!
-                                                    .color!
+                                                ? titleLargeColor
+                                                : titleLargeColor
                                                     .withOpacity(0.2),
                                           ));
                                     }),
@@ -208,20 +202,21 @@ class GesturePlayer extends StatelessWidget {
                                       onPressed:
                                           playerController.toggleShuffleMode,
                                       icon: Obx(
-                                        () => Icon(
-                                          Ionicons.shuffle,
-                                          color: playerController
-                                                  .isShuffleModeEnabled.value
-                                              ? Theme.of(context)
+                                        () {
+                                          final titleLargeColor = Theme.of(context)
                                                   .textTheme
-                                                  .titleLarge!
-                                                  .color
-                                              : Theme.of(context)
-                                                  .textTheme
-                                                  .titleLarge!
-                                                  .color!
-                                                  .withOpacity(0.2),
-                                        ),
+                                                  .titleLarge
+                                                  ?.color ??
+                                              Colors.white;
+                                          return Icon(
+                                            Ionicons.shuffle,
+                                            color: playerController
+                                                    .isShuffleModeEnabled.value
+                                                ? titleLargeColor
+                                                : titleLargeColor
+                                                    .withOpacity(0.2),
+                                          );
+                                        },
                                       ),
                                     ),
                                   ],

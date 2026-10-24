@@ -48,11 +48,11 @@ class PlayerControlWidget extends StatelessWidget {
                           duration: const Duration(seconds: 10),
                           id: "${playerController.currentSong.value}_title",
                           child: Text(
-                            playerController.currentSong.value != null
-                                ? playerController.currentSong.value!.title
-                                : "NA",
+                            playerController.currentSong.value?.title ?? "NA",
                             textAlign: TextAlign.start,
-                            style: Theme.of(context).textTheme.labelMedium!,
+                            style: Theme.of(context).textTheme.labelMedium ??
+                                const TextStyle(
+                                    fontSize: 23, fontWeight: FontWeight.bold),
                           ),
                         ),
                         const SizedBox(
@@ -61,11 +61,9 @@ class PlayerControlWidget extends StatelessWidget {
                         Marquee(
                           delay: const Duration(milliseconds: 300),
                           duration: const Duration(seconds: 10),
-                          id: "${playerController.currentSong.value}_subtitle",
+                          id: "${playerController.currentSong.value?.id ?? 'idle'}_subtitle",
                           child: Text(
-                            playerController.currentSong.value != null
-                                ? playerController.currentSong.value!.artist!
-                                : "NA",
+                            playerController.currentSong.value?.artist ?? "NA",
                             textAlign: TextAlign.start,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.labelSmall,
@@ -84,7 +82,8 @@ class PlayerControlWidget extends StatelessWidget {
                           playerController.isCurrentSongFav.isFalse
                               ? Icons.favorite_border
                               : Icons.favorite,
-                          color: Theme.of(context).textTheme.titleMedium!.color,
+                          color: Theme.of(context).textTheme.titleMedium?.color ??
+                              Colors.white,
                         ))),
               ),
             ],
@@ -120,11 +119,10 @@ class PlayerControlWidget extends StatelessWidget {
                   icon: Obx(() => Icon(
                         Ionicons.shuffle,
                         color: playerController.isShuffleModeEnabled.value
-                            ? Theme.of(context).textTheme.titleLarge!.color
-                            : Theme.of(context)
-                                .textTheme
-                                .titleLarge!
-                                .color!
+                            ? (Theme.of(context).textTheme.titleLarge?.color ??
+                                Colors.white)
+                            : (Theme.of(context).textTheme.titleLarge?.color ??
+                                    Colors.white)
                                 .withOpacity(0.2),
                       ))),
               _previousButton(playerController, context),
@@ -159,11 +157,10 @@ class PlayerControlWidget extends StatelessWidget {
                     icon: Icon(
                       Icons.all_inclusive,
                       color: playerController.isLoopModeEnabled.value
-                          ? Theme.of(context).textTheme.titleLarge!.color
-                          : Theme.of(context)
-                              .textTheme
-                              .titleLarge!
-                              .color!
+                          ? (Theme.of(context).textTheme.titleLarge?.color ??
+                              Colors.white)
+                          : (Theme.of(context).textTheme.titleLarge?.color ??
+                                  Colors.white)
                               .withOpacity(0.2),
                     ));
               }),
@@ -178,7 +175,7 @@ class PlayerControlWidget extends StatelessWidget {
     return IconButton(
       icon: Icon(
         Icons.skip_previous,
-        color: Theme.of(context).textTheme.titleMedium!.color,
+        color: Theme.of(context).textTheme.titleMedium?.color ?? Colors.white,
       ),
       iconSize: 30,
       onPressed: playerController.prev,
@@ -193,12 +190,16 @@ Widget _nextButton(PlayerController playerController, BuildContext context) {
                 playerController.isQueueLoopModeEnabled.isTrue) &&
             (playerController.currentQueue.last.id ==
                 playerController.currentSong.value?.id));
+    final titleLargeColor =
+        Theme.of(context).textTheme.titleLarge?.color ?? Colors.white;
+    final titleMediumColor =
+        Theme.of(context).textTheme.titleMedium?.color ?? Colors.white;
     return IconButton(
         icon: Icon(
           Icons.skip_next,
           color: isLastSong
-              ? Theme.of(context).textTheme.titleLarge!.color!.withOpacity(0.2)
-              : Theme.of(context).textTheme.titleMedium!.color,
+              ? titleLargeColor.withOpacity(0.2)
+              : titleMediumColor,
         ),
         iconSize: 30,
         onPressed: isLastSong ? null : playerController.next);

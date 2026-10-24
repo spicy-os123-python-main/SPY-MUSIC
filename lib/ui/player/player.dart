@@ -26,10 +26,12 @@ class Player extends StatelessWidget {
     final PlayerController playerController = Get.find<PlayerController>();
     final settingsScreenController = Get.find<SettingsScreenController>();
     return Scaffold(
+      backgroundColor: const Color(0xFF070913),
       /// SlidingUpPanel is used to create a panel that can slide up and down
       /// It is used to show the current queue panel in mobile
       body: Obx(
         () => SlidingUpPanel(
+          color: const Color(0xFF070913),
           boxShadow: const [],
           minHeight: settingsScreenController.playerUi.value == 0
               ? 65 + Get.mediaQuery.padding.bottom

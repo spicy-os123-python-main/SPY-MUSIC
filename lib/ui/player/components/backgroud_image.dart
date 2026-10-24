@@ -21,7 +21,7 @@ class BackgroudImage extends StatelessWidget {
         child: playerController.currentSong.value != null
 
             /// if song is local then return image from local file
-            ? (playerController.currentSong.value!.extras!['url'] ?? '')
+            ? (playerController.currentSong.value?.extras?['url']?.toString() ?? '')
                     .contains('file')
                 ? Builder(builder: (context) {
                     final imgFile = File(

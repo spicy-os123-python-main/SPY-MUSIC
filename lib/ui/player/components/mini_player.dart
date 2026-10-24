@@ -163,10 +163,7 @@ class MiniPlayer extends StatelessWidget {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          playerController.currentSong.value != null
-                                              ? playerController
-                                                  .currentSong.value!.title
-                                              : "",
+                                          playerController.currentSong.value?.title ?? "",
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: Theme.of(context)
@@ -174,6 +171,7 @@ class MiniPlayer extends StatelessWidget {
                                               .titleMedium
                                               ?.copyWith(
                                                 fontWeight: FontWeight.w700,
+                                                color: Colors.white,
                                               ),
                                         ),
                                       ),
@@ -190,15 +188,11 @@ class MiniPlayer extends StatelessWidget {
                                   SizedBox(
                                     height: 18,
                                     child: Marquee(
-                                      id: "${playerController.currentSong.value}_mini",
+                                      id: "${playerController.currentSong.value?.id ?? 'idle'}_mini",
                                       delay: const Duration(milliseconds: 300),
                                       duration: const Duration(seconds: 5),
                                       child: Text(
-                                        playerController.currentSong.value !=
-                                                null
-                                            ? playerController
-                                                .currentSong.value!.artist!
-                                            : "",
+                                        playerController.currentSong.value?.artist ?? "",
                                         maxLines: 1,
                                         style: Theme.of(context)
                                             .textTheme
@@ -233,9 +227,10 @@ class MiniPlayer extends StatelessWidget {
                                                   ? Icons.favorite_border
                                                   : Icons.favorite,
                                               color: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium!
-                                                  .color,
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.color ??
+                                                  Colors.white,
                                             ))),
                                     IconButton(
                                         iconSize: 20,
@@ -246,14 +241,16 @@ class MiniPlayer extends StatelessWidget {
                                               color: playerController
                                                       .isShuffleModeEnabled
                                                       .value
-                                                  ? Theme.of(context)
-                                                      .textTheme
-                                                      .titleLarge!
-                                                      .color
-                                                  : Theme.of(context)
-                                                      .textTheme
-                                                      .titleLarge!
-                                                      .color!
+                                                  ? (Theme.of(context)
+                                                          .textTheme
+                                                          .titleLarge
+                                                          ?.color ??
+                                                      Colors.white)
+                                                  : (Theme.of(context)
+                                                              .textTheme
+                                                              .titleLarge
+                                                              ?.color ??
+                                                          Colors.white)
                                                       .withOpacity(0.2),
                                             ))),
                                   ],
@@ -273,9 +270,10 @@ class MiniPlayer extends StatelessWidget {
                                       child: Icon(
                                         Icons.skip_previous,
                                         color: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium!
-                                            .color,
+                                                .textTheme
+                                                .titleMedium
+                                                ?.color ??
+                                            Colors.white,
                                         size: 35,
                                       ),
                                     )),
@@ -314,6 +312,16 @@ class MiniPlayer extends StatelessWidget {
                                                         .currentQueue.last.id ==
                                                     playerController.currentSong
                                                         .value?.id));
+                                    final titleLargeColor = Theme.of(context)
+                                            .textTheme
+                                            .titleLarge
+                                            ?.color ??
+                                        Colors.white;
+                                    final titleMediumColor = Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.color ??
+                                        Colors.white;
                                     return InkWell(
                                       onTap: isLastSong
                                           ? null
@@ -321,15 +329,8 @@ class MiniPlayer extends StatelessWidget {
                                       child: Icon(
                                         Icons.skip_next,
                                         color: isLastSong
-                                            ? Theme.of(context)
-                                                .textTheme
-                                                .titleLarge!
-                                                .color!
-                                                .withOpacity(0.2)
-                                            : Theme.of(context)
-                                                .textTheme
-                                                .titleMedium!
-                                                .color,
+                                            ? titleLargeColor.withOpacity(0.2)
+                                            : titleMediumColor,
                                         size: 35,
                                       ),
                                     );
@@ -345,14 +346,16 @@ class MiniPlayer extends StatelessWidget {
                                           Icons.all_inclusive,
                                           color: playerController
                                                   .isLoopModeEnabled.value
-                                              ? Theme.of(context)
-                                                  .textTheme
-                                                  .titleLarge!
-                                                  .color
-                                              : Theme.of(context)
-                                                  .textTheme
-                                                  .titleLarge!
-                                                  .color!
+                                              ? (Theme.of(context)
+                                                      .textTheme
+                                                      .titleLarge
+                                                      ?.color ??
+                                                  Colors.white)
+                                              : (Theme.of(context)
+                                                          .textTheme
+                                                          .titleLarge
+                                                          ?.color ??
+                                                      Colors.white)
                                                   .withOpacity(0.2),
                                         )),
                                     IconButton(
@@ -375,9 +378,10 @@ class MiniPlayer extends StatelessWidget {
                                         },
                                         icon: Icon(Icons.lyrics_outlined,
                                             color: Theme.of(context)
-                                                .textTheme
-                                                .titleLarge!
-                                                .color)),
+                                                    .textTheme
+                                                    .titleLarge
+                                                    ?.color ??
+                                                Colors.white)),
                                   ],
                                 ),
                               if (isWideScreen && !bottomNavEnabled)
