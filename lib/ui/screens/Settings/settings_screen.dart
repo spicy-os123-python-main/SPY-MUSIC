@@ -20,6 +20,8 @@ import '/ui/player/player_controller.dart';
 import '/ui/utils/theme_controller.dart';
 import 'components/custom_expansion_tile.dart';
 import 'settings_screen_controller.dart';
+import '../Watchtime/watchtime_screen.dart';
+import '../../../services/watchtime_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, this.isBottomNavActive = false});
@@ -450,23 +452,39 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   ListTile(
                     contentPadding: const EdgeInsets.only(left: 5, right: 10),
-                    title: Text("streamingQuality".tr),
-                    subtitle: Text("streamingQualityDes".tr,
-                        style: Theme.of(context).textTheme.bodyMedium),
+                    title: const Text("Streaming-Qualität"),
+                    subtitle: Obx(
+                      () => Text(
+                        settingsController.streamingQuality.value == AudioQuality.Ultra
+                            ? "Ultra Datensparmodus (spart ca. 85% Daten)"
+                            : settingsController.streamingQuality.value == AudioQuality.Mid
+                                ? "Mittlere Qualität (Datensparer)"
+                                : "Beste Audioqualität (Normal)",
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
                     trailing: Obx(
-                      () => DropdownButton(
+                      () => DropdownButton<AudioQuality>(
                         dropdownColor: Theme.of(context).cardColor,
                         underline: const SizedBox.shrink(),
                         value: settingsController.streamingQuality.value,
-                        items: [
+                        items: const [
                           DropdownMenuItem(
-                              value: AudioQuality.Low, child: Text("low".tr)),
+                            value: AudioQuality.Normal,
+                            child: Text("Normal"),
+                          ),
                           DropdownMenuItem(
-                            value: AudioQuality.High,
-                            child: Text("high".tr),
+                            value: AudioQuality.Mid,
+                            child: Text("Mid"),
+                          ),
+                          DropdownMenuItem(
+                            value: AudioQuality.Ultra,
+                            child: Text("Ultra (-85% Daten)"),
                           ),
                         ],
-                        onChanged: settingsController.setStreamingQuality,
+                        onChanged: (val) {
+                          if (val != null) settingsController.setStreamingQuality(val);
+                        },
                       ),
                     ),
                   ),
@@ -619,6 +637,88 @@ class SettingsScreen extends StatelessWidget {
                         )
                       : const SizedBox.shrink(),
                 ],
+              ),
+              // Watchtime Tracking Tile (between Music & Playback and Download)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF141A29), Color(0xFF1B2338)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFF00D2FF).withOpacity(0.35),
+                    width: 1.2,
+                  ),
+                ),
+                child: ListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00D2FF).withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.timer_rounded,
+                      color: Color(0xFF00D2FF),
+                      size: 24,
+                    ),
+                  ),
+                  title: const Text(
+                    "Watchtime Tracking",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    "Tägliche, wöchentliche & monatliche Spielzeit aller Plattformen",
+                    style: TextStyle(color: Colors.white60, fontSize: 12),
+                  ),
+                  trailing: ValueListenableBuilder<int>(
+                    valueListenable: WatchtimeService.watchtimeNotifier,
+                    builder: (context, _, __) {
+                      final todaySec = WatchtimeService.getDailyPlaytimeSec();
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00D2FF).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color:
+                                    const Color(0xFF00D2FF).withOpacity(0.5),
+                              ),
+                            ),
+                            child: Text(
+                              WatchtimeService.formatDuration(todaySec),
+                              style: const TextStyle(
+                                color: Color(0xFF00D2FF),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 14,
+                            color: Colors.white38,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  onTap: () => Get.to(() => const WatchtimeScreen()),
+                ),
               ),
               CustomExpansionTile(
                 title: "download".tr,

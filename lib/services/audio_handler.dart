@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
@@ -18,6 +19,7 @@ import 'package:rxdart/rxdart.dart';
 import 'soundcloud_service.dart';
 import 'platform_search_service.dart';
 import 'chunked_audio_source.dart';
+import 'watchtime_service.dart';
 import '/models/album.dart';
 import '../models/music_source.dart';
 import '../ui/widgets/platform_selector_widget.dart';
@@ -121,6 +123,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     if (GetPlatform.isAndroid) {
       _listenSessionIdStream();
     }
+    Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_player.playing &&
+          mediaItem.value != null &&
+          _player.processingState == ProcessingState.ready) {
+        WatchtimeService.recordPlaytime(mediaItem.value!, seconds: 5);
+      }
+    });
   }
 
   Future<void> _initAudioSession() async {
@@ -625,6 +634,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             queue.value[songIndex] = playableSong;
           }
           mediaItem.add(playableSong);
+          WatchtimeService.recordSongStart(playableSong);
           playbackState
               .add(playbackState.value.copyWith(queueIndex: currentIndex));
           await _playList.add(_createAudioSource(playableSong));
@@ -682,9 +692,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 ? [
                     true,
                     dbStreamData[
-                        Hive.box('AppPrefs').get('streamingQuality') == 0
+                        Hive.box('AppPrefs').get('streamingQuality') == 2
                             ? 'lowQualityAudio'
-                            : "highQualityAudio"]
+                            : (Hive.box('AppPrefs').get('streamingQuality') == 1
+                                ? 'midQualityAudio'
+                                : "highQualityAudio")]
                   ]
                 : null;
             songsCacheBox.put(song.id, jsonData);
@@ -731,6 +743,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           final playableSong = currMed.copyWith(extras: updatedExtras);
           queue.add([playableSong]);
           mediaItem.add(playableSong);
+          WatchtimeService.recordSongStart(playableSong);
 
           playbackState.add(playbackState.value.copyWith(queueIndex: 0));
           await _playList.add(_createAudioSource(playableSong));
@@ -1183,9 +1196,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     } else {
       //check if song stream url is cached and allocate url accordingly
       final songsUrlCacheBox = Hive.box("SongsUrlCache");
-      final dataSaverMode =
-          Hive.box('AppPrefs').get('dataSaverMode', defaultValue: 0) as int;
-      final qualityIndex = dataSaverMode.clamp(0, 2);
+      final qualityIndex =
+          (Hive.box('AppPrefs').get('streamingQuality', defaultValue: 0) as int)
+              .clamp(0, 2);
       HMStreamingData? streamInfo;
       if (songsUrlCacheBox.containsKey(songId) && !generateNewUrl) {
         final streamInfoJson = songsUrlCacheBox.get(songId);

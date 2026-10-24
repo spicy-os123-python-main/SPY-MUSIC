@@ -172,6 +172,7 @@ initHive() async {
   await Hive.openBox('SongsUrlCache');
   await Hive.openBox("AppPrefs");
   await Hive.openBox("appPrefs");
+  await Hive.openBox("WatchtimeStats");
 }
 
 void _setAppInitPrefs() {
@@ -181,7 +182,7 @@ void _setAppInitPrefs() {
       'themeModeType': 0,
       "cacheSongs": false,
       "skipSilenceEnabled": false,
-      'streamingQuality': 1,
+      'streamingQuality': 0,
       'dataSaverMode': 0,
       'themePrimaryColor': 4278199603,
       'discoverContentType': "QP",

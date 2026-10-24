@@ -18,7 +18,7 @@ import '/services/music_service.dart';
 import '/ui/player/player_controller.dart';
 import '../Home/home_screen_controller.dart';
 import '/ui/utils/theme_controller.dart';
-import '../../widgets/new_version_dialog.dart';
+import '../../widgets/app_update_dialog.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 enum DataSaverMode {
@@ -35,7 +35,7 @@ class SettingsScreenController extends GetxController {
   final skipSilenceEnabled = false.obs;
   final loudnessNormalizationEnabled = false.obs;
   final noOfHomeScreenContent = 3.obs;
-  final streamingQuality = AudioQuality.High.obs;
+  final streamingQuality = AudioQuality.Normal.obs;
   final dataSaverMode = DataSaverMode.normal.obs;
   final playerUi = 0.obs;
   final slidableActionEnabled = true.obs;
@@ -78,26 +78,39 @@ class SettingsScreenController extends GetxController {
   }
 
   Future<void> checkForUpdatesManually(BuildContext context) async {
-    final details = await checkAppUpdateDetails(currentVer: currentVersion);
-    if (details['hasUpdate'] == true) {
-      isNewVersionAvailable.value = true;
-      if (context.mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => const NewVersionDialog(),
-        );
-      }
-    } else {
-      isNewVersionAvailable.value = false;
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          snackbar(
-            context,
-            "✅ SPY MUSIC ist aktuell! (${details['current']})",
-            size: SanckBarSize.MEDIUM,
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(
+        child: Card(
+          color: Color(0xFF16161F),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF00D2FF)),
+                SizedBox(width: 16),
+                Text(
+                  "Prüfe auf Updates...",
+                  style: TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ],
+            ),
           ),
-        );
-      }
+        ),
+      ),
+    );
+
+    final details = await checkAppUpdateDetails(currentVer: currentVersion);
+
+    if (context.mounted) {
+      Navigator.of(context).pop(); // Dismiss loading dialog
+      showDialog(
+        context: context,
+        builder: (ctx) => AppUpdateDialog(updateDetails: details),
+      );
     }
   }
 
@@ -138,8 +151,8 @@ class SettingsScreenController extends GetxController {
     final savedDataSaver = setBox.get('dataSaverMode') ?? 0;
     dataSaverMode.value =
         DataSaverMode.values[(savedDataSaver as int).clamp(0, 2)];
-    streamingQuality.value =
-        AudioQuality.values[setBox.get('streamingQuality') ?? 1];
+    final savedQuality = (setBox.get('streamingQuality', defaultValue: 0) as int).clamp(0, 2);
+    streamingQuality.value = AudioQuality.values[savedQuality];
     playerUi.value = isDesktop ? 0 : (setBox.get('playerUi') ?? 0);
     backgroundPlayEnabled.value = setBox.get("backgroundPlayEnabled") ?? true;
     keepScreenAwake.value =
@@ -186,16 +199,21 @@ class SettingsScreenController extends GetxController {
     dataSaverMode.value = mode;
     setBox.put('dataSaverMode', mode.index);
     if (mode == DataSaverMode.ultra) {
-      setBox.put('streamingQuality', 0);
-      streamingQuality.value = AudioQuality.Low;
-    } else {
+      setBox.put('streamingQuality', 2);
+      streamingQuality.value = AudioQuality.Ultra;
+    } else if (mode == DataSaverMode.mid) {
       setBox.put('streamingQuality', 1);
-      streamingQuality.value = AudioQuality.High;
+      streamingQuality.value = AudioQuality.Mid;
+    } else {
+      setBox.put('streamingQuality', 0);
+      streamingQuality.value = AudioQuality.Normal;
     }
   }
 
   void setStreamingQuality(dynamic val) {
-    setBox.put("streamingQuality", AudioQuality.values.indexOf(val));
+    final idx = AudioQuality.values.indexOf(val);
+    setBox.put("streamingQuality", idx);
+    setBox.put("dataSaverMode", idx);
     streamingQuality.value = val;
   }
 

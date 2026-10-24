@@ -163,22 +163,53 @@ void sortArtist(
   }
 }
 
-/// Checks GitHub tags and returns full update details
+/// Checks GitHub releases and returns full update details
 Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
   try {
     currentVer ??= "v1.0.0";
-    final response = await Dio().get(
-      "https://api.github.com/repos/spicy-os123-python-main/SPY-MUSIC/tags",
-      options: Options(
-        sendTimeout: const Duration(seconds: 8),
-        receiveTimeout: const Duration(seconds: 8),
-      ),
-    );
-    final tags = response.data as List;
-    if (tags.isEmpty) {
-      return {'hasUpdate': false, 'latest': currentVer, 'current': currentVer};
+    final dio = Dio();
+    dynamic response;
+    String latestTag = currentVer;
+    String body = "";
+    String htmlUrl = "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest";
+    String downloadUrl = "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk";
+
+    try {
+      response = await dio.get(
+        "https://api.github.com/repos/spicy-os123-python-main/SPY-MUSIC/releases/latest",
+        options: Options(
+          sendTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 8),
+        ),
+      );
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data as Map;
+        latestTag = data['tag_name']?.toString() ?? currentVer;
+        body = data['body']?.toString() ?? '';
+        htmlUrl = data['html_url']?.toString() ?? htmlUrl;
+        final assets = data['assets'] as List? ?? [];
+        for (var a in assets) {
+          final name = a['name']?.toString() ?? '';
+          if (name.contains('arm64-v8a') && name.endsWith('.apk')) {
+            downloadUrl = a['browser_download_url']?.toString() ?? downloadUrl;
+            break;
+          }
+        }
+      }
+    } catch (_) {
+      // Fallback to tags endpoint if releases/latest is not found
+      response = await dio.get(
+        "https://api.github.com/repos/spicy-os123-python-main/SPY-MUSIC/tags",
+        options: Options(
+          sendTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 8),
+        ),
+      );
+      final tags = response.data as List;
+      if (tags.isNotEmpty) {
+        latestTag = tags[0]['name'] as String;
+      }
     }
-    final latestTag = tags[0]['name'] as String;
 
     final cleanCurrent = currentVer.toLowerCase().replaceAll('v', '').trim();
     final cleanLatest = latestTag.toLowerCase().replaceAll('v', '').trim();
@@ -209,6 +240,9 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
       'hasUpdate': hasUpdate,
       'latest': latestTag,
       'current': currentVer,
+      'body': body,
+      'htmlUrl': htmlUrl,
+      'downloadUrl': downloadUrl,
     };
   } catch (e) {
     printERROR("checkAppUpdateDetails error: $e");
@@ -217,6 +251,8 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
       'error': e.toString(),
       'latest': currentVer ?? "v1.0.0",
       'current': currentVer ?? "v1.0.0",
+      'downloadUrl': "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk",
+      'htmlUrl': "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest",
     };
   }
 }
