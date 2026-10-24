@@ -23,8 +23,7 @@ if (flutterVersionName == null) {
 }
 
 android {
-    compileSdk 34
-    compileSdkVersion 34
+    compileSdkVersion flutter.compileSdkVersion
     //ndkVersion flutter.ndkVersion
     ndkVersion = "26.1.10909125"
 
@@ -46,11 +45,10 @@ android {
         applicationId "com.spymusic.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
-        minSdkVersion 21
-        targetSdkVersion 34
+        minSdkVersion flutter.minSdkVersion
+        targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
-        multiDexEnabled true
     }
 
     signingConfigs {
@@ -67,8 +65,6 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
-            shrinkResources false
         }
     }
     namespace 'com.spymusic.app'
@@ -79,7 +75,7 @@ flutter {
 }
 
 dependencies {
-    implementation 'androidx.multidex:multidex:2.0.1'
-    implementation 'androidx.core:core-splashscreen:1.0.0'
+    implementation 'com.android.support:multidex:2.0.1'
+    implementation 'androidx.core:core-splashscreen:1.0.0-beta02'
 }
 
