@@ -2,6 +2,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import 'music_service.dart';
+import 'soundcloud_service.dart';
 import '../utils/helper.dart';
 
 class PlatformSearchService {
@@ -145,6 +146,26 @@ class PlatformSearchService {
       return _matchCache[trackId];
     }
 
+    // 1. Resolve via SoundCloud first (independent CDN, no rate limits, doesn't touch YouTube)
+    try {
+      final cleanQuery = searchQuery
+          .replaceAll(RegExp(r'\(feat\.[^)]*\)', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\[feat\.[^\]]*\]', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\(official video\)', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\[official video\]', caseSensitive: false), '')
+          .trim();
+      final q = cleanQuery.isNotEmpty ? cleanQuery : searchQuery;
+      final scTracks = await SoundCloudService().searchTracks(q, limit: 3);
+      if (scTracks.isNotEmpty) {
+        final match = scTracks.first;
+        _matchCache[trackId] = match.id;
+        return match.id;
+      }
+    } catch (e) {
+      printERROR("SoundCloud resolution failed for $trackId: $e");
+    }
+
+    // 2. Fallback to MusicServices (YouTube Music) if SoundCloud has no result
     try {
       final musicServices = Get.find<MusicServices>();
       final res =

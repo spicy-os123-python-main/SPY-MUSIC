@@ -887,13 +887,33 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     // Spotify or Amazon Native Track Stream Matching
     if (songId.startsWith("sp_") || songId.startsWith("az_")) {
       printINFO("Resolving Spotify/Amazon track stream for: $songId");
-      final targetSong =
-          queue.value.firstWhereOrNull((item) => item.id == songId);
+      final targetSong = queue.value.firstWhereOrNull((item) => item.id == songId) ??
+          (mediaItem.value?.id == songId ? mediaItem.value : null);
       final query = (targetSong?.extras?['searchQuery'] as String?) ??
           '${targetSong?.title} ${targetSong?.artist}';
       final matchedId =
           await PlatformSearchService.resolveMatchedStreamId(songId, query);
       if (matchedId != null && matchedId.isNotEmpty) {
+        if (matchedId.startsWith("sc_")) {
+          final scStreamUrl = await SoundCloudService.resolveStreamUrl(matchedId);
+          if (scStreamUrl != null && scStreamUrl.isNotEmpty) {
+            final audio = Audio(
+              audioCodec: Codec.mp4a,
+              bitrate: 160000,
+              loudnessDb: 0,
+              duration: targetSong?.duration?.inMilliseconds ?? 0,
+              size: 0,
+              url: scStreamUrl,
+              itag: 140,
+            );
+            return HMStreamingData(
+              playable: true,
+              statusMSG: "OK",
+              lowQualityAudio: audio,
+              highQualityAudio: audio,
+            );
+          }
+        }
         return checkNGetUrl(matchedId, generateNewUrl: generateNewUrl);
       }
     }
@@ -973,12 +993,48 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         }
       }
 
-      if (streamInfo == null) {
+      if (streamInfo == null || !streamInfo.playable) {
         final token = RootIsolateToken.instance;
         final streamInfoJson =
             await Isolate.run(() => getStreamInfo(songId, token));
         streamInfo = HMStreamingData.fromJson(streamInfoJson);
-        if (streamInfo.playable) songsUrlCacheBox.put(songId, streamInfoJson);
+        if (streamInfo.playable) {
+          songsUrlCacheBox.put(songId, streamInfoJson);
+        } else {
+          // Automatic resilient fallback to SoundCloud CDN if YouTube / Piped fails (e.g. strict VPN rate-limiting)
+          printINFO("YouTube failed for $songId (${streamInfo.statusMSG}), attempting SoundCloud CDN fallback...");
+          final targetSong = queue.value.firstWhereOrNull((item) => item.id == songId) ??
+              (mediaItem.value?.id == songId ? mediaItem.value : null);
+          final title = targetSong?.title ?? '';
+          final artist = targetSong?.artist ?? '';
+          if (title.isNotEmpty) {
+            final query = '$title $artist'.trim();
+            final scTracks = await SoundCloudService().searchTracks(query, limit: 3);
+            if (scTracks.isNotEmpty) {
+              final scTrack = scTracks.first;
+              final scUrl = await SoundCloudService.resolveStreamUrl(scTrack.id,
+                  transcodingUrl: scTrack.extras?['transcodingUrl'] as String?);
+              if (scUrl != null && scUrl.isNotEmpty) {
+                printINFO("Successfully recovered playback via SoundCloud CDN for: $query");
+                final audio = Audio(
+                  audioCodec: Codec.mp4a,
+                  bitrate: 160000,
+                  loudnessDb: 0,
+                  duration: targetSong?.duration?.inMilliseconds ?? 0,
+                  size: 0,
+                  url: scUrl,
+                  itag: 140,
+                );
+                streamInfo = HMStreamingData(
+                  playable: true,
+                  statusMSG: "OK",
+                  lowQualityAudio: audio,
+                  highQualityAudio: audio,
+                );
+              }
+            }
+          }
+        }
       }
 
       streamInfo.setQualityIndex(qualityIndex);

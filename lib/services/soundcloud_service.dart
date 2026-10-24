@@ -143,8 +143,9 @@ class SoundCloudService {
           }
         }
 
-        if (bestTranscodingUrl == null && transcodings.isNotEmpty) {
-          bestTranscodingUrl = transcodings.first['url']?.toString();
+        // Skip tracks with exclusively encrypted streams (SoundCloud Go+ DRM)
+        if (bestTranscodingUrl == null) {
+          continue;
         }
 
         items.add(MediaItem(
@@ -219,13 +220,12 @@ class SoundCloudService {
           final transcodings = trackRes.data['media']['transcodings'] as List? ?? [];
           for (var t in transcodings) {
             final u = t['url']?.toString() ?? '';
-            if (u.contains('/stream/hls') || u.contains('/stream/progressive')) {
+            final format = t['format'] as Map?;
+            final protocol = format?['protocol']?.toString() ?? '';
+            if (!protocol.contains('encrypted') && (u.contains('/stream/progressive') || u.contains('/stream/hls'))) {
               targetTranscoding = u;
               break;
             }
-          }
-          if (targetTranscoding == null && transcodings.isNotEmpty) {
-            targetTranscoding = transcodings.first['url']?.toString();
           }
         }
       }

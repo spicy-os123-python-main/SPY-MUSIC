@@ -13,7 +13,10 @@ class StreamProvider {
     final yt = YoutubeExplode();
 
     try {
-      final res = await yt.videos.streamsClient.getManifest(videoId);
+      final res = await yt.videos.streamsClient.getManifest(
+        videoId,
+        requireWatchPage: false,
+      );
       final audio = res.audioOnly;
       return StreamProvider(
           playable: true,
@@ -139,7 +142,10 @@ class StreamProvider {
   static Future<String?> getVideoUrl(String videoId) async {
     final yt = YoutubeExplode();
     try {
-      final manifest = await yt.videos.streamsClient.getManifest(videoId);
+      final manifest = await yt.videos.streamsClient.getManifest(
+        videoId,
+        requireWatchPage: false,
+      );
       final muxed = manifest.muxed;
       if (muxed.isNotEmpty) {
         return muxed.withHighestBitrate().url.toString();
