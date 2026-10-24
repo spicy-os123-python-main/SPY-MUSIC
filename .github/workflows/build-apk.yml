@@ -50,15 +50,20 @@ jobs:
               print('Successfully patched', f)
           "
 
-      - name: Build Android APK (Release)
+      - name: Build Android APKs (Release & Split)
         run: |
           flutter build apk --release
+          flutter build apk --split-per-abi --release
 
       - name: Prepare APK Outputs
         run: |
           mkdir -p output
-          cp build/app/outputs/flutter-apk/app-release.apk output/SPY-MUSIC.apk || cp build/app/outputs/flutter-apk/*.apk output/ || true
-          ls -la output/
+          # Universal APK (runs on all Android devices)
+          cp build/app/outputs/flutter-apk/app-release.apk output/SPY-MUSIC.apk
+          # Split APKs (smaller downloads for specific architectures)
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk output/SPY-MUSIC-arm64-v8a.apk || true
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk output/SPY-MUSIC-armeabi-v7a.apk || true
+          ls -lh output/
 
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
@@ -75,3 +80,4 @@ jobs:
           files: output/*.apk
           name: "SPY MUSIC v1.0.0 (Android APK)"
           generate_release_notes: true
+          make_latest: true
