@@ -18,6 +18,8 @@ import 'package:rxdart/rxdart.dart';
 import 'soundcloud_service.dart';
 import 'platform_search_service.dart';
 import '/models/album.dart';
+import '../models/music_source.dart';
+import '../ui/widgets/platform_selector_widget.dart';
 import '../models/playlist.dart';
 import '/services/equalizer.dart';
 import '/services/stream_service.dart';
@@ -571,7 +573,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             currentSong.id,
             targetMediaItem: currentSong,
             generateNewUrl: isNewUrlReq,
-          ).timeout(const Duration(seconds: 20));
+          ).timeout(const Duration(seconds: 30));
 
           if (songIndex != currentIndex) {
             return;
@@ -681,7 +683,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           final streamInfo = await checkNGetUrl(
             currMed.id,
             targetMediaItem: currMed,
-          ).timeout(const Duration(seconds: 20));
+          ).timeout(const Duration(seconds: 30));
 
           if (!streamInfo.playable) {
             currentSongUrl = null;
@@ -922,11 +924,36 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     return super.stop();
   }
 
+  MusicSource _activeSource() {
+    if (Get.isRegistered<PlatformSelectorController>()) {
+      return Get.find<PlatformSelectorController>().selectedSource.value;
+    }
+    return MusicSource.all;
+  }
+
+  void _applyMatchedDuration(MediaItem? song, MediaItem matched) {
+    if (song == null) return;
+    final missing = song.duration == null || song.duration!.inSeconds == 0;
+    final matchedDuration = matched.duration;
+    if (!missing || matchedDuration == null || matchedDuration <= Duration.zero) {
+      return;
+    }
+    final updated = song.copyWith(duration: matchedDuration);
+    final index = currentIndex;
+    if (index != null &&
+        index < queue.value.length &&
+        queue.value[index].id == song.id) {
+      queue.value[index] = updated;
+    }
+    mediaItem.add(updated);
+  }
+
 // Work around used [useNewInstanceOfExplode = false] to Fix Connection closed before full header was received issue
   Future<HMStreamingData> checkNGetUrl(String songId,
       {MediaItem? targetMediaItem,
       bool generateNewUrl = false,
-      bool offlineReplacementUrl = false}) async {
+      bool offlineReplacementUrl = false,
+      bool allowFallback = true}) async {
     printINFO("Requested id : $songId");
 
     final targetSong = targetMediaItem ??
@@ -992,55 +1019,51 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       printINFO("Resolving Spotify/Amazon track stream for: $songId");
       final query = (targetSong?.extras?['searchQuery'] as String?) ??
           ('${targetSong?.title ?? ''} ${targetSong?.artist ?? ''}').trim();
-      final matchedTrack =
-          await PlatformSearchService.resolveMatchedTrack(songId, query, originalTrack: targetSong);
-      if (matchedTrack != null) {
-        if (targetSong != null &&
-            (targetSong.duration == null ||
-                targetSong.duration == Duration.zero ||
-                targetSong.duration!.inSeconds == 0)) {
-          if (matchedTrack.duration != null &&
-              matchedTrack.duration! > Duration.zero) {
-            final updatedSong =
-                targetSong.copyWith(duration: matchedTrack.duration);
-            if (currentIndex != null &&
-                currentIndex! < queue.value.length &&
-                queue.value[currentIndex!].id == targetSong.id) {
-              queue.value[currentIndex!] = updatedSong;
-            }
-            mediaItem.add(updatedSong);
-          }
-        }
-        if (matchedTrack.id.startsWith("sc_")) {
-          final scStreamUrl = await SoundCloudService.resolveStreamUrl(
-            matchedTrack.id,
-            transcodingUrl: matchedTrack.extras?['transcodingUrl'] as String?,
-            trackAuthorization: matchedTrack.extras?['track_authorization'] as String?,
-          );
-          if (scStreamUrl != null && scStreamUrl.isNotEmpty) {
-            final audio = Audio(
-              audioCodec: Codec.mp4a,
-              bitrate: 160000,
-              loudnessDb: 0,
-              duration: targetSong?.duration?.inMilliseconds ?? (matchedTrack.duration?.inMilliseconds ?? 0),
-              size: 0,
-              url: scStreamUrl,
-              itag: 140,
-            );
-            return HMStreamingData(
-              playable: true,
-              statusMSG: "OK",
-              lowQualityAudio: audio,
-              highQualityAudio: audio,
-            );
-          } else {
-            PlatformSearchService.invalidateMatch(songId);
-            SoundCloudService.invalidateStreamCache(matchedTrack.id);
-          }
-        } else {
+      var matchedTrack = await PlatformSearchService.resolveMatchedTrack(
+          songId, query,
+          originalTrack: targetSong);
+
+      for (var attempt = 0; attempt < 2 && matchedTrack != null; attempt++) {
+        _applyMatchedDuration(targetSong, matchedTrack);
+
+        if (!matchedTrack.id.startsWith("sc_")) {
           return checkNGetUrl(matchedTrack.id,
-              targetMediaItem: targetSong, generateNewUrl: generateNewUrl);
+              targetMediaItem: targetSong,
+              generateNewUrl: generateNewUrl,
+              allowFallback: false);
         }
+
+        final scStreamUrl = await SoundCloudService.resolveStreamUrl(
+          matchedTrack.id,
+          transcodingUrl: matchedTrack.extras?['transcodingUrl'] as String?,
+          trackAuthorization:
+              matchedTrack.extras?['track_authorization'] as String?,
+        );
+        if (scStreamUrl != null && scStreamUrl.isNotEmpty) {
+          final audio = Audio(
+            audioCodec: Codec.mp4a,
+            bitrate: 160000,
+            loudnessDb: 0,
+            duration: targetSong?.duration?.inMilliseconds ??
+                (matchedTrack.duration?.inMilliseconds ?? 0),
+            size: 0,
+            url: scStreamUrl,
+            itag: 140,
+          );
+          return HMStreamingData(
+            playable: true,
+            statusMSG: "OK",
+            lowQualityAudio: audio,
+            highQualityAudio: audio,
+          );
+        }
+
+        // The SoundCloud match had no usable stream, look for a YouTube Music match instead
+        SoundCloudService.invalidateStreamCache(matchedTrack.id);
+        PlatformSearchService.invalidateMatch(songId);
+        matchedTrack = await PlatformSearchService.resolveMatchedTrack(
+            songId, query,
+            originalTrack: targetSong, skipSoundCloud: true);
       }
 
       // DO NOT fall through to YouTube code!
@@ -1136,15 +1159,23 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
         } catch (_) {}
 
-        final streamInfoJson = await Isolate.run(
-          () => getStreamInfo(songId, token, pipedInstances: pipedList),
-        ).timeout(const Duration(seconds: 16));
+        Map<String, dynamic> streamInfoJson;
+        try {
+          streamInfoJson = await Isolate.run(
+            () => getStreamInfo(songId, token, pipedInstances: pipedList),
+          ).timeout(const Duration(seconds: 18));
+        } catch (e) {
+          printERROR("YouTube stream lookup failed for $songId: $e");
+          streamInfoJson = {"playable": false, "statusMSG": e.toString()};
+        }
         streamInfo = HMStreamingData.fromJson(streamInfoJson);
         if (streamInfo.playable) {
           songsUrlCacheBox.put(songId, streamInfoJson);
+        } else if (!allowFallback || _activeSource() == MusicSource.youtube) {
+          // YouTube is selected (or this id already came from a fallback), so no other platform is used
+          printERROR("YouTube failed for $songId: ${streamInfo.statusMSG}");
         } else {
-          // Automatic resilient fallback to SoundCloud CDN if YouTube / Piped fails (e.g. strict VPN rate-limiting)
-          printINFO("YouTube failed for $songId (${streamInfo.statusMSG}), attempting SoundCloud CDN fallback...");
+          printINFO("YouTube failed for $songId (${streamInfo.statusMSG}), trying SoundCloud");
           final sSong = targetSong ??
               queue.value.firstWhereOrNull((item) => item.id == songId) ??
               (mediaItem.value?.id == songId ? mediaItem.value : null);
@@ -1173,9 +1204,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 .replaceAll(RegExp(r'\(lyrics\)', caseSensitive: false), '')
                 .replaceAll(RegExp(r'\[lyrics\]', caseSensitive: false), '')
                 .trim();
-            final scTracks = await SoundCloudService().searchTracks(query, limit: 3);
-            if (scTracks.isNotEmpty) {
-              final scTrack = scTracks.first;
+            final scTracks = await SoundCloudService()
+                .searchTracks(query, limit: 8)
+                .timeout(const Duration(seconds: 8), onTimeout: () => []);
+            final scTrack = PlatformSearchService.findBestMatch(scTracks, sSong);
+            if (scTrack != null) {
               final scUrl = await SoundCloudService.resolveStreamUrl(scTrack.id,
                   transcodingUrl: scTrack.extras?['transcodingUrl'] as String?,
                   trackAuthorization: scTrack.extras?['track_authorization'] as String?);

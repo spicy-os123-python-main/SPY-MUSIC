@@ -1,3 +1,4 @@
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:spymusic/ui/screens/Settings/settings_screen_controller.dart';
@@ -156,6 +157,34 @@ class SearchResultScreenController extends GetxController
     onDestinationSelected(railItems.indexOf(text) + 1);
   }
 
+  Future<Map<String, dynamic>> _searchYouTube(List<String> queries) async {
+    Map<String, dynamic> result = {};
+    for (final q in queries) {
+      result = await musicServices.search(q);
+      if (result.isNotEmpty) break;
+    }
+    return result;
+  }
+
+  Future<T> _safeSearch<T>(Future<T> search, T fallback) {
+    return search.timeout(const Duration(seconds: 8)).catchError((Object e) {
+      printERROR("Search source failed: $e");
+      return fallback;
+    });
+  }
+
+  List<dynamic> _interleave(List<List<dynamic>> lists) {
+    final out = <dynamic>[];
+    final longest =
+        lists.fold<int>(0, (max, l) => l.length > max ? l.length : max);
+    for (var i = 0; i < longest; i++) {
+      for (final list in lists) {
+        if (i < list.length) out.add(list[i]);
+      }
+    }
+    return out;
+  }
+
   Future<void> _getInitSearchResult() async {
     isResultContentFetced.value = false;
     final args = queryString.value.isNotEmpty ? queryString.value : Get.arguments;
@@ -197,20 +226,29 @@ class SearchResultScreenController extends GetxController
         }
       } else {
         printINFO("All Platforms Search for: $finalQuery");
-        resultContent.value = await musicServices.search(finalQuery);
-        if (resultContent.isEmpty && args.toString().contains(" - ")) {
-          final fallbackQuery = args.toString().split(" - ").last.trim();
-          resultContent.value = await musicServices.search(fallbackQuery);
-        }
+        final queries = [
+          finalQuery,
+          if (finalQuery.contains(" - ")) finalQuery.split(" - ").last.trim(),
+        ];
 
-        // Seamless fallback to SoundCloud if YouTube had 0 results
-        final songsList = resultContent["Songs"] as List?;
-        if (songsList == null || songsList.isEmpty) {
-          final scTracks = await SoundCloudService().searchTracks(finalQuery);
-          if (scTracks.isNotEmpty) {
-            resultContent["Songs"] = scTracks;
-          }
-        }
+        final responses = await Future.wait([
+          _safeSearch<Map<String, dynamic>>(
+              _searchYouTube(queries), <String, dynamic>{}),
+          _safeSearch<List<MediaItem>>(
+              SoundCloudService().searchTracks(finalQuery), <MediaItem>[]),
+          _safeSearch<List<MediaItem>>(
+              PlatformSearchService.searchSpotify(finalQuery), <MediaItem>[]),
+        ]);
+
+        final merged = Map<String, dynamic>.from(responses[0] as Map);
+        final ytSongs = List.from((merged["Songs"] as List?) ?? const []);
+        final songs = _interleave([
+          ytSongs,
+          responses[1] as List,
+          responses[2] as List,
+        ]);
+        if (songs.isNotEmpty) merged["Songs"] = songs;
+        resultContent.value = merged;
       }
 
       const preferredOrder = [

@@ -10,19 +10,49 @@ class StreamProvider {
   StreamProvider(
       {required this.playable, this.audioFormats, this.statusMSG = ""});
 
+  /// Each client gets its own short attempt. The library retries a failing
+  /// client up to five times, so a single dead client used to eat the whole
+  /// time budget before the next one was even tried.
+  static Future<StreamManifest> _manifestWithClients(
+      YoutubeExplode yt, String videoId) async {
+    final clients = <String, YoutubeApiClient>{
+      'androidSdkless': YoutubeApiClient.androidSdkless,
+      'androidVr': YoutubeApiClient.androidVr,
+      'ios': YoutubeApiClient.ios,
+      'androidMusic': YoutubeApiClient.androidMusic,
+    };
+    final watch = Stopwatch()..start();
+    Object? lastError;
+
+    for (final entry in clients.entries) {
+      if (watch.elapsed > const Duration(seconds: 8)) break;
+      try {
+        final manifest = await yt.videos.streamsClient
+            .getManifest(
+              videoId,
+              ytClients: [entry.value],
+              requireWatchPage: false,
+            )
+            .timeout(const Duration(seconds: 4));
+        if (manifest.audioOnly.isNotEmpty) {
+          printINFO("YouTube client ${entry.key} worked for $videoId");
+          return manifest;
+        }
+        printERROR("YouTube client ${entry.key} returned no audio for $videoId");
+      } catch (e) {
+        lastError = e;
+        printERROR("YouTube client ${entry.key} failed for $videoId: $e");
+      }
+    }
+    throw lastError ??
+        VideoUnavailableException('No YouTube client returned audio for $videoId');
+  }
+
   static Future<StreamProvider> fetch(String videoId, {List<String>? pipedInstances}) async {
     final yt = YoutubeExplode();
 
     try {
-      final res = await yt.videos.streamsClient.getManifest(
-        videoId,
-        ytClients: [
-          YoutubeApiClient.androidSdkless,
-          YoutubeApiClient.androidMusic,
-          YoutubeApiClient.ios,
-        ],
-        requireWatchPage: false,
-      ).timeout(const Duration(seconds: 12));
+      final res = await _manifestWithClients(yt, videoId);
       final audio = res.audioOnly;
       return StreamProvider(
           playable: true,
@@ -42,7 +72,9 @@ class StreamProvider {
       printERROR("StreamProvider.fetch YouTube error for $videoId: $e (Type: ${e.runtimeType})\n$stack");
 
       // Robust Fallback: try fallback stream APIs (Piped instances)
-      final fallbackResult = await _fetchFromPiped(videoId, pipedInstances: pipedInstances);
+      final fallbackResult = await _fetchFromPiped(videoId,
+              pipedInstances: pipedInstances)
+          .timeout(const Duration(seconds: 4), onTimeout: () => null);
       if (fallbackResult != null && fallbackResult.playable) {
         return fallbackResult;
       }

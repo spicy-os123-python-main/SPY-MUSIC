@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
@@ -82,7 +81,7 @@ class PlatformSearchService {
     }
 
     // Fallback: query tagged Spotify tracks
-    return await _queryFilteredEngine('Spotify $query', 'Spotify');
+    return [];
   }
 
   /// Search specifically for Amazon Music tracks
@@ -137,7 +136,7 @@ class PlatformSearchService {
       printERROR("Amazon platform search error: $e");
     }
 
-    return await _queryFilteredEngine('Amazon Music $query', 'Amazon Music');
+    return [];
   }
 
   /// Get current Spotify Top Hits for Home Screen
@@ -150,104 +149,73 @@ class PlatformSearchService {
     return await searchAmazon('Amazon Music Best Hits', limit: limit);
   }
 
-  /// Fast fallback search with explicit YouTube labeling
-  static Future<List<MediaItem>> _queryFilteredEngine(
-      String query, String platformName) async {
-    try {
-      final musicServices = Get.find<MusicServices>();
-      final results = await musicServices.search(query, filter: 'songs', limit: 25);
-      final rawList = (results['Songs'] as List?) ?? (results['mixed'] as List?);
-      if (rawList != null && rawList.isNotEmpty) {
-        return rawList.whereType<MediaItem>().map((item) {
-          final extras = Map<String, dynamic>.from(item.extras ?? {});
-          extras['platform'] = '$platformName (via YouTube)';
-          extras['isFallback'] = true;
-          return item.copyWith(extras: extras);
-        }).toList();
-      }
-    } catch (_) {}
-    return [];
-  }
-
-  /// Resolve audio stream for Spotify or Amazon track by matching track title, artist & duration
-  /// Starts SoundCloud and YouTube search in parallel and picks first valid match to avoid slow sequential fallbacks
+  /// Spotify and Amazon results only carry metadata (they come from Deezer),
+  /// so the audio has to be matched on another source. SoundCloud is tried
+  /// first, YouTube Music only if SoundCloud has no usable match.
   static Future<MediaItem?> resolveMatchedTrack(
       String trackId, String searchQuery,
-      {MediaItem? originalTrack}) async {
-    if (_matchedItemCache.containsKey(trackId)) {
+      {MediaItem? originalTrack, bool skipSoundCloud = false}) async {
+    if (!skipSoundCloud && _matchedItemCache.containsKey(trackId)) {
       return _matchedItemCache[trackId];
     }
 
-    final cleanQuery = searchQuery
-        .replaceAll(RegExp(r'\(feat\.[^)]*\)', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\[feat\.[^\]]*\]', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\(official video\)', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\[official video\]', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\(official audio\)', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\[official audio\]', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\(lyrics\)', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\[lyrics\]', caseSensitive: false), '')
-        .trim();
-    final q = cleanQuery.isNotEmpty ? cleanQuery : searchQuery;
+    final q = _cleanQuery(searchQuery);
 
-    final completer = Completer<MediaItem?>();
-    int pending = 2;
-
-    void onResolved(MediaItem? match, String source) {
-      if (completer.isCompleted) return;
-      if (match != null) {
-        _matchedItemCache[trackId] = match;
-        _matchCache[trackId] = match.id;
-        printINFO("Matched $trackId to $source: '${match.title}' by '${match.artist}'");
-        completer.complete(match);
-      } else {
-        pending--;
-        if (pending == 0 && !completer.isCompleted) {
-          completer.complete(null);
+    if (!skipSoundCloud) {
+      try {
+        final scTracks = await SoundCloudService()
+            .searchTracks(q, limit: 8)
+            .timeout(const Duration(seconds: 6));
+        final match = findBestMatch(scTracks, originalTrack);
+        if (match != null) {
+          _remember(trackId, match);
+          printINFO("Matched $trackId to SoundCloud: '${match.title}' by '${match.artist}'");
+          return match;
         }
+        printINFO("No SoundCloud match for $trackId ('$q')");
+      } catch (e) {
+        printERROR("SoundCloud match failed for $trackId: $e");
       }
     }
 
-    // 1. Parallel Task: SoundCloud Search & Match (timeout 5s)
-    SoundCloudService()
-        .searchTracks(q, limit: 5)
-        .timeout(const Duration(seconds: 5))
-        .then((scTracks) {
-      final match =
-          scTracks.isNotEmpty ? _findBestMatch(scTracks, originalTrack) : null;
-      onResolved(match, 'SoundCloud');
-    }).catchError((e) {
-      printERROR("SoundCloud parallel resolution failed for $trackId: $e");
-      onResolved(null, 'SoundCloud');
-    });
-
-    // 2. Parallel Task: YouTube Music Search & Match (timeout 5s)
-    Future.microtask(() async {
-      try {
-        final musicServices = Get.find<MusicServices>();
-        final res = await musicServices
-            .search(searchQuery, filter: 'songs', limit: 5)
-            .timeout(const Duration(seconds: 5));
-        final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
-        MediaItem? match;
-        if (rawList != null && rawList.isNotEmpty) {
-          final ytTracks = rawList
-              .whereType<MediaItem>()
-              .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
-              .toList();
-          if (ytTracks.isNotEmpty) {
-            match = _findBestMatch(ytTracks, originalTrack);
-          }
-        }
-        onResolved(match, 'YouTube');
-      } catch (e) {
-        printERROR("YouTube parallel resolution failed for $trackId: $e");
-        onResolved(null, 'YouTube');
+    try {
+      final musicServices = Get.find<MusicServices>();
+      final res = await musicServices
+          .search(q, filter: 'songs', limit: 8)
+          .timeout(const Duration(seconds: 6));
+      final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
+      final ytTracks = (rawList ?? const [])
+          .whereType<MediaItem>()
+          .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
+          .toList();
+      final match = findBestMatch(ytTracks, originalTrack);
+      if (match != null) {
+        _remember(trackId, match);
+        printINFO("Matched $trackId to YouTube: '${match.title}' by '${match.artist}'");
+        return match;
       }
-    });
+    } catch (e) {
+      printERROR("YouTube match failed for $trackId: $e");
+    }
 
-    return await completer.future
-        .timeout(const Duration(seconds: 6), onTimeout: () => null);
+    return null;
+  }
+
+  static void _remember(String trackId, MediaItem match) {
+    _matchedItemCache[trackId] = match;
+    _matchCache[trackId] = match.id;
+  }
+
+  static String _cleanQuery(String searchQuery) {
+    final cleaned = searchQuery
+        .replaceAll(RegExp(r'\(feat\.[^)]*\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\[feat\.[^\]]*\]', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\((official )?(video|audio)\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\[(official )?(video|audio)\]', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\(lyrics\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\[lyrics\]', caseSensitive: false), '')
+        .trim();
+    return cleaned.isNotEmpty ? cleaned : searchQuery;
   }
 
   /// Backward-compatible method returning matched stream ID
@@ -258,8 +226,9 @@ class PlatformSearchService {
     return matched?.id;
   }
 
-  /// Match candidates against original track by comparing title, artist, and duration
-  static MediaItem? _findBestMatch(List<MediaItem> candidates, MediaItem? original) {
+  /// Picks the candidate that fits the original track best (title, artist,
+  /// duration). Returns null if nothing is close enough.
+  static MediaItem? findBestMatch(List<MediaItem> candidates, MediaItem? original) {
     if (candidates.isEmpty) return null;
     if (original == null) return candidates.first;
 
@@ -273,6 +242,7 @@ class PlatformSearchService {
     for (var candidate in candidates) {
       double score = 0.0;
       final cTitle = _normalizeString(candidate.title);
+      if (cTitle.isEmpty) continue;
       final cArtist = _normalizeString(candidate.artist ?? '');
       final cDurationSec = candidate.duration?.inSeconds ?? 0;
 
@@ -316,13 +286,13 @@ class PlatformSearchService {
       }
     }
 
-    return bestScore >= 15.0 ? bestMatch : candidates.first;
+    return bestScore >= 30.0 ? bestMatch : null;
   }
 
   static String _normalizeString(String str) {
     return str
         .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9\s]'), '')
+        .replaceAll(RegExp(r'[^\p{L}\p{N}\s]', unicode: true), '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
