@@ -17,7 +17,7 @@ class StreamProvider {
       YoutubeExplode yt, String videoId) async {
     final clients = <String, YoutubeApiClient>{
       'androidSdkless': YoutubeApiClient.androidSdkless,
-      'androidVr': YoutubeApiClient.androidVr,
+      'android': YoutubeApiClient.android,
       'ios': YoutubeApiClient.ios,
       'androidMusic': YoutubeApiClient.androidMusic,
     };

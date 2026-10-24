@@ -162,7 +162,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   void _listenSessionIdStream() {
     _player.androidAudioSessionIdStream.listen((int? id) {
       if (id != null) {
-        EqualizerService.initAudioEffect(id);
+        try {
+          EqualizerService.initAudioEffect(id);
+        } catch (e) {
+          printERROR("initAudioEffect error: $e");
+        }
       }
     });
   }
@@ -227,7 +231,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           await _player.play();
           return;
         }
-        customAction("playByIndex", {'index': currentIndex, 'newUrl': true});
+        customAction("playByIndex", {'index': currentIndex ?? 0, 'newUrl': true});
       } else {
         printERROR("Playback failed after $_songErrorRetryCount retries for $currentId: $e");
         _songErrorRetryCount = 0;
@@ -359,20 +363,36 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
     }
 
-    if (mediaItem.id.startsWith("sc_") ||
-        (mediaItem.extras?['isSoundCloud'] == true) ||
+    // Direct AudioSource.uri for all streaming sources (YouTube, SoundCloud, Piped, HLS)
+    // Avoids LockCachingAudioSource which breaks range-seeking and triggers ExoPlayer "Source error"
+    if (url.contains('googlevideo.com') ||
+        url.contains('piped') ||
         url.contains('.m3u8') ||
-        url.contains('soundcloud.cloud')) {
-      printINFO("Playing SoundCloud Track via AudioSource.uri");
+        url.contains('soundcloud') ||
+        url.contains('sndcdn') ||
+        mediaItem.id.startsWith("sc_") ||
+        (mediaItem.extras?['isSoundCloud'] == true)) {
+      printINFO("Playing stream via AudioSource.uri: ${url.substring(0, url.length > 80 ? 80 : url.length)}...");
       isPlayingUsingLockCachingSource = false;
+      final uri = Uri.parse(url);
+      final headers = url.contains('googlevideo.com')
+          ? {
+              'User-Agent':
+                  'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+              'Connection': 'keep-alive',
+            }
+          : null;
       return AudioSource.uri(
-        Uri.parse(url),
+        uri,
+        headers: headers,
         tag: mediaItem,
       );
     }
+
     if (url.contains('/cache') ||
         (Get.find<SettingsScreenController>().cacheSongs.isTrue &&
-            url.contains("http"))) {
+            url.contains("http") &&
+            !url.contains('googlevideo.com'))) {
       printINFO("Playing Using LockCaching");
       isPlayingUsingLockCachingSource = true;
       return LockCachingAudioSource(
@@ -611,14 +631,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 Duration(
                   milliseconds: position,
                 ),
-              );
-              await _player.seek(
-                Duration(
-                  milliseconds: position,
-                ),
+                index: 0,
               );
             }
           } else {
+            await _player.seek(Duration.zero, index: 0);
             await _player.play();
           }
         } catch (e, st) {
@@ -697,6 +714,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
           currentSongUrl = currMed.extras!['url'] = streamInfo.audio!.url;
 
+          playbackState.add(playbackState.value.copyWith(queueIndex: 0));
           await _playList.add(_createAudioSource(currMed));
           isSongLoading = false;
 
@@ -705,6 +723,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             _normalizeVolume(streamInfo.audio!.loudnessDb);
           }
 
+          await _player.seek(Duration.zero, index: 0);
           await _player.play();
         } catch (e, st) {
           printERROR("setSourceNPlay error for ${currMed.id}: $e\n$st");
