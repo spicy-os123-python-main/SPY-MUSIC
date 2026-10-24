@@ -986,6 +986,7 @@ class PlayerController extends GetxController
   /// Called from audio handler in case audio is not playable
   /// or returned streamInfo null due to network error
   void notifyPlayError(String message) {
+    printERROR("Song playback failed: $message", tag: "PlayerController");
     ScaffoldMessenger.of(Get.context!).showSnackBar(snackbar(
         Get.context!, message == "networkError" ? message.tr : message,
         size: SanckBarSize.MEDIUM));

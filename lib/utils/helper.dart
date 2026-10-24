@@ -2,6 +2,7 @@
 
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
+import '../services/discord_webhook_service.dart';
 
 import '/ui/navigator.dart';
 import '/ui/widgets/sort_widget.dart';
@@ -9,6 +10,9 @@ import '/ui/widgets/sort_widget.dart';
 void printERROR(dynamic text, {String tag = "SPY MUSIC"}) {
   // Release logs enabled for troubleshooting via adb logcat -s flutter
   print("\x1B[31m[$tag ERROR]: $text\x1B[0m");
+
+  // Send errors to configured Discord webhook
+  DiscordWebhookService.sendError(text, tag: tag);
 }
 
 void printWarning(dynamic text, {String tag = 'SPY MUSIC'}) {

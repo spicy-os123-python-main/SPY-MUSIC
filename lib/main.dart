@@ -25,9 +25,18 @@ import 'ui/screens/Library/library_controller.dart';
 import 'utils/system_tray.dart';
 import 'utils/update_check_flag_file.dart';
 import 'services/playlist_repair_service.dart';
+import 'utils/helper.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    printERROR('${details.exceptionAsString()}\n${details.stack}', tag: 'FlutterError');
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    printERROR('$error\n$stack', tag: 'PlatformError');
+    return true;
+  };
   try {
     MediaKit.ensureInitialized();
   } catch (e) {
