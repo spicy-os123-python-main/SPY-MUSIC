@@ -176,3 +176,4 @@ class _DiscordLoginDialogState extends State<DiscordLoginDialog> {
     );
   }
 }
+

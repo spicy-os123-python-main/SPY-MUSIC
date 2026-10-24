@@ -18,6 +18,7 @@ import '/services/music_service.dart';
 import '/ui/player/player_controller.dart';
 import '../Home/home_screen_controller.dart';
 import '/ui/utils/theme_controller.dart';
+import '../../widgets/new_version_dialog.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 enum DataSaverMode {
@@ -74,6 +75,30 @@ class SettingsScreenController extends GetxController {
   _checkNewVersion() {
     newVersionCheck(currentVersion)
         .then((value) => isNewVersionAvailable.value = value);
+  }
+
+  Future<void> checkForUpdatesManually(BuildContext context) async {
+    final details = await checkAppUpdateDetails(currentVer: currentVersion);
+    if (details['hasUpdate'] == true) {
+      isNewVersionAvailable.value = true;
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => const NewVersionDialog(),
+        );
+      }
+    } else {
+      isNewVersionAvailable.value = false;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          snackbar(
+            context,
+            "✅ SPY MUSIC ist aktuell! (${details['current']})",
+            size: SanckBarSize.MEDIUM,
+          ),
+        );
+      }
+    }
   }
 
   Future<String> _createInAppSongDownDir() async {

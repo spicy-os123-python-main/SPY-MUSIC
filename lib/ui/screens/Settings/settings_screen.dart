@@ -60,7 +60,7 @@ class SettingsScreen extends StatelessWidget {
                             onTap: () {
                               launchUrl(
                                 Uri.parse(
-                                  'https://github.com/anandnet/Harmony-Music/releases/latest',
+                                  'https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest',
                                 ),
                                 mode: LaunchMode.externalApplication,
                               );
@@ -799,17 +799,30 @@ class SettingsScreen extends StatelessWidget {
                 title: "appInfo".tr,
                 children: [
                   ListTile(
-                    contentPadding: const EdgeInsets.only(left: 5, right: 10),
-                    title: Text("github".tr),
+                    leading: const Icon(Icons.system_update_rounded,
+                        color: Color(0xFF00D2FF)),
+                    title: const Text("Auf Updates überprüfen"),
+                    subtitle: const Text("Prüft online auf die neueste SPY MUSIC Version"),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                        size: 16, color: Colors.white54),
+                    onTap: () =>
+                        settingsController.checkForUpdatesManually(context),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading:
+                        const Icon(Icons.code_rounded, color: Colors.white70),
+                    contentPadding: const EdgeInsets.only(left: 15, right: 10),
+                    title: const Text("GitHub Repository"),
                     subtitle: Text(
-                      "${"githubDes".tr}${((Get.find<PlayerController>().playerPanelMinHeight.value) == 0 || !isBottomNavActive) ? "" : "\n\n${settingsController.currentVersion} ${"by".tr} anandnet"}",
+                      "Quellcode & Releases auf GitHub\n${settingsController.currentVersion} by SPY",
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     isThreeLine: true,
                     onTap: () {
                       launchUrl(
                         Uri.parse(
-                          'https://github.com/anandnet/Harmony-Music',
+                          'https://github.com/spicy-os123-python-main/SPY-MUSIC',
                         ),
                         mode: LaunchMode.externalApplication,
                       );
@@ -835,7 +848,7 @@ class SettingsScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 20.0),
             child: Text(
-              "${settingsController.currentVersion} ${"by".tr} anandnet",
+              "${settingsController.currentVersion} by SPY",
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),

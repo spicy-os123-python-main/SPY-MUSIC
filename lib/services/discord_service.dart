@@ -239,6 +239,14 @@ class DiscordService {
           "assets": {
             "large_image": "spy_music_logo",
             "large_text": "SPY MUSIC (Ad-Free Streaming)",
+          },
+          "buttons": [
+            "Download SPY MUSIC"
+          ],
+          "metadata": {
+            "button_urls": [
+              "https://github.com/spicy-os123-python-main/SPY-MUSIC"
+            ]
           }
         }
       ],
