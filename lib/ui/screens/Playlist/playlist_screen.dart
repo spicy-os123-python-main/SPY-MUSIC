@@ -9,6 +9,7 @@ import '/models/playling_from.dart';
 import '/models/thumbnail.dart';
 import '/ui/widgets/playlist_album_scroll_behaviour.dart';
 import '../../../services/downloader.dart';
+import '../../../services/playlist_repair_service.dart';
 import '../../navigator.dart';
 import '../../player/player_controller.dart';
 import '../../widgets/create_playlist_dialog.dart';
@@ -449,7 +450,28 @@ class PlaylistScreen extends StatelessWidget {
                                                               Icons.download),
                                             );
                                           }),
-                                      
+
+                                          // Repair button for fixing 0:00 durations & offline streams
+                                          IconButton(
+                                              tooltip: "Playlist reparieren (0:00 beheben)",
+                                              onPressed: () async {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  snackbar(context, "Repariere Playlist...", size: SanckBarSize.MEDIUM),
+                                                );
+                                                final repaired = await PlaylistRepairService().repairSinglePlaylist(
+                                                    playlistController.playlist.value.playlistId);
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    snackbar(
+                                                      context,
+                                                      "✅ Playlist repariert: $repaired Songs aktualisiert!",
+                                                      size: SanckBarSize.BIG,
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                              icon: const Icon(Icons.auto_fix_high_rounded, color: Color(0xFF00D2FF))),
+
                                           if (playlistController
                                               .isAddedToLibrary.isTrue)
                                             IconButton(

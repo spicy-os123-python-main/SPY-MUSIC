@@ -24,6 +24,7 @@ import 'ui/screens/Home/home_screen_controller.dart';
 import 'ui/screens/Library/library_controller.dart';
 import 'utils/system_tray.dart';
 import 'utils/update_check_flag_file.dart';
+import 'services/playlist_repair_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,6 +57,13 @@ Future<void> main() async {
     debugPrint('System UI init: $e');
   }
   runApp(const MyApp());
+  Future.microtask(() async {
+    try {
+      await PlaylistRepairService().autoRepairOnLaunch();
+    } catch (e) {
+      debugPrint('Auto repair: $e');
+    }
+  });
 }
 
 class SpyScrollBehavior extends MaterialScrollBehavior {

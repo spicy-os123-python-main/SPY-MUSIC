@@ -24,7 +24,6 @@ import '/models/hm_streaming_data.dart';
 import '/ui/player/player_controller.dart';
 import '../ui/screens/Home/home_screen_controller.dart';
 import '/services/background_task.dart';
-import '/services/permission_service.dart';
 import '../utils/helper.dart';
 import '/models/media_Item_builder.dart';
 import '/services/utils.dart';
@@ -244,10 +243,14 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   void _listenForDurationChanges() {
     _player.durationStream.listen((duration) async {
       final currQueue = queue.value;
-      if (currentIndex == null || currQueue.isEmpty || duration == null) return;
+      if (currentIndex == null || currQueue.isEmpty || duration == null || duration == Duration.zero) return;
       final currentSong = queue.value[currentIndex];
-      if (currentSong.duration == null || currentIndex == 0) {
+      if (currentSong.duration == null ||
+          currentSong.duration == Duration.zero ||
+          currentSong.duration!.inSeconds == 0 ||
+          currentIndex == 0) {
         final newMediaItem = currentSong.copyWith(duration: duration);
+        queue.value[currentIndex] = newMediaItem;
         mediaItem.add(newMediaItem);
       }
     });
@@ -290,7 +293,27 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   AudioSource _createAudioSource(MediaItem mediaItem) {
-    final url = mediaItem.extras!['url'] as String;
+    String url = (mediaItem.extras?['url'] ?? '') as String;
+
+    if (url.isEmpty && Hive.box("SongDownloads").containsKey(mediaItem.id)) {
+      final songJson = Hive.box("SongDownloads").get(mediaItem.id);
+      url = (songJson['url'] ?? '') as String;
+    }
+
+    final isLocalFile = !url.startsWith('http://') && !url.startsWith('https://');
+    if (isLocalFile && url.isNotEmpty) {
+      final cleanPath = url.replaceFirst('file://', '');
+      final file = File(cleanPath);
+      if (file.existsSync()) {
+        printINFO("Playing offline local file: $cleanPath");
+        isPlayingUsingLockCachingSource = false;
+        return AudioSource.file(
+          cleanPath,
+          tag: mediaItem,
+        );
+      }
+    }
+
     if (mediaItem.id.startsWith("sc_") ||
         (mediaItem.extras?['isSoundCloud'] == true) ||
         url.contains('.m3u8') ||
@@ -314,10 +337,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       );
     }
 
-    printINFO("Playing Using AudioSource.uri");
+    printINFO("Playing Using AudioSource.uri: $url");
     isPlayingUsingLockCachingSource = false;
+    final uri = isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
     return AudioSource.uri(
-      Uri.tryParse(url)!,
+      uri,
       tag: mediaItem,
     );
   }
@@ -503,7 +527,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               errorMessage: streamInfo.statusMSG));
           return;
         }
-        currentSongUrl = currentSong.extras!['url'] = streamInfo.audio!.url;
+        final streamAudioUrl = streamInfo.audio?.url ?? '';
+        currentSongUrl = streamAudioUrl;
+        if (currentSong.extras != null) {
+          currentSong.extras!['url'] = streamAudioUrl;
+        }
         playbackState
             .add(playbackState.value.copyWith(queueIndex: currentIndex));
         await _playList.add(_createAudioSource(currentSong));
@@ -893,16 +921,14 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           highQualityAudio: audio,
           lowQualityAudio: audio);
 
-      if (path.contains(
-          "${Get.find<SettingsScreenController>().supportDirPath}/Music")) {
-        return streamInfo;
+      if (path != null && path.toString().isNotEmpty) {
+        final filePath = path.toString().replaceFirst("file://", "");
+        if (File(filePath).existsSync()) {
+          return streamInfo;
+        }
       }
-      //check file access and if file exist in storage
-      final status = await PermissionService.getExtStoragePermission();
-      if (status && await File(path).exists()) {
-        return streamInfo;
-      }
-      //in case file doesnot found in storage, song will be played online
+      // In case file is not found in storage, song will be played online seamlessly
+      printINFO("Downloaded file not found at $path, playing $songId online");
       return checkNGetUrl(songId, offlineReplacementUrl: true);
     } else {
       //check if song stream url is cached and allocate url accordingly

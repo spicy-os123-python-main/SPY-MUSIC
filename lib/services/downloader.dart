@@ -228,6 +228,7 @@ class Downloader extends GetxService {
 
         song.extras?['url'] = filePath;
         final songJson = MediaItemBuilder.toJson(song);
+        songJson['url'] = filePath;
         final streamInfoJson = requiredAudioStream.toJson();
         streamInfoJson['url'] = filePath;
         // [playbility status, info map]

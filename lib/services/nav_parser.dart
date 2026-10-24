@@ -553,6 +553,26 @@ List<dynamic> parsePlaylistItems(List<dynamic> results,
         duration = getFixedColumnItem(data, 0)!['text']['runs'][0]['text'];
       }
     }
+    if (duration == null && data.containsKey('flexColumns')) {
+      final reg = RegExp(r'^\d{1,2}:\d{2}(:\d{2})?$');
+      for (final col in data['flexColumns']) {
+        final runs = nav(col, [
+          'musicResponsiveListItemFlexColumnRenderer',
+          'text',
+          'runs'
+        ]) as List?;
+        if (runs != null) {
+          for (final run in runs) {
+            final t = run['text']?.toString().trim();
+            if (t != null && reg.hasMatch(t)) {
+              duration = t;
+              break;
+            }
+          }
+        }
+        if (duration != null) break;
+      }
+    }
 
     dynamic thumbnails_;
     if (data.containsKey('thumbnail')) {

@@ -13,6 +13,8 @@ import '../Library/library_controller.dart';
 import '../../widgets/snackbar.dart';
 import '/ui/widgets/link_piped.dart';
 import '/services/music_service.dart';
+import '/services/discord_service.dart';
+import '/services/playlist_repair_service.dart';
 import '/ui/player/player_controller.dart';
 import '/ui/utils/theme_controller.dart';
 import 'components/custom_expansion_tile.dart';
@@ -288,9 +290,13 @@ class SettingsScreen extends StatelessWidget {
                                 child: Obx(() {
                                   final isEnabled = settingsController
                                       .discordRpcEnabled.value;
+                                  final hasToken =
+                                      DiscordService().token.isNotEmpty;
                                   return Text(
                                     isEnabled
-                                        ? "Status: Aktiv • Sobald Discord auf deinem PC, Pi oder Vesktop läuft, wird dein Song übertragen."
+                                        ? (hasToken
+                                            ? "Status: Aktiv • Live Discord-Gateway verbunden (Smartphone & PC)."
+                                            : "Status: Aktiv • Synchronisiert deine Musik auf PC und via Android MediaSession.")
                                         : "Status: Deaktiviert",
                                     style: TextStyle(
                                       fontSize: 11.5,
@@ -305,6 +311,8 @@ class SettingsScreen extends StatelessWidget {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        const _DiscordTokenInputWidget(),
                       ],
                     ),
                   ),
@@ -736,6 +744,31 @@ class SettingsScreen extends StatelessWidget {
                       ).whenComplete(
                           () => Get.delete<RestoreDialogController>()),
                     ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.only(left: 5, right: 10),
+                      leading: const Icon(Icons.auto_fix_high_rounded, color: Color(0xFF00D2FF)),
+                      title: const Text("Playlists reparieren & bereinigen"),
+                      subtitle: Text(
+                        "Korrigiert 0:00-Laufzeiten, repariert Streams und bereinigt fehlerhafte Downloads.",
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      isThreeLine: true,
+                      onTap: () async {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          snackbar(context, "Repariere Playlists...", size: SanckBarSize.MEDIUM),
+                        );
+                        final repaired = await PlaylistRepairService().autoRepairOnLaunch();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            snackbar(
+                              context,
+                              "✅ $repaired Songs in Playlists erfolgreich repariert!",
+                              size: SanckBarSize.BIG,
+                            ),
+                          );
+                        }
+                      },
+                    ),
                   ]),
               CustomExpansionTile(
                   icon: Icons.miscellaneous_services,
@@ -952,4 +985,194 @@ Widget radioWidget(
                 : controller.onContentChange),
         title: Text(label),
       ));
+}
+
+class _DiscordTokenInputWidget extends StatefulWidget {
+  const _DiscordTokenInputWidget();
+
+  @override
+  State<_DiscordTokenInputWidget> createState() => _DiscordTokenInputWidgetState();
+}
+
+class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
+  late TextEditingController _controller;
+  bool _obscureText = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: DiscordService().token);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _saveToken() {
+    final text = _controller.text.trim();
+    DiscordService().setToken(text);
+    ScaffoldMessenger.of(context).showSnackBar(
+      snackbar(
+        context,
+        text.isNotEmpty
+            ? "✅ Discord Token gespeichert! Live-Status aktiv."
+            : "Discord Token entfernt.",
+        size: SanckBarSize.BIG,
+      ),
+    );
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isConnected = DiscordService().isGatewayConnected;
+    final hasToken = DiscordService().token.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0D18),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isConnected
+              ? const Color(0xFF5865F2)
+              : Colors.white.withOpacity(0.08),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.smartphone_rounded,
+                size: 16,
+                color: isConnected ? const Color(0xFF5865F2) : Colors.white70,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                "Handy-Status (Discord Token)",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const Spacer(),
+              if (isConnected)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF5865F2).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                        color: const Color(0xFF5865F2), width: 0.8),
+                  ),
+                  child: const Text(
+                    "Verbunden",
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF5865F2),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Trage optional deinen Discord-Token ein, damit dein Smartphone deinen Song live direkt an Discord sendet ('Hört SPY MUSIC').",
+            style: TextStyle(
+              fontSize: 11.5,
+              color: Colors.white.withOpacity(0.6),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: _controller,
+                    obscureText: _obscureText,
+                    style: const TextStyle(fontSize: 12.5, color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: "Discord Token hier einfügen...",
+                      hintStyle:
+                          const TextStyle(fontSize: 12, color: Colors.white30),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      filled: true,
+                      fillColor: Colors.black38,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Colors.white12),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Colors.white12),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFF5865F2)),
+                      ),
+                      suffixIcon: IconButton(
+                        iconSize: 18,
+                        icon: Icon(
+                          _obscureText
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: Colors.white54,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscureText = !_obscureText;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 40,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF5865F2),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                  ),
+                  onPressed: _saveToken,
+                  child: const Text("Speichern", style: TextStyle(fontSize: 12)),
+                ),
+              ),
+              if (hasToken) ...[
+                const SizedBox(width: 6),
+                SizedBox(
+                  height: 40,
+                  child: IconButton(
+                    iconSize: 20,
+                    tooltip: "Token löschen",
+                    icon: const Icon(Icons.delete_outline, color: Colors.white54),
+                    onPressed: () {
+                      _controller.clear();
+                      _saveToken();
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

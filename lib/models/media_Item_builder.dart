@@ -39,36 +39,44 @@ class MediaItemBuilder {
   }
 
   static Duration? toDuration(String? time) {
-    if (time == null) {
+    if (time == null || time.isEmpty) {
       return null;
     }
 
-    int sec = 0;
-    final splitted = time.split(":");
-    if (splitted.length == 3) {
-      sec += int.parse(splitted[0]) * 3600 +
-          int.parse(splitted[1]) * 60 +
-          int.parse(splitted[2]);
-    } else if (splitted.length == 2) {
-      sec += int.parse(splitted[0]) * 60 + int.parse(splitted[1]);
-    } else if (splitted.length == 1) {
-      sec += int.parse(splitted[0]);
+    try {
+      int sec = 0;
+      final splitted = time.split(":");
+      if (splitted.length == 3) {
+        sec += (int.tryParse(splitted[0]) ?? 0) * 3600 +
+            (int.tryParse(splitted[1]) ?? 0) * 60 +
+            (int.tryParse(splitted[2]) ?? 0);
+      } else if (splitted.length == 2) {
+        sec += (int.tryParse(splitted[0]) ?? 0) * 60 +
+            (int.tryParse(splitted[1]) ?? 0);
+      } else if (splitted.length == 1) {
+        sec += int.tryParse(splitted[0]) ?? 0;
+      }
+      return sec > 0 ? Duration(seconds: sec) : null;
+    } catch (_) {
+      return null;
     }
-    return Duration(seconds: sec);
   }
 
   static Map<String, dynamic> toJson(MediaItem mediaItem) => {
         "videoId": mediaItem.id,
         "title": mediaItem.title,
-        'album': mediaItem.extras!['album'],
-        'artists': mediaItem.extras!['artists'],
-        'length': mediaItem.extras!['length'],
+        'album': mediaItem.extras?['album'],
+        'artists': mediaItem.extras?['artists'],
+        'length': mediaItem.extras?['length'] ??
+            (mediaItem.duration != null && mediaItem.duration!.inSeconds > 0
+                ? "${mediaItem.duration!.inMinutes}:${(mediaItem.duration!.inSeconds % 60).toString().padLeft(2, '0')}"
+                : null),
         'duration': mediaItem.duration?.inSeconds,
-        'date': mediaItem.extras!['date'],
+        'date': mediaItem.extras?['date'],
         'thumbnails': [
-          {'url': mediaItem.artUri.toString()}
+          {'url': mediaItem.artUri?.toString() ?? ''}
         ],
-        'url': mediaItem.extras!['url'],
+        'url': mediaItem.extras?['url'],
         'trackDetails': mediaItem.extras?['trackDetails'],
         'year': mediaItem.extras?['year']
       };
