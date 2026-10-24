@@ -9,13 +9,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic.apk">
-    <img src="https://img.shields.io/badge/📲%20DIREKTER%20DOWNLOAD-spymusic.apk-FF0055?style=for-the-badge&logo=android&logoColor=white" height="48" alt="Download SPY MUSIC APK" />
+  <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk">
+    <img src="https://img.shields.io/badge/📲%20DIREKTER%20DOWNLOAD-SPY--MUSIC%20(APK)-FF0055?style=for-the-badge&logo=android&logoColor=white" height="48" alt="Download SPY MUSIC APK" />
   </a>
 </p>
 
 <p align="center">
-  👉 <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic.apk">Hier tippen: spymusic.apk herunterladen</a></b> 👈
+  👉 <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk">Hier tippen: spymusic-arm64-v8a.apk herunterladen (12 MB)</a></b> 👈
 </p>
 
 ---
