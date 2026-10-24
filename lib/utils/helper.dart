@@ -1,23 +1,22 @@
+// ignore_for_file: avoid_print
+
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '/ui/navigator.dart';
 import '/ui/widgets/sort_widget.dart';
 
 void printERROR(dynamic text, {String tag = "SPY MUSIC"}) {
-  if (kReleaseMode) return;
-  debugPrint("\x1B[31m[$tag]: $text\x1B[0m");
+  // Release logs enabled for troubleshooting via adb logcat -s flutter
+  print("\x1B[31m[$tag ERROR]: $text\x1B[0m");
 }
 
 void printWarning(dynamic text, {String tag = 'SPY MUSIC'}) {
-  if (kReleaseMode) return;
-  debugPrint("\x1B[33m[$tag]: $text\x1B[34m");
+  print("\x1B[33m[$tag WARN]: $text\x1B[34m");
 }
 
 void printINFO(dynamic text, {String tag = 'SPY MUSIC'}) {
-  if (kReleaseMode) return;
-  debugPrint("\x1B[32m[$tag]: $text\x1B[34m");
+  print("\x1B[32m[$tag INFO]: $text\x1B[34m");
 }
 
 String? getCurrentRouteName() {

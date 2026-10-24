@@ -25,7 +25,9 @@ class SoundCloudService {
   ));
 
   static String _clientId = 'GytJkwrLebfCWmFfWOuDf7WObQo2BND9';
-  static bool _isRefreshingClient = false;
+  static Future<void>? _refreshFuture;
+  static DateTime? _lastRefreshAttempt;
+  static const Duration _refreshCooldown = Duration(minutes: 10);
 
   /// Cache of resolved stream URLs with expiration
   static final Map<String, _CachedStream> _streamCache = {};
@@ -49,12 +51,36 @@ class SoundCloudService {
   }
 
   /// Dynamically scrape latest client_id from SoundCloud assets and persist to Hive
-  Future<void> refreshClientId() async {
-    if (_isRefreshingClient) return;
-    _isRefreshingClient = true;
+  /// Includes cooldown and future sharing across concurrent callers with fast timeouts
+  Future<void> refreshClientId() {
+    if (_lastRefreshAttempt != null &&
+        DateTime.now().difference(_lastRefreshAttempt!) < _refreshCooldown) {
+      printINFO("SoundCloud client_id refresh skipped (cooldown active)");
+      return Future.value();
+    }
+    if (_refreshFuture != null) {
+      return _refreshFuture!;
+    }
+    _refreshFuture = _doRefreshClientId().whenComplete(() {
+      _refreshFuture = null;
+    });
+    return _refreshFuture!;
+  }
+
+  Future<void> _doRefreshClientId() async {
+    _lastRefreshAttempt = DateTime.now();
+    final scraperDio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 4),
+      receiveTimeout: const Duration(seconds: 4),
+      headers: {
+        'User-Agent':
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    ));
+
     try {
       printINFO("Refreshing SoundCloud client_id from soundcloud.com...");
-      final res = await _dio.get('https://soundcloud.com');
+      final res = await scraperDio.get('https://soundcloud.com');
       final html = res.data.toString();
       final scriptRegex = RegExp(r'<script[^>]+src="(https://[^"]+assets/[^"]+\.js)"');
       final matches = scriptRegex.allMatches(html).toList();
@@ -63,7 +89,7 @@ class SoundCloudService {
         final scriptUrl = m.group(1);
         if (scriptUrl == null) continue;
         try {
-          final sRes = await _dio.get(scriptUrl);
+          final sRes = await scraperDio.get(scriptUrl);
           final idMatch = RegExp(r'client_id:"([a-zA-Z0-9]{32})"').firstMatch(sRes.data.toString());
           if (idMatch != null) {
             _clientId = idMatch.group(1)!;
@@ -78,8 +104,6 @@ class SoundCloudService {
       }
     } catch (e) {
       printERROR("SoundCloud refreshClientId error: $e");
-    } finally {
-      _isRefreshingClient = false;
     }
   }
 
@@ -127,9 +151,13 @@ class SoundCloudService {
           artwork = user?['avatar_url']?.toString();
         }
 
-        final durationMs = (track['duration'] is int)
-            ? track['duration'] as int
-            : ((track['full_duration'] is int) ? track['full_duration'] as int : 0);
+        final durationRaw = track['duration'] ?? track['full_duration'];
+        int durationMs = 0;
+        if (durationRaw is num) {
+          durationMs = durationRaw.toInt();
+        } else if (durationRaw is String) {
+          durationMs = int.tryParse(durationRaw) ?? 0;
+        }
 
         // Find best full unencrypted transcoding URL (strictly exclude previews and DRM)
         final media = track['media'] as Map?;
@@ -137,7 +165,8 @@ class SoundCloudService {
             ? media['transcodings'] as List
             : [];
 
-        String? bestTranscodingUrl;
+        String? progressiveTranscodingUrl;
+        String? hlsTranscodingUrl;
 
         for (var t in transcodings) {
           if (t is! Map) continue;
@@ -153,13 +182,14 @@ class SoundCloudService {
           }
 
           if (tUrl.contains('/stream/progressive')) {
-            bestTranscodingUrl = tUrl;
-            break;
-          }
-          if (tUrl.contains('/stream/hls')) {
-            bestTranscodingUrl = tUrl;
+            progressiveTranscodingUrl ??= tUrl;
+          } else if (tUrl.contains('/stream/hls')) {
+            hlsTranscodingUrl ??= tUrl;
           }
         }
+
+        // Strongly prefer progressive over HLS so media player has known duration and exact seeking
+        final bestTranscodingUrl = progressiveTranscodingUrl ?? hlsTranscodingUrl;
 
         // Skip tracks with exclusively preview or encrypted streams
         if (bestTranscodingUrl == null) {
@@ -171,13 +201,14 @@ class SoundCloudService {
           title: title,
           artist: artist,
           album: 'SoundCloud',
-          duration: Duration(milliseconds: durationMs),
+          duration: durationMs > 0 ? Duration(milliseconds: durationMs) : null,
           artUri: artwork != null ? Uri.tryParse(artwork) : null,
           extras: {
             'isSoundCloud': true,
             'scTrackId': id,
             'transcodingUrl': bestTranscodingUrl,
             'track_authorization': trackAuth,
+            'duration': durationMs > 0 ? (durationMs / 1000).round() : null,
             'permalink': track['permalink_url']?.toString(),
             'platform': 'SoundCloud',
           },

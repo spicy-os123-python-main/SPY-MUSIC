@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
@@ -47,7 +48,14 @@ class PlatformSearchService {
           final album = item['album']?['title']?.toString() ?? 'Spotify Track';
           final cover = item['album']?['cover_big']?.toString() ??
               item['album']?['cover_medium']?.toString();
-          final durationSec = (item['duration'] is int) ? item['duration'] as int : 180;
+          final rawDuration = item['duration'];
+          int durationSec = 0;
+          if (rawDuration is num) {
+            durationSec = rawDuration.toInt();
+          } else if (rawDuration is String) {
+            durationSec = int.tryParse(rawDuration) ?? 0;
+          }
+          if (durationSec <= 0) durationSec = 180;
 
           items.add(MediaItem(
             id: 'sp_$id',
@@ -61,6 +69,8 @@ class PlatformSearchService {
               'isSpotify': true,
               'searchQuery': '$title $artist',
               'originalId': id,
+              'duration': durationSec,
+              'length': "${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}",
             },
           ));
         }
@@ -94,7 +104,14 @@ class PlatformSearchService {
           final album = item['album']?['title']?.toString() ?? 'Amazon Music';
           final cover = item['album']?['cover_big']?.toString() ??
               item['album']?['cover_medium']?.toString();
-          final durationSec = (item['duration'] is int) ? item['duration'] as int : 180;
+          final rawDuration = item['duration'];
+          int durationSec = 0;
+          if (rawDuration is num) {
+            durationSec = rawDuration.toInt();
+          } else if (rawDuration is String) {
+            durationSec = int.tryParse(rawDuration) ?? 0;
+          }
+          if (durationSec <= 0) durationSec = 180;
 
           items.add(MediaItem(
             id: 'az_$id',
@@ -108,6 +125,8 @@ class PlatformSearchService {
               'isAmazon': true,
               'searchQuery': '$title $artist',
               'originalId': id,
+              'duration': durationSec,
+              'length': "${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}",
             },
           ));
         }
@@ -151,6 +170,7 @@ class PlatformSearchService {
   }
 
   /// Resolve audio stream for Spotify or Amazon track by matching track title, artist & duration
+  /// Starts SoundCloud and YouTube search in parallel and picks first valid match to avoid slow sequential fallbacks
   static Future<MediaItem?> resolveMatchedTrack(
       String trackId, String searchQuery,
       {MediaItem? originalTrack}) async {
@@ -170,48 +190,64 @@ class PlatformSearchService {
         .trim();
     final q = cleanQuery.isNotEmpty ? cleanQuery : searchQuery;
 
-    // 1. Resolve via SoundCloud first (independent CDN, no rate limits, doesn't touch YouTube)
-    try {
-      final scTracks = await SoundCloudService().searchTracks(q, limit: 5);
-      if (scTracks.isNotEmpty) {
-        final match = _findBestMatch(scTracks, originalTrack);
-        if (match != null) {
-          _matchedItemCache[trackId] = match;
-          _matchCache[trackId] = match.id;
-          printINFO("Matched $trackId to SoundCloud: '${match.title}' by '${match.artist}' (${match.duration})");
-          return match;
+    final completer = Completer<MediaItem?>();
+    int pending = 2;
+
+    void onResolved(MediaItem? match, String source) {
+      if (completer.isCompleted) return;
+      if (match != null) {
+        _matchedItemCache[trackId] = match;
+        _matchCache[trackId] = match.id;
+        printINFO("Matched $trackId to $source: '${match.title}' by '${match.artist}'");
+        completer.complete(match);
+      } else {
+        pending--;
+        if (pending == 0 && !completer.isCompleted) {
+          completer.complete(null);
         }
       }
-    } catch (e) {
-      printERROR("SoundCloud resolution failed for $trackId: $e");
     }
 
-    // 2. Fallback to MusicServices (YouTube Music) if SoundCloud has no result
-    try {
-      final musicServices = Get.find<MusicServices>();
-      final res =
-          await musicServices.search(searchQuery, filter: 'songs', limit: 5);
-      final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
-      if (rawList != null && rawList.isNotEmpty) {
-        final ytTracks = rawList
-            .whereType<MediaItem>()
-            .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
-            .toList();
-        if (ytTracks.isNotEmpty) {
-          final match = _findBestMatch(ytTracks, originalTrack);
-          if (match != null) {
-            _matchedItemCache[trackId] = match;
-            _matchCache[trackId] = match.id;
-            printINFO("Matched $trackId to YouTube: '${match.title}' by '${match.artist}'");
-            return match;
+    // 1. Parallel Task: SoundCloud Search & Match (timeout 5s)
+    SoundCloudService()
+        .searchTracks(q, limit: 5)
+        .timeout(const Duration(seconds: 5))
+        .then((scTracks) {
+      final match =
+          scTracks.isNotEmpty ? _findBestMatch(scTracks, originalTrack) : null;
+      onResolved(match, 'SoundCloud');
+    }).catchError((e) {
+      printERROR("SoundCloud parallel resolution failed for $trackId: $e");
+      onResolved(null, 'SoundCloud');
+    });
+
+    // 2. Parallel Task: YouTube Music Search & Match (timeout 5s)
+    Future.microtask(() async {
+      try {
+        final musicServices = Get.find<MusicServices>();
+        final res = await musicServices
+            .search(searchQuery, filter: 'songs', limit: 5)
+            .timeout(const Duration(seconds: 5));
+        final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
+        MediaItem? match;
+        if (rawList != null && rawList.isNotEmpty) {
+          final ytTracks = rawList
+              .whereType<MediaItem>()
+              .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
+              .toList();
+          if (ytTracks.isNotEmpty) {
+            match = _findBestMatch(ytTracks, originalTrack);
           }
         }
+        onResolved(match, 'YouTube');
+      } catch (e) {
+        printERROR("YouTube parallel resolution failed for $trackId: $e");
+        onResolved(null, 'YouTube');
       }
-    } catch (e) {
-      printERROR("Match error for $trackId: $e");
-    }
+    });
 
-    return null;
+    return await completer.future
+        .timeout(const Duration(seconds: 6), onTimeout: () => null);
   }
 
   /// Backward-compatible method returning matched stream ID

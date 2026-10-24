@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:hive/hive.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../utils/helper.dart';
 
@@ -11,7 +10,7 @@ class StreamProvider {
   StreamProvider(
       {required this.playable, this.audioFormats, this.statusMSG = ""});
 
-  static Future<StreamProvider> fetch(String videoId) async {
+  static Future<StreamProvider> fetch(String videoId, {List<String>? pipedInstances}) async {
     final yt = YoutubeExplode();
 
     try {
@@ -23,7 +22,7 @@ class StreamProvider {
           YoutubeApiClient.ios,
         ],
         requireWatchPage: false,
-      );
+      ).timeout(const Duration(seconds: 12));
       final audio = res.audioOnly;
       return StreamProvider(
           playable: true,
@@ -43,7 +42,7 @@ class StreamProvider {
       printERROR("StreamProvider.fetch YouTube error for $videoId: $e (Type: ${e.runtimeType})\n$stack");
 
       // Robust Fallback: try fallback stream APIs (Piped instances)
-      final fallbackResult = await _fetchFromPiped(videoId);
+      final fallbackResult = await _fetchFromPiped(videoId, pipedInstances: pipedInstances);
       if (fallbackResult != null && fallbackResult.playable) {
         return fallbackResult;
       }
@@ -84,27 +83,23 @@ class StreamProvider {
     }
   }
 
-  /// Fallback stream provider using configurable/decentralized Piped endpoints
-  static Future<StreamProvider?> _fetchFromPiped(String videoId) async {
+  /// Fallback stream provider using configurable/decentralized Piped endpoints (max 2 instances, 3s timeout)
+  static Future<StreamProvider?> _fetchFromPiped(String videoId, {List<String>? pipedInstances}) async {
     final cleanId = videoId.replaceAll("MPED", "").trim();
-    List<String> instances = [
-      "https://pipedapi.adminforge.de",
-      "https://api.piped.private.coffee",
-      "https://pipedapi.kavin.rocks",
-      "https://pipedapi.tokhmi.xyz",
-    ];
-
-    try {
-      final customList = Hive.box('AppPrefs').get('piped_instances');
-      if (customList is List && customList.isNotEmpty) {
-        instances = customList.map((e) => e.toString()).toList();
-      }
-    } catch (_) {}
+    List<String> instances;
+    if (pipedInstances != null && pipedInstances.isNotEmpty) {
+      instances = pipedInstances.take(2).toList();
+    } else {
+      instances = [
+        "https://pipedapi.adminforge.de",
+        "https://api.piped.private.coffee",
+      ];
+    }
 
     final dio = Dio(
       BaseOptions(
-        connectTimeout: const Duration(seconds: 4),
-        receiveTimeout: const Duration(seconds: 4),
+        connectTimeout: const Duration(seconds: 3),
+        receiveTimeout: const Duration(seconds: 3),
       ),
     );
 

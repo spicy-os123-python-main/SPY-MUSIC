@@ -63,6 +63,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   bool loudnessNormalizationEnabled = false;
   // var networkErrorPause = false;
   bool isSongLoading = true;
+  int _songErrorRetryCount = 0;
+  String? _lastFailedSongId;
 
   // list of shuffled queue songs ids
   List<String> shuffledQueue = [];
@@ -202,33 +204,43 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       //print("set ${playbackState.value.queueIndex},${event.currentIndex}");
     }, onError: (Object e, StackTrace st) async {
-      if (e is PlayerException) {
-        printERROR('Error code: ${e.code}');
-        printERROR('Error message: ${e.message}');
-      } else {
-        printERROR('An error occurred: $e');
-        Duration curPos = _player.position;
-        await _player.stop();
+      printERROR("playbackEventStream error: $e");
+      final currentId = mediaItem.value?.id ??
+          (currentIndex != null && queue.value.isNotEmpty
+              ? queue.value[currentIndex!].id
+              : null);
 
+      if (_lastFailedSongId != currentId) {
+        _lastFailedSongId = currentId;
+        _songErrorRetryCount = 0;
+      }
+
+      if (_songErrorRetryCount < 2) {
+        _songErrorRetryCount++;
+        printINFO("Retrying playback for $currentId (attempt $_songErrorRetryCount of 2)...");
         if (isPlayingUsingLockCachingSource &&
             e.toString().contains("Connection closed while receiving data")) {
+          Duration curPos = _player.position;
           await _player.seek(curPos, index: 0);
           await _player.play();
           return;
         }
-
-        //Workaround when 403 error encountered
-        // customAction("playByIndex", {'index': currentIndex, 'newUrl': true})
-        //     .whenComplete(() async {
-        //   await _player.stop();
-        //   if (currentSongUrl == null) {
-        //     networkErrorPause = true;
-        //   } else {
-        //     _player.play();
-        //   }
-        // });
         customAction("playByIndex", {'index': currentIndex, 'newUrl': true});
-        await _player.seek(curPos, index: 0);
+      } else {
+        printERROR("Playback failed after $_songErrorRetryCount retries for $currentId: $e");
+        _songErrorRetryCount = 0;
+        isSongLoading = false;
+        await _player.stop();
+        final errText =
+            e is PlayerException ? (e.message ?? e.toString()) : e.toString();
+        try {
+          Get.find<PlayerController>().notifyPlayError(errText);
+        } catch (_) {}
+        playbackState.add(playbackState.value.copyWith(
+          processingState: AudioProcessingState.error,
+          errorCode: 500,
+          errorMessage: errText,
+        ));
       }
     });
   }
@@ -270,12 +282,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   void _listenForDurationChanges() {
     _player.durationStream.listen((duration) async {
       final currQueue = queue.value;
-      if (currentIndex == null || currQueue.isEmpty || duration == null || duration == Duration.zero) return;
+      if (currentIndex == null ||
+          currQueue.isEmpty ||
+          duration == null ||
+          duration == Duration.zero ||
+          duration.inSeconds == 0) return;
       final currentSong = queue.value[currentIndex];
+      // Only set duration from player if metadata did not already have a valid non-zero duration
       if (currentSong.duration == null ||
           currentSong.duration == Duration.zero ||
-          currentSong.duration!.inSeconds == 0 ||
-          currentIndex == 0) {
+          currentSong.duration!.inSeconds == 0) {
         final newMediaItem = currentSong.copyWith(duration: duration);
         queue.value[currentIndex] = newMediaItem;
         mediaItem.add(newMediaItem);
@@ -536,62 +552,87 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         final songIndex = extras!['index'];
         currentIndex = songIndex;
         final isNewUrlReq = extras['newUrl'] ?? false;
+        if (!isNewUrlReq) {
+          _songErrorRetryCount = 0;
+        }
         final currentSong = queue.value[currentIndex];
-        final futureStreamInfo =
-            checkNGetUrl(currentSong.id, targetMediaItem: currentSong, generateNewUrl: isNewUrlReq);
         final bool restoreSession = extras['restoreSession'] ?? false;
-        isSongLoading = true;
-        playbackState.add(playbackState.value
-            .copyWith(processingState: AudioProcessingState.loading));
-        if (_playList.children.isNotEmpty) {
-          await _playList.clear();
-        }
 
-        mediaItem.add(currentSong);
-        final streamInfo = await futureStreamInfo;
-        if (songIndex != currentIndex) {
-          return;
-        } else if (!streamInfo.playable) {
-          currentSongUrl = null;
-          isSongLoading = false;
-          Get.find<PlayerController>().notifyPlayError(streamInfo.statusMSG);
-          playbackState.add(playbackState.value.copyWith(
-              processingState: AudioProcessingState.error,
-              errorCode: 404,
-              errorMessage: streamInfo.statusMSG));
-          return;
-        }
-        final streamAudioUrl = streamInfo.audio?.url ?? '';
-        currentSongUrl = streamAudioUrl;
-        if (currentSong.extras != null) {
-          currentSong.extras!['url'] = streamAudioUrl;
-        }
-        playbackState
-            .add(playbackState.value.copyWith(queueIndex: currentIndex));
-        await _playList.add(_createAudioSource(currentSong));
-
-        isSongLoading = false;
-        if (loudnessNormalizationEnabled && GetPlatform.isAndroid) {
-          _normalizeVolume(streamInfo.audio!.loudnessDb);
-        }
-
-        if (restoreSession) {
-          if (!GetPlatform.isDesktop) {
-            final position = extras['position'];
-            await _player.load();
-            await _player.seek(
-              Duration(
-                milliseconds: position,
-              ),
-            );
-            await _player.seek(
-              Duration(
-                milliseconds: position,
-              ),
-            );
+        try {
+          isSongLoading = true;
+          playbackState.add(playbackState.value
+              .copyWith(processingState: AudioProcessingState.loading));
+          if (_playList.children.isNotEmpty) {
+            await _playList.clear();
           }
-        } else {
-          await _player.play();
+
+          mediaItem.add(currentSong);
+          final streamInfo = await checkNGetUrl(
+            currentSong.id,
+            targetMediaItem: currentSong,
+            generateNewUrl: isNewUrlReq,
+          ).timeout(const Duration(seconds: 20));
+
+          if (songIndex != currentIndex) {
+            return;
+          } else if (!streamInfo.playable) {
+            currentSongUrl = null;
+            isSongLoading = false;
+            try {
+              Get.find<PlayerController>().notifyPlayError(streamInfo.statusMSG);
+            } catch (_) {}
+            playbackState.add(playbackState.value.copyWith(
+                processingState: AudioProcessingState.error,
+                errorCode: 404,
+                errorMessage: streamInfo.statusMSG));
+            return;
+          }
+          final streamAudioUrl = streamInfo.audio?.url ?? '';
+          currentSongUrl = streamAudioUrl;
+          if (currentSong.extras != null) {
+            currentSong.extras!['url'] = streamAudioUrl;
+          }
+          playbackState
+              .add(playbackState.value.copyWith(queueIndex: currentIndex));
+          await _playList.add(_createAudioSource(currentSong));
+
+          isSongLoading = false;
+          if (loudnessNormalizationEnabled && GetPlatform.isAndroid) {
+            _normalizeVolume(streamInfo.audio!.loudnessDb);
+          }
+
+          if (restoreSession) {
+            if (!GetPlatform.isDesktop) {
+              final position = extras['position'];
+              await _player.load();
+              await _player.seek(
+                Duration(
+                  milliseconds: position,
+                ),
+              );
+              await _player.seek(
+                Duration(
+                  milliseconds: position,
+                ),
+              );
+            }
+          } else {
+            await _player.play();
+          }
+        } catch (e, st) {
+          printERROR("playByIndex error for ${currentSong.id}: $e\n$st");
+          currentSongUrl = null;
+          final msg = "Fehler beim Laden des Tracks: $e";
+          try {
+            Get.find<PlayerController>().notifyPlayError(msg);
+          } catch (_) {}
+          playbackState.add(playbackState.value.copyWith(
+            processingState: AudioProcessingState.error,
+            errorCode: 500,
+            errorMessage: msg,
+          ));
+        } finally {
+          isSongLoading = false;
         }
         break;
 
@@ -629,33 +670,55 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       case 'setSourceNPlay':
         final currMed = (extras!['mediaItem'] as MediaItem);
-        mediaItem.add(currMed);
-        queue.add([currMed]);
-        final futureStreamInfo =
-            checkNGetUrl(currMed.id, targetMediaItem: currMed);
-        isSongLoading = true;
-        currentIndex = 0;
-        await _playList.clear();
-        final streamInfo = (await futureStreamInfo);
-        if (!streamInfo.playable) {
-          currentSongUrl = null;
+        _songErrorRetryCount = 0;
+        try {
+          mediaItem.add(currMed);
+          queue.add([currMed]);
+          isSongLoading = true;
+          currentIndex = 0;
+          await _playList.clear();
+
+          final streamInfo = await checkNGetUrl(
+            currMed.id,
+            targetMediaItem: currMed,
+          ).timeout(const Duration(seconds: 20));
+
+          if (!streamInfo.playable) {
+            currentSongUrl = null;
+            isSongLoading = false;
+            try {
+              Get.find<PlayerController>().notifyPlayError(streamInfo.statusMSG);
+            } catch (_) {}
+            playbackState.add(playbackState.value
+                .copyWith(processingState: AudioProcessingState.error));
+            return;
+          }
+          currentSongUrl = currMed.extras!['url'] = streamInfo.audio!.url;
+
+          await _playList.add(_createAudioSource(currMed));
           isSongLoading = false;
-          Get.find<PlayerController>().notifyPlayError(streamInfo.statusMSG);
-          playbackState.add(playbackState.value
-              .copyWith(processingState: AudioProcessingState.error));
-          return;
+
+          // Normalize audio
+          if (loudnessNormalizationEnabled && GetPlatform.isAndroid) {
+            _normalizeVolume(streamInfo.audio!.loudnessDb);
+          }
+
+          await _player.play();
+        } catch (e, st) {
+          printERROR("setSourceNPlay error for ${currMed.id}: $e\n$st");
+          currentSongUrl = null;
+          final msg = "Fehler beim Starten des Songs: $e";
+          try {
+            Get.find<PlayerController>().notifyPlayError(msg);
+          } catch (_) {}
+          playbackState.add(playbackState.value.copyWith(
+            processingState: AudioProcessingState.error,
+            errorCode: 500,
+            errorMessage: msg,
+          ));
+        } finally {
+          isSongLoading = false;
         }
-        currentSongUrl = currMed.extras!['url'] = streamInfo.audio!.url;
-
-        await _playList.add(_createAudioSource(currMed));
-        isSongLoading = false;
-
-        // Normalize audio
-        if (loudnessNormalizationEnabled && GetPlatform.isAndroid) {
-          _normalizeVolume(streamInfo.audio!.loudnessDb);
-        }
-
-        await _player.play();
         break;
 
       case 'toggleSkipSilence':
@@ -880,11 +943,30 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           trackAuthorization: trackAuth);
 
       if (scStreamUrl != null && scStreamUrl.isNotEmpty) {
+        int durationMs = targetSong?.duration?.inMilliseconds ?? 0;
+        if (durationMs == 0 && targetSong?.extras?['duration'] != null) {
+          final dur = targetSong!.extras!['duration'];
+          if (dur is num) durationMs = (dur * 1000).toInt();
+        }
+        if (durationMs > 0 &&
+            (targetSong?.duration == null ||
+                targetSong?.duration == Duration.zero ||
+                targetSong?.duration!.inSeconds == 0)) {
+          final updatedSong =
+              targetSong!.copyWith(duration: Duration(milliseconds: durationMs));
+          if (currentIndex != null &&
+              currentIndex! < queue.value.length &&
+              queue.value[currentIndex!].id == targetSong.id) {
+            queue.value[currentIndex!] = updatedSong;
+          }
+          mediaItem.add(updatedSong);
+        }
+
         final audio = Audio(
           audioCodec: Codec.mp4a,
           bitrate: 160000,
           loudnessDb: 0,
-          duration: targetSong?.duration?.inMilliseconds ?? 0,
+          duration: durationMs,
           size: 0,
           url: scStreamUrl,
           itag: 140,
@@ -913,6 +995,22 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       final matchedTrack =
           await PlatformSearchService.resolveMatchedTrack(songId, query, originalTrack: targetSong);
       if (matchedTrack != null) {
+        if (targetSong != null &&
+            (targetSong.duration == null ||
+                targetSong.duration == Duration.zero ||
+                targetSong.duration!.inSeconds == 0)) {
+          if (matchedTrack.duration != null &&
+              matchedTrack.duration! > Duration.zero) {
+            final updatedSong =
+                targetSong.copyWith(duration: matchedTrack.duration);
+            if (currentIndex != null &&
+                currentIndex! < queue.value.length &&
+                queue.value[currentIndex!].id == targetSong.id) {
+              queue.value[currentIndex!] = updatedSong;
+            }
+            mediaItem.add(updatedSong);
+          }
+        }
         if (matchedTrack.id.startsWith("sc_")) {
           final scStreamUrl = await SoundCloudService.resolveStreamUrl(
             matchedTrack.id,
@@ -1030,8 +1128,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       if (streamInfo == null || !streamInfo.playable) {
         final token = RootIsolateToken.instance;
-        final streamInfoJson =
-            await Isolate.run(() => getStreamInfo(songId, token));
+        List<String>? pipedList;
+        try {
+          final customList = Hive.box('AppPrefs').get('piped_instances');
+          if (customList is List && customList.isNotEmpty) {
+            pipedList = customList.map((e) => e.toString()).toList();
+          }
+        } catch (_) {}
+
+        final streamInfoJson = await Isolate.run(
+          () => getStreamInfo(songId, token, pipedInstances: pipedList),
+        ).timeout(const Duration(seconds: 16));
         streamInfo = HMStreamingData.fromJson(streamInfoJson);
         if (streamInfo.playable) {
           songsUrlCacheBox.put(songId, streamInfoJson);
