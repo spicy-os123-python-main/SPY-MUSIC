@@ -9,14 +9,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/SPY-MUSIC.apk">
-    <img src="https://img.shields.io/badge/📲%20DIREKTER%20DOWNLOAD-SPY--MUSIC%20(APK)-FF0055?style=for-the-badge&logo=android&logoColor=white" height="48" alt="Download SPY MUSIC APK" />
+  <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic.apk">
+    <img src="https://img.shields.io/badge/📲%20DIREKTER%20DOWNLOAD-spymusic.apk-FF0055?style=for-the-badge&logo=android&logoColor=white" height="48" alt="Download SPY MUSIC APK" />
   </a>
 </p>
 
 <p align="center">
-  👉 <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/SPY-MUSIC.apk">Direkt-Download: SPY-MUSIC.apk (Universal für alle Handys)</a></b> 👈<br/>
-  📱 <i>Oder optimiert für moderne 64-Bit Handys: <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/SPY-MUSIC-arm64-v8a.apk">SPY-MUSIC-arm64-v8a.apk</a> | Alle Versionen unter <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest">GitHub Releases</a></i>
+  👉 <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic.apk">Hier tippen: spymusic.apk herunterladen</a></b> 👈
 </p>
 
 ---
