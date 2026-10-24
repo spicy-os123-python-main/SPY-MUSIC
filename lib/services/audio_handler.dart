@@ -17,6 +17,7 @@ import 'package:rxdart/rxdart.dart';
 
 import 'soundcloud_service.dart';
 import 'platform_search_service.dart';
+import 'chunked_audio_source.dart';
 import '/models/album.dart';
 import '../models/music_source.dart';
 import '../ui/widgets/platform_selector_widget.dart';
@@ -363,28 +364,39 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
     }
 
-    // Direct AudioSource.uri for all streaming sources (YouTube, SoundCloud, Piped, HLS)
-    // Avoids LockCachingAudioSource which breaks range-seeking and triggers ExoPlayer "Source error"
-    if (url.contains('googlevideo.com') ||
-        url.contains('piped') ||
-        url.contains('.m3u8') ||
-        url.contains('soundcloud') ||
+    // Direct chunked stream proxy for YouTube streams to bypass Google 403 Forbidden
+    if (url.contains('googlevideo.com')) {
+      final size = (mediaItem.extras?['size'] as int?) ?? 0;
+      final codec = (mediaItem.extras?['codec'] as String?) ?? 'mp4a';
+      final contentType = codec == 'opus' ? 'audio/webm' : 'audio/mp4';
+      printINFO("Playing YouTube stream via ChunkedStreamAudioSource ($contentType, size: $size bytes)");
+      isPlayingUsingLockCachingSource = false;
+      return ChunkedStreamAudioSource(
+        url: url,
+        totalBytes: size > 0 ? size : 10 * 1024 * 1024,
+        contentType: contentType,
+        tag: mediaItem,
+      );
+    }
+
+    if (url.contains('.m3u8')) {
+      printINFO("Playing HLS stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
+      isPlayingUsingLockCachingSource = false;
+      return AudioSource.uri(
+        Uri.parse(url),
+        tag: mediaItem,
+      );
+    }
+
+    if (url.contains('soundcloud') ||
         url.contains('sndcdn') ||
+        url.contains('piped') ||
         mediaItem.id.startsWith("sc_") ||
         (mediaItem.extras?['isSoundCloud'] == true)) {
-      printINFO("Playing stream via AudioSource.uri: ${url.substring(0, url.length > 80 ? 80 : url.length)}...");
+      printINFO("Playing direct stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
       isPlayingUsingLockCachingSource = false;
-      final uri = Uri.parse(url);
-      final headers = url.contains('googlevideo.com')
-          ? {
-              'User-Agent':
-                  'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-              'Connection': 'keep-alive',
-            }
-          : null;
       return AudioSource.uri(
-        uri,
-        headers: headers,
+        Uri.parse(url),
         tag: mediaItem,
       );
     }
@@ -405,15 +417,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     printINFO("Playing Using AudioSource.uri: $url");
     isPlayingUsingLockCachingSource = false;
     final uri = isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
-    final headers = url.contains('googlevideo.com')
-        ? {
-            'User-Agent':
-                'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-          }
-        : null;
     return AudioSource.uri(
       uri,
-      headers: headers,
       tag: mediaItem,
     );
   }
@@ -611,12 +616,18 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
           final streamAudioUrl = streamInfo.audio?.url ?? '';
           currentSongUrl = streamAudioUrl;
-          if (currentSong.extras != null) {
-            currentSong.extras!['url'] = streamAudioUrl;
+          final updatedExtras = Map<String, dynamic>.from(currentSong.extras ?? {});
+          updatedExtras['url'] = streamAudioUrl;
+          updatedExtras['size'] = streamInfo.audio?.size ?? 0;
+          updatedExtras['codec'] = streamInfo.audio?.audioCodec.name ?? 'mp4a';
+          final playableSong = currentSong.copyWith(extras: updatedExtras);
+          if (songIndex < queue.value.length) {
+            queue.value[songIndex] = playableSong;
           }
+          mediaItem.add(playableSong);
           playbackState
               .add(playbackState.value.copyWith(queueIndex: currentIndex));
-          await _playList.add(_createAudioSource(currentSong));
+          await _playList.add(_createAudioSource(playableSong));
 
           isSongLoading = false;
           if (loudnessNormalizationEnabled && GetPlatform.isAndroid) {
@@ -712,10 +723,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 .copyWith(processingState: AudioProcessingState.error));
             return;
           }
-          currentSongUrl = currMed.extras!['url'] = streamInfo.audio!.url;
+          currentSongUrl = streamInfo.audio!.url;
+          final updatedExtras = Map<String, dynamic>.from(currMed.extras ?? {});
+          updatedExtras['url'] = currentSongUrl;
+          updatedExtras['size'] = streamInfo.audio!.size;
+          updatedExtras['codec'] = streamInfo.audio!.audioCodec.name;
+          final playableSong = currMed.copyWith(extras: updatedExtras);
+          queue.add([playableSong]);
+          mediaItem.add(playableSong);
 
           playbackState.add(playbackState.value.copyWith(queueIndex: 0));
-          await _playList.add(_createAudioSource(currMed));
+          await _playList.add(_createAudioSource(playableSong));
           isSongLoading = false;
 
           // Normalize audio
@@ -1025,7 +1043,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         );
       }
 
-      // DO NOT fall through to YouTube code!
+      // Fallback: If SoundCloud stream is unavailable (e.g. DRM encrypted official release), fall back to YouTube
+      if (allowFallback) {
+        printINFO("SoundCloud track $songId stream not available, trying YouTube fallback...");
+        final query = '${targetSong?.title ?? ''} ${targetSong?.artist ?? ''}'.trim();
+        final ytMatch = await PlatformSearchService.resolveMatchedTrack(
+            songId, query, originalTrack: targetSong, skipSoundCloud: true);
+        if (ytMatch != null) {
+          return checkNGetUrl(ytMatch.id, targetMediaItem: targetSong, allowFallback: false);
+        }
+      }
+
       SoundCloudService.invalidateStreamCache(songId);
       return HMStreamingData(
         playable: false,

@@ -28,6 +28,41 @@ class PlatformSearchService {
     printINFO("Invalidated match cache for: $trackId");
   }
 
+  static MediaItem _mapDeezerTrack(Map item, String prefix, String platform) {
+    final id = item['id']?.toString() ?? '';
+    final title = item['title']?.toString() ?? 'Unbekannt';
+    final artist = item['artist']?['name']?.toString() ?? '$platform Artist';
+    final album = item['album']?['title']?.toString() ?? '$platform Track';
+    final cover = item['album']?['cover_big']?.toString() ??
+        item['album']?['cover_medium']?.toString();
+    final rawDuration = item['duration'];
+    int durationSec = 0;
+    if (rawDuration is num) {
+      durationSec = rawDuration.toInt();
+    } else if (rawDuration is String) {
+      durationSec = int.tryParse(rawDuration) ?? 0;
+    }
+    if (durationSec <= 0) durationSec = 180;
+
+    return MediaItem(
+      id: '${prefix}_$id',
+      title: title,
+      artist: artist,
+      album: album,
+      duration: Duration(seconds: durationSec),
+      artUri: cover != null ? Uri.tryParse(cover) : null,
+      extras: {
+        'platform': platform,
+        'is$platform': true,
+        'searchQuery': '$title $artist',
+        'originalId': id,
+        'duration': durationSec,
+        'length':
+            "${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}",
+      },
+    );
+  }
+
   /// Search specifically for Spotify tracks
   static Future<List<MediaItem>> searchSpotify(String query,
       {int limit = 25}) async {
@@ -37,50 +72,15 @@ class PlatformSearchService {
       final response = await _dio.get(url);
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data['data'] as List? ?? [];
-        final List<MediaItem> items = [];
-
-        for (var item in data) {
-          if (item is! Map) continue;
-          final id = item['id']?.toString() ?? '';
-          final title = item['title']?.toString() ?? 'Unbekannt';
-          final artist = item['artist']?['name']?.toString() ?? 'Spotify Artist';
-          final album = item['album']?['title']?.toString() ?? 'Spotify Track';
-          final cover = item['album']?['cover_big']?.toString() ??
-              item['album']?['cover_medium']?.toString();
-          final rawDuration = item['duration'];
-          int durationSec = 0;
-          if (rawDuration is num) {
-            durationSec = rawDuration.toInt();
-          } else if (rawDuration is String) {
-            durationSec = int.tryParse(rawDuration) ?? 0;
-          }
-          if (durationSec <= 0) durationSec = 180;
-
-          items.add(MediaItem(
-            id: 'sp_$id',
-            title: title,
-            artist: artist,
-            album: album,
-            duration: Duration(seconds: durationSec),
-            artUri: cover != null ? Uri.tryParse(cover) : null,
-            extras: {
-              'platform': 'Spotify',
-              'isSpotify': true,
-              'searchQuery': '$title $artist',
-              'originalId': id,
-              'duration': durationSec,
-              'length': "${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}",
-            },
-          ));
-        }
-
-        if (items.isNotEmpty) return items;
+        return data
+            .whereType<Map>()
+            .map((item) => _mapDeezerTrack(item, 'sp', 'Spotify'))
+            .toList();
       }
     } catch (e) {
       printERROR("Spotify platform search error: $e");
     }
 
-    // Fallback: query tagged Spotify tracks
     return [];
   }
 
@@ -93,44 +93,10 @@ class PlatformSearchService {
       final response = await _dio.get(url);
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data['data'] as List? ?? [];
-        final List<MediaItem> items = [];
-
-        for (var item in data) {
-          if (item is! Map) continue;
-          final id = item['id']?.toString() ?? '';
-          final title = item['title']?.toString() ?? 'Unbekannt';
-          final artist = item['artist']?['name']?.toString() ?? 'Amazon Artist';
-          final album = item['album']?['title']?.toString() ?? 'Amazon Music';
-          final cover = item['album']?['cover_big']?.toString() ??
-              item['album']?['cover_medium']?.toString();
-          final rawDuration = item['duration'];
-          int durationSec = 0;
-          if (rawDuration is num) {
-            durationSec = rawDuration.toInt();
-          } else if (rawDuration is String) {
-            durationSec = int.tryParse(rawDuration) ?? 0;
-          }
-          if (durationSec <= 0) durationSec = 180;
-
-          items.add(MediaItem(
-            id: 'az_$id',
-            title: title,
-            artist: artist,
-            album: album,
-            duration: Duration(seconds: durationSec),
-            artUri: cover != null ? Uri.tryParse(cover) : null,
-            extras: {
-              'platform': 'Amazon Music',
-              'isAmazon': true,
-              'searchQuery': '$title $artist',
-              'originalId': id,
-              'duration': durationSec,
-              'length': "${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}",
-            },
-          ));
-        }
-
-        if (items.isNotEmpty) return items;
+        return data
+            .whereType<Map>()
+            .map((item) => _mapDeezerTrack(item, 'az', 'Amazon'))
+            .toList();
       }
     } catch (e) {
       printERROR("Amazon platform search error: $e");
@@ -141,12 +107,40 @@ class PlatformSearchService {
 
   /// Get current Spotify Top Hits for Home Screen
   static Future<List<MediaItem>> getSpotifyTopHits({int limit = 25}) async {
-    return await searchSpotify('Spotify Top 50 Global', limit: limit);
+    try {
+      final url = 'https://api.deezer.com/chart/0/tracks?limit=$limit';
+      final response = await _dio.get(url);
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data['data'] as List? ?? [];
+        final items = data
+            .whereType<Map>()
+            .map((item) => _mapDeezerTrack(item, 'sp', 'Spotify'))
+            .toList();
+        if (items.isNotEmpty) return items;
+      }
+    } catch (e) {
+      printERROR("getSpotifyTopHits error: $e");
+    }
+    return await searchSpotify('Top Hits', limit: limit);
   }
 
   /// Get current Amazon Music Top Tracks for Home Screen
   static Future<List<MediaItem>> getAmazonTopTracks({int limit = 25}) async {
-    return await searchAmazon('Amazon Music Best Hits', limit: limit);
+    try {
+      final url = 'https://api.deezer.com/chart/0/tracks?limit=$limit&index=25';
+      final response = await _dio.get(url);
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data['data'] as List? ?? [];
+        final items = data
+            .whereType<Map>()
+            .map((item) => _mapDeezerTrack(item, 'az', 'Amazon'))
+            .toList();
+        if (items.isNotEmpty) return items;
+      }
+    } catch (e) {
+      printERROR("getAmazonTopTracks error: $e");
+    }
+    return await searchAmazon('Popular Hits', limit: limit);
   }
 
   /// Spotify and Amazon results only carry metadata (they come from Deezer),

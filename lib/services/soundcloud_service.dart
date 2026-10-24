@@ -24,7 +24,7 @@ class SoundCloudService {
     },
   ));
 
-  static String _clientId = 'GytJkwrLebfCWmFfWOuDf7WObQo2BND9';
+  static String _clientId = '3GKD969NJWD1eB6gvQJN0GnueYbcWszv';
   static Future<void>? _refreshFuture;
   static DateTime? _lastRefreshAttempt;
   static const Duration _refreshCooldown = Duration(minutes: 10);
@@ -85,12 +85,12 @@ class SoundCloudService {
       final scriptRegex = RegExp(r'<script[^>]+src="(https://[^"]+assets/[^"]+\.js)"');
       final matches = scriptRegex.allMatches(html).toList();
 
-      for (var m in matches.reversed.take(4)) {
+      for (var m in matches) {
         final scriptUrl = m.group(1);
         if (scriptUrl == null) continue;
         try {
           final sRes = await scraperDio.get(scriptUrl);
-          final idMatch = RegExp(r'client_id:"([a-zA-Z0-9]{32})"').firstMatch(sRes.data.toString());
+          final idMatch = RegExp(r'client_id[=:\"]+([a-zA-Z0-9]{32})').firstMatch(sRes.data.toString());
           if (idMatch != null) {
             _clientId = idMatch.group(1)!;
             try {
