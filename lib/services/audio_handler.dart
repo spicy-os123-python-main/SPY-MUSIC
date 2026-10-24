@@ -367,8 +367,15 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     printINFO("Playing Using AudioSource.uri: $url");
     isPlayingUsingLockCachingSource = false;
     final uri = isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
+    final headers = url.contains('googlevideo.com')
+        ? {
+            'User-Agent':
+                'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+          }
+        : null;
     return AudioSource.uri(
       uri,
+      headers: headers,
       tag: mediaItem,
     );
   }
@@ -531,7 +538,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         final isNewUrlReq = extras['newUrl'] ?? false;
         final currentSong = queue.value[currentIndex];
         final futureStreamInfo =
-            checkNGetUrl(currentSong.id, generateNewUrl: isNewUrlReq);
+            checkNGetUrl(currentSong.id, targetMediaItem: currentSong, generateNewUrl: isNewUrlReq);
         final bool restoreSession = extras['restoreSession'] ?? false;
         isSongLoading = true;
         playbackState.add(playbackState.value
@@ -622,12 +629,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       case 'setSourceNPlay':
         final currMed = (extras!['mediaItem'] as MediaItem);
-        final futureStreamInfo = checkNGetUrl(currMed.id);
+        mediaItem.add(currMed);
+        queue.add([currMed]);
+        final futureStreamInfo =
+            checkNGetUrl(currMed.id, targetMediaItem: currMed);
         isSongLoading = true;
         currentIndex = 0;
         await _playList.clear();
-        mediaItem.add(currMed);
-        queue.add([currMed]);
         final streamInfo = (await futureStreamInfo);
         if (!streamInfo.playable) {
           currentSongUrl = null;
@@ -853,14 +861,18 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
 // Work around used [useNewInstanceOfExplode = false] to Fix Connection closed before full header was received issue
   Future<HMStreamingData> checkNGetUrl(String songId,
-      {bool generateNewUrl = false, bool offlineReplacementUrl = false}) async {
+      {MediaItem? targetMediaItem,
+      bool generateNewUrl = false,
+      bool offlineReplacementUrl = false}) async {
     printINFO("Requested id : $songId");
+
+    final targetSong = targetMediaItem ??
+        queue.value.firstWhereOrNull((item) => item.id == songId) ??
+        (mediaItem.value?.id == songId ? mediaItem.value : null);
 
     // SoundCloud Native Song Handling
     if (songId.startsWith("sc_")) {
       printINFO("Resolving SoundCloud track: $songId");
-      final targetSong =
-          queue.value.firstWhereOrNull((item) => item.id == songId);
       final transcodingUrl = targetSong?.extras?['transcodingUrl'] as String?;
       final scStreamUrl = await SoundCloudService.resolveStreamUrl(songId,
           transcodingUrl: transcodingUrl);
@@ -887,10 +899,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     // Spotify or Amazon Native Track Stream Matching
     if (songId.startsWith("sp_") || songId.startsWith("az_")) {
       printINFO("Resolving Spotify/Amazon track stream for: $songId");
-      final targetSong = queue.value.firstWhereOrNull((item) => item.id == songId) ??
-          (mediaItem.value?.id == songId ? mediaItem.value : null);
       final query = (targetSong?.extras?['searchQuery'] as String?) ??
-          '${targetSong?.title} ${targetSong?.artist}';
+          ('${targetSong?.title ?? ''} ${targetSong?.artist ?? ''}').trim();
       final matchedId =
           await PlatformSearchService.resolveMatchedStreamId(songId, query);
       if (matchedId != null && matchedId.isNotEmpty) {
@@ -914,7 +924,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             );
           }
         }
-        return checkNGetUrl(matchedId, generateNewUrl: generateNewUrl);
+        return checkNGetUrl(matchedId,
+            targetMediaItem: targetSong, generateNewUrl: generateNewUrl);
       }
     }
 
@@ -1003,12 +1014,34 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         } else {
           // Automatic resilient fallback to SoundCloud CDN if YouTube / Piped fails (e.g. strict VPN rate-limiting)
           printINFO("YouTube failed for $songId (${streamInfo.statusMSG}), attempting SoundCloud CDN fallback...");
-          final targetSong = queue.value.firstWhereOrNull((item) => item.id == songId) ??
+          final sSong = targetSong ??
+              queue.value.firstWhereOrNull((item) => item.id == songId) ??
               (mediaItem.value?.id == songId ? mediaItem.value : null);
-          final title = targetSong?.title ?? '';
-          final artist = targetSong?.artist ?? '';
+          var title = sSong?.title ?? '';
+          var artist = sSong?.artist ?? '';
+          if (title.isEmpty) {
+            try {
+              final libBox = Hive.box("LibrarySongs");
+              if (libBox.containsKey(songId)) {
+                final s = libBox.get(songId);
+                title = s?['title']?.toString() ?? '';
+                artist = s?['artist']?.toString() ?? '';
+              }
+            } catch (_) {}
+          }
           if (title.isNotEmpty) {
-            final query = '$title $artist'.trim();
+            String query = title;
+            if (artist.isNotEmpty && !title.toLowerCase().contains(artist.toLowerCase())) {
+              query = '$title $artist';
+            }
+            query = query
+                .replaceAll(RegExp(r'\(official video\)', caseSensitive: false), '')
+                .replaceAll(RegExp(r'\[official video\]', caseSensitive: false), '')
+                .replaceAll(RegExp(r'\(official audio\)', caseSensitive: false), '')
+                .replaceAll(RegExp(r'\[official audio\]', caseSensitive: false), '')
+                .replaceAll(RegExp(r'\(lyrics\)', caseSensitive: false), '')
+                .replaceAll(RegExp(r'\[lyrics\]', caseSensitive: false), '')
+                .trim();
             final scTracks = await SoundCloudService().searchTracks(query, limit: 3);
             if (scTracks.isNotEmpty) {
               final scTrack = scTracks.first;
@@ -1020,7 +1053,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   audioCodec: Codec.mp4a,
                   bitrate: 160000,
                   loudnessDb: 0,
-                  duration: targetSong?.duration?.inMilliseconds ?? 0,
+                  duration: sSong?.duration?.inMilliseconds ?? 0,
                   size: 0,
                   url: scUrl,
                   itag: 140,

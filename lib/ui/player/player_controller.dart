@@ -344,23 +344,37 @@ class PlayerController extends GetxController
     /// set global radio mode flag
     isRadioModeOn = radio;
 
+    final id = mediaItem?.id ?? '';
+
+    // SoundCloud / Spotify / Amazon tracks cannot use YouTube Music's watch playlist.
+    // Play them directly via setSourceNPlay which already handles sc_/sp_/az_ routing.
+    if (id.startsWith('sc_') || id.startsWith('sp_') || id.startsWith('az_')) {
+      _playerPanelCheck();
+      await _audioHandler.customAction("setSourceNPlay", {'mediaItem': mediaItem});
+      return;
+    }
+
     Future.delayed(
       Duration.zero,
       () async {
-        final content = await _musicServices.getWatchPlaylist(
-            videoId: mediaItem?.id ?? "", radio: radio, playlistId: playlistid);
-        radioContinuationParam = content['additionalParamsForNext'];
-        await _audioHandler
-            .updateQueue(List<MediaItem>.from(content['tracks']));
-        if (isShuffleModeEnabled.isTrue) {
-          await _audioHandler.customAction("shuffleCmd", {"index": 0});
-        }
+        try {
+          final content = await _musicServices.getWatchPlaylist(
+              videoId: mediaItem?.id ?? "", radio: radio, playlistId: playlistid);
+          radioContinuationParam = content['additionalParamsForNext'];
+          await _audioHandler
+              .updateQueue(List<MediaItem>.from(content['tracks']));
+          if (isShuffleModeEnabled.isTrue) {
+            await _audioHandler.customAction("shuffleCmd", {"index": 0});
+          }
 
-        // added here to broadcast current mediaitem via Audio Service as list is updated
-        // if radio is started on current playing song
-        if (radio && (currentSong.value?.id == mediaItem?.id)) {
-          _audioHandler
-              .customAction("upadateMediaItemInAudioService", {"index": 0});
+          // added here to broadcast current mediaitem via Audio Service as list is updated
+          // if radio is started on current playing song
+          if (radio && (currentSong.value?.id == mediaItem?.id)) {
+            _audioHandler
+                .customAction("upadateMediaItemInAudioService", {"index": 0});
+          }
+        } catch (e) {
+          printERROR("getWatchPlaylist error in pushSongToQueue: $e");
         }
       },
     ).then((value) async {
@@ -369,8 +383,11 @@ class PlayerController extends GetxController
         await _audioHandler.customAction("playByIndex", {"index": 0});
       } else {
         if (Hive.box("AppPrefs").get("discoverContentType") == "BOLI") {
-          Get.find<HomeScreenController>()
-              .changeDiscoverContent("BOLI", songId: mediaItem!.id);
+          final sId = mediaItem?.id ?? '';
+          if (!sId.startsWith('sc_') && !sId.startsWith('sp_') && !sId.startsWith('az_')) {
+            Get.find<HomeScreenController>()
+                .changeDiscoverContent("BOLI", songId: sId);
+          }
         }
       }
     });
@@ -405,8 +422,11 @@ class PlayerController extends GetxController
     //for changing home content based on last interation
     Future.delayed(const Duration(seconds: 3), () {
       if (Hive.box("AppPrefs").get("discoverContentType") == "BOLI") {
-        Get.find<HomeScreenController>()
-            .changeDiscoverContent("BOLI", songId: mediaItems[index].id);
+        final songId = mediaItems[index].id;
+        if (!songId.startsWith('sc_') && !songId.startsWith('sp_') && !songId.startsWith('az_')) {
+          Get.find<HomeScreenController>()
+              .changeDiscoverContent("BOLI", songId: songId);
+        }
       }
     });
 

@@ -18,17 +18,12 @@ class SoundCloudService {
 
   static String _clientId = 'GytJkwrLebfCWmFfWOuDf7WObQo2BND9';
   static bool _isRefreshingClient = false;
-  static DateTime? _lastRefresh;
 
   /// Cache of resolved stream URLs by scTrackId or url
   static final Map<String, String> _streamCache = {};
 
   /// Get active client ID (auto-refreshes if needed)
   Future<String> getClientId() async {
-    if (_lastRefresh == null ||
-        DateTime.now().difference(_lastRefresh!).inHours > 6) {
-      refreshClientId();
-    }
     return _clientId;
   }
 
@@ -50,7 +45,6 @@ class SoundCloudService {
           final idMatch = RegExp(r'client_id:"([a-zA-Z0-9]{32})"').firstMatch(sRes.data.toString());
           if (idMatch != null) {
             _clientId = idMatch.group(1)!;
-            _lastRefresh = DateTime.now();
             printINFO("SoundCloud client_id refreshed: $_clientId");
             break;
           }

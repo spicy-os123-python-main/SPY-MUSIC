@@ -15,6 +15,11 @@ class StreamProvider {
     try {
       final res = await yt.videos.streamsClient.getManifest(
         videoId,
+        ytClients: [
+          YoutubeApiClient.androidSdkless,
+          YoutubeApiClient.androidMusic,
+          YoutubeApiClient.ios,
+        ],
         requireWatchPage: false,
       );
       final audio = res.audioOnly;
@@ -144,6 +149,11 @@ class StreamProvider {
     try {
       final manifest = await yt.videos.streamsClient.getManifest(
         videoId,
+        ytClients: [
+          YoutubeApiClient.androidSdkless,
+          YoutubeApiClient.androidMusic,
+          YoutubeApiClient.ios,
+        ],
         requireWatchPage: false,
       );
       final muxed = manifest.muxed;
