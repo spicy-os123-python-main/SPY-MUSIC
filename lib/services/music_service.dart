@@ -111,11 +111,11 @@ class MusicServices extends getx.GetxService {
   }
 
   Future<Response> _sendRequest(String action, Map<dynamic, dynamic> data,
-      {additionalParams = ""}) async {
-    //print("$baseUrl$action$fixedParms$additionalParams          data:$data");
+      {additionalParams = "", int retryCount = 0}) async {
+    final reqUrl = "$baseUrl$action$fixedParms$additionalParams";
     try {
       final response =
-          await dio.post("$baseUrl$action$fixedParms$additionalParams",
+          await dio.post(reqUrl,
               options: Options(
                 headers: _headers,
               ),
@@ -124,10 +124,25 @@ class MusicServices extends getx.GetxService {
       if (response.statusCode == 200) {
         return response;
       } else {
-        return _sendRequest(action, data, additionalParams: additionalParams);
+        final respText = response.data?.toString() ?? '';
+        final trunc = respText.length > 150 ? '${respText.substring(0, 150)}...' : respText;
+        printERROR("YTMusic API [$action] returned HTTP ${response.statusCode}: $trunc");
+        if (retryCount < 2) {
+          return _sendRequest(action, data,
+              additionalParams: additionalParams, retryCount: retryCount + 1);
+        }
+        return response;
       }
     } on DioException catch (e) {
-      printINFO("Error $e");
+      final sCode = e.response?.statusCode;
+      final errBody = e.response?.data?.toString() ?? '';
+      final trunc = errBody.length > 150 ? '${errBody.substring(0, 150)}...' : errBody;
+      printERROR("YTMusic API [$action] error [HTTP $sCode]: ${e.message}, body: $trunc");
+      if ((sCode == 401 || sCode == 403) && retryCount < 1) {
+        await init();
+        return _sendRequest(action, data,
+            additionalParams: additionalParams, retryCount: retryCount + 1);
+      }
       throw NetworkError();
     }
   }

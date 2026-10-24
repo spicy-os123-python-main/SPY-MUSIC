@@ -874,8 +874,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     if (songId.startsWith("sc_")) {
       printINFO("Resolving SoundCloud track: $songId");
       final transcodingUrl = targetSong?.extras?['transcodingUrl'] as String?;
+      final trackAuth = targetSong?.extras?['track_authorization'] as String?;
       final scStreamUrl = await SoundCloudService.resolveStreamUrl(songId,
-          transcodingUrl: transcodingUrl);
+          transcodingUrl: transcodingUrl,
+          trackAuthorization: trackAuth);
 
       if (scStreamUrl != null && scStreamUrl.isNotEmpty) {
         final audio = Audio(
@@ -894,6 +896,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           highQualityAudio: audio,
         );
       }
+
+      // DO NOT fall through to YouTube code!
+      SoundCloudService.invalidateStreamCache(songId);
+      return HMStreamingData(
+        playable: false,
+        statusMSG: "SoundCloud-Stream für '${targetSong?.title ?? songId}' konnte nicht geladen werden.",
+      );
     }
 
     // Spotify or Amazon Native Track Stream Matching
@@ -901,17 +910,21 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       printINFO("Resolving Spotify/Amazon track stream for: $songId");
       final query = (targetSong?.extras?['searchQuery'] as String?) ??
           ('${targetSong?.title ?? ''} ${targetSong?.artist ?? ''}').trim();
-      final matchedId =
-          await PlatformSearchService.resolveMatchedStreamId(songId, query);
-      if (matchedId != null && matchedId.isNotEmpty) {
-        if (matchedId.startsWith("sc_")) {
-          final scStreamUrl = await SoundCloudService.resolveStreamUrl(matchedId);
+      final matchedTrack =
+          await PlatformSearchService.resolveMatchedTrack(songId, query, originalTrack: targetSong);
+      if (matchedTrack != null) {
+        if (matchedTrack.id.startsWith("sc_")) {
+          final scStreamUrl = await SoundCloudService.resolveStreamUrl(
+            matchedTrack.id,
+            transcodingUrl: matchedTrack.extras?['transcodingUrl'] as String?,
+            trackAuthorization: matchedTrack.extras?['track_authorization'] as String?,
+          );
           if (scStreamUrl != null && scStreamUrl.isNotEmpty) {
             final audio = Audio(
               audioCodec: Codec.mp4a,
               bitrate: 160000,
               loudnessDb: 0,
-              duration: targetSong?.duration?.inMilliseconds ?? 0,
+              duration: targetSong?.duration?.inMilliseconds ?? (matchedTrack.duration?.inMilliseconds ?? 0),
               size: 0,
               url: scStreamUrl,
               itag: 140,
@@ -922,11 +935,22 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               lowQualityAudio: audio,
               highQualityAudio: audio,
             );
+          } else {
+            PlatformSearchService.invalidateMatch(songId);
+            SoundCloudService.invalidateStreamCache(matchedTrack.id);
           }
+        } else {
+          return checkNGetUrl(matchedTrack.id,
+              targetMediaItem: targetSong, generateNewUrl: generateNewUrl);
         }
-        return checkNGetUrl(matchedId,
-            targetMediaItem: targetSong, generateNewUrl: generateNewUrl);
       }
+
+      // DO NOT fall through to YouTube code!
+      PlatformSearchService.invalidateMatch(songId);
+      return HMStreamingData(
+        playable: false,
+        statusMSG: "Kein passender Stream für '${targetSong?.title ?? songId}' auf SoundCloud/YouTube gefunden.",
+      );
     }
 
     final songDownloadsBox = Hive.box("SongDownloads");
@@ -1046,7 +1070,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             if (scTracks.isNotEmpty) {
               final scTrack = scTracks.first;
               final scUrl = await SoundCloudService.resolveStreamUrl(scTrack.id,
-                  transcodingUrl: scTrack.extras?['transcodingUrl'] as String?);
+                  transcodingUrl: scTrack.extras?['transcodingUrl'] as String?,
+                  trackAuthorization: scTrack.extras?['track_authorization'] as String?);
               if (scUrl != null && scUrl.isNotEmpty) {
                 printINFO("Successfully recovered playback via SoundCloud CDN for: $query");
                 final audio = Audio(

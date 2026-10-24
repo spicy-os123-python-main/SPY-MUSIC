@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:hive/hive.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import '../utils/helper.dart';
 
 class StreamProvider {
   final bool playable;
@@ -37,7 +39,9 @@ class StreamProvider {
                   url: e.url.toString(),
                   size: e.size.totalBytes))
               .toList());
-    } catch (e) {
+    } catch (e, stack) {
+      printERROR("StreamProvider.fetch YouTube error for $videoId: $e (Type: ${e.runtimeType})\n$stack");
+
       // Robust Fallback: try fallback stream APIs (Piped instances)
       final fallbackResult = await _fetchFromPiped(videoId);
       if (fallbackResult != null && fallbackResult.playable) {
@@ -47,7 +51,7 @@ class StreamProvider {
       if (e is SocketException) {
         return StreamProvider(
           playable: false,
-          statusMSG: "networkError",
+          statusMSG: "Netzwerkfehler: ${e.message}",
         );
       } else if (e is VideoUnplayableException) {
         return StreamProvider(
@@ -62,7 +66,7 @@ class StreamProvider {
       } else if (e is VideoUnavailableException) {
         return StreamProvider(
           playable: false,
-          statusMSG: "Song is unavailable",
+          statusMSG: "Song ist auf YouTube nicht verfügbar",
         );
       } else if (e is YoutubeExplodeException) {
         return StreamProvider(
@@ -72,7 +76,7 @@ class StreamProvider {
       } else {
         return StreamProvider(
           playable: false,
-          statusMSG: "Unknown error occurred",
+          statusMSG: e.toString(),
         );
       }
     } finally {
@@ -80,14 +84,22 @@ class StreamProvider {
     }
   }
 
-  /// Fallback stream provider using decentralized Piped endpoints
+  /// Fallback stream provider using configurable/decentralized Piped endpoints
   static Future<StreamProvider?> _fetchFromPiped(String videoId) async {
     final cleanId = videoId.replaceAll("MPED", "").trim();
-    final instances = [
-      "https://pipedapi.kavin.rocks",
+    List<String> instances = [
+      "https://pipedapi.adminforge.de",
       "https://api.piped.private.coffee",
+      "https://pipedapi.kavin.rocks",
       "https://pipedapi.tokhmi.xyz",
     ];
+
+    try {
+      final customList = Hive.box('AppPrefs').get('piped_instances');
+      if (customList is List && customList.isNotEmpty) {
+        instances = customList.map((e) => e.toString()).toList();
+      }
+    } catch (_) {}
 
     final dio = Dio(
       BaseOptions(
@@ -99,6 +111,10 @@ class StreamProvider {
     for (final host in instances) {
       try {
         final res = await dio.get("$host/streams/$cleanId");
+        final previewBody = res.data != null ? res.data.toString() : '';
+        final truncated = previewBody.length > 150 ? '${previewBody.substring(0, 150)}...' : previewBody;
+        printINFO("Piped [$host] status ${res.statusCode} for $cleanId: $truncated");
+
         if (res.statusCode == 200 && res.data != null) {
           final data = res.data;
           final audioList = data['audioStreams'] as List?;
@@ -137,8 +153,15 @@ class StreamProvider {
             }
           }
         }
-      } catch (_) {
-        continue;
+      } catch (e) {
+        if (e is DioException) {
+          final sCode = e.response?.statusCode;
+          final errBody = e.response?.data?.toString();
+          final trunc = errBody != null ? (errBody.length > 100 ? errBody.substring(0, 100) : errBody) : 'none';
+          printERROR("Piped [$host] failed [HTTP $sCode]: ${e.message}, body: $trunc");
+        } else {
+          printERROR("Piped [$host] failed: $e");
+        }
       }
     }
     return null;
@@ -164,7 +187,8 @@ class StreamProvider {
       if (videoOnly.isNotEmpty) {
         return videoOnly.withHighestBitrate().url.toString();
       }
-    } catch (_) {
+    } catch (e) {
+      printERROR("getVideoUrl failed for $videoId: $e");
     } finally {
       yt.close();
     }

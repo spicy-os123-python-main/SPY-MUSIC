@@ -1,6 +1,14 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
+import 'package:hive/hive.dart';
 import '../utils/helper.dart';
+
+class _CachedStream {
+  final String url;
+  final DateTime expiresAt;
+  _CachedStream(this.url, this.expiresAt);
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
+}
 
 class SoundCloudService {
   static final SoundCloudService _instance = SoundCloudService._internal();
@@ -19,19 +27,33 @@ class SoundCloudService {
   static String _clientId = 'GytJkwrLebfCWmFfWOuDf7WObQo2BND9';
   static bool _isRefreshingClient = false;
 
-  /// Cache of resolved stream URLs by scTrackId or url
-  static final Map<String, String> _streamCache = {};
+  /// Cache of resolved stream URLs with expiration
+  static final Map<String, _CachedStream> _streamCache = {};
 
-  /// Get active client ID (auto-refreshes if needed)
+  /// Invalidate stream cache for a track (e.g. on playback error)
+  static void invalidateStreamCache(String songId) {
+    _streamCache.remove(songId);
+    printINFO("Invalidated SoundCloud stream cache for: $songId");
+  }
+
+  /// Get active client ID (loads persisted Hive ID or falls back to default)
   Future<String> getClientId() async {
+    try {
+      final box = Hive.box('AppPrefs');
+      final stored = box.get('soundcloud_client_id') as String?;
+      if (stored != null && stored.isNotEmpty) {
+        _clientId = stored;
+      }
+    } catch (_) {}
     return _clientId;
   }
 
-  /// Dynamically scrape latest client_id from SoundCloud assets
+  /// Dynamically scrape latest client_id from SoundCloud assets and persist to Hive
   Future<void> refreshClientId() async {
     if (_isRefreshingClient) return;
     _isRefreshingClient = true;
     try {
+      printINFO("Refreshing SoundCloud client_id from soundcloud.com...");
       final res = await _dio.get('https://soundcloud.com');
       final html = res.data.toString();
       final scriptRegex = RegExp(r'<script[^>]+src="(https://[^"]+assets/[^"]+\.js)"');
@@ -45,7 +67,11 @@ class SoundCloudService {
           final idMatch = RegExp(r'client_id:"([a-zA-Z0-9]{32})"').firstMatch(sRes.data.toString());
           if (idMatch != null) {
             _clientId = idMatch.group(1)!;
-            printINFO("SoundCloud client_id refreshed: $_clientId");
+            try {
+              final box = Hive.box('AppPrefs');
+              await box.put('soundcloud_client_id', _clientId);
+            } catch (_) {}
+            printINFO("SoundCloud client_id refreshed & saved to Hive: $_clientId");
             break;
           }
         } catch (_) {}
@@ -66,6 +92,7 @@ class SoundCloudService {
 
       final response = await _dio.get(url);
       if (response.statusCode != 200 || response.data == null) {
+        printERROR("SoundCloud search returned HTTP ${response.statusCode} for query '$query'");
         return [];
       }
 
@@ -73,6 +100,10 @@ class SoundCloudService {
       final collection = (data is Map && data['collection'] is List)
           ? data['collection'] as List
           : [];
+
+      if (collection.isEmpty) {
+        printINFO("SoundCloud search returned 0 items for: '$query'");
+      }
 
       final List<MediaItem> items = [];
 
@@ -86,6 +117,7 @@ class SoundCloudService {
 
         final user = track['user'] as Map?;
         final artist = user?['username']?.toString() ?? 'SoundCloud';
+        final trackAuth = track['track_authorization']?.toString();
 
         // High-res artwork fallback
         String? artwork = track['artwork_url']?.toString();
@@ -99,7 +131,7 @@ class SoundCloudService {
             ? track['duration'] as int
             : ((track['full_duration'] is int) ? track['full_duration'] as int : 0);
 
-        // Find best transcoding URL
+        // Find best full unencrypted transcoding URL (strictly exclude previews and DRM)
         final media = track['media'] as Map?;
         final transcodings = (media != null && media['transcodings'] is List)
             ? media['transcodings'] as List
@@ -107,37 +139,29 @@ class SoundCloudService {
 
         String? bestTranscodingUrl;
 
-        // 1. Prefer unencrypted progressive or full stream HLS
         for (var t in transcodings) {
           if (t is! Map) continue;
           final tUrl = t['url']?.toString() ?? '';
           final format = t['format'] as Map?;
           final protocol = format?['protocol']?.toString() ?? '';
 
+          // Strictly skip preview and encrypted streams
+          if (tUrl.contains('/preview') ||
+              protocol.contains('preview') ||
+              protocol.contains('encrypted')) {
+            continue;
+          }
+
           if (tUrl.contains('/stream/progressive')) {
             bestTranscodingUrl = tUrl;
             break;
           }
-          if (tUrl.contains('/stream/hls') && !protocol.contains('encrypted')) {
+          if (tUrl.contains('/stream/hls')) {
             bestTranscodingUrl = tUrl;
           }
         }
 
-        // 2. Fallback to any stream or preview transcoding if no clean stream
-        if (bestTranscodingUrl == null) {
-          for (var t in transcodings) {
-            if (t is! Map) continue;
-            final tUrl = t['url']?.toString() ?? '';
-            final format = t['format'] as Map?;
-            final protocol = format?['protocol']?.toString() ?? '';
-            if (!protocol.contains('encrypted') && tUrl.isNotEmpty) {
-              bestTranscodingUrl = tUrl;
-              break;
-            }
-          }
-        }
-
-        // Skip tracks with exclusively encrypted streams (SoundCloud Go+ DRM)
+        // Skip tracks with exclusively preview or encrypted streams
         if (bestTranscodingUrl == null) {
           continue;
         }
@@ -153,6 +177,7 @@ class SoundCloudService {
             'isSoundCloud': true,
             'scTrackId': id,
             'transcodingUrl': bestTranscodingUrl,
+            'track_authorization': trackAuth,
             'permalink': track['permalink_url']?.toString(),
             'platform': 'SoundCloud',
           },
@@ -166,12 +191,16 @@ class SoundCloudService {
 
       return items;
     } on DioException catch (dioErr) {
-      if (dioErr.response?.statusCode == 401 && !isRetry) {
-        printINFO("SoundCloud 401 detected, refreshing client ID and retrying...");
+      final status = dioErr.response?.statusCode;
+      final errBody = dioErr.response?.data?.toString();
+      final trunc = errBody != null ? (errBody.length > 200 ? '${errBody.substring(0, 200)}...' : errBody) : 'none';
+      printERROR("SoundCloud search failed [HTTP $status] for '$query': ${dioErr.message}, body: $trunc");
+
+      if ((status == 401 || status == 403) && !isRetry) {
+        printINFO("SoundCloud $status detected, refreshing client ID and retrying...");
         await refreshClientId();
         return await searchTracks(query, limit: limit, isRetry: true);
       }
-      printERROR("SoundCloud search dio error: $dioErr");
       return [];
     } catch (e) {
       printERROR("SoundCloud search error: $e");
@@ -193,9 +222,13 @@ class SoundCloudService {
 
   /// Resolve the direct audio playback stream URL
   static Future<String?> resolveStreamUrl(String songId,
-      {String? transcodingUrl, bool isRetry = false}) async {
+      {String? transcodingUrl, String? trackAuthorization, bool isRetry = false}) async {
     if (_streamCache.containsKey(songId)) {
-      return _streamCache[songId];
+      final cached = _streamCache[songId]!;
+      if (!cached.isExpired) {
+        return cached.url;
+      }
+      _streamCache.remove(songId);
     }
 
     try {
@@ -203,6 +236,7 @@ class SoundCloudService {
       final cid = await service.getClientId();
 
       String? targetTranscoding = transcodingUrl;
+      String? targetAuth = trackAuthorization;
 
       // If transcoding URL is not provided in extras, fetch track details
       if (targetTranscoding == null) {
@@ -210,40 +244,63 @@ class SoundCloudService {
         final trackInfoUrl =
             'https://api-v2.soundcloud.com/tracks/$scId?client_id=$cid';
         final trackRes = await service._dio.get(trackInfoUrl);
-        if (trackRes.data != null && trackRes.data['media'] != null) {
-          final transcodings = trackRes.data['media']['transcodings'] as List? ?? [];
-          for (var t in transcodings) {
-            final u = t['url']?.toString() ?? '';
-            final format = t['format'] as Map?;
-            final protocol = format?['protocol']?.toString() ?? '';
-            if (!protocol.contains('encrypted') && (u.contains('/stream/progressive') || u.contains('/stream/hls'))) {
-              targetTranscoding = u;
-              break;
+        if (trackRes.data != null) {
+          targetAuth ??= trackRes.data['track_authorization']?.toString();
+          if (trackRes.data['media'] != null) {
+            final transcodings = trackRes.data['media']['transcodings'] as List? ?? [];
+            for (var t in transcodings) {
+              final u = t['url']?.toString() ?? '';
+              final format = t['format'] as Map?;
+              final protocol = format?['protocol']?.toString() ?? '';
+              if (!protocol.contains('encrypted') &&
+                  !protocol.contains('preview') &&
+                  !u.contains('/preview') &&
+                  (u.contains('/stream/progressive') || u.contains('/stream/hls'))) {
+                targetTranscoding = u;
+                break;
+              }
             }
           }
         }
       }
 
-      if (targetTranscoding == null) return null;
+      if (targetTranscoding == null) {
+        printERROR("No valid unencrypted transcoding found for SoundCloud track: $songId");
+        return null;
+      }
 
       final delim = targetTranscoding.contains('?') ? '&' : '?';
-      final resolveUrl = '$targetTranscoding${delim}client_id=$cid';
+      var resolveUrl = '$targetTranscoding${delim}client_id=$cid';
+      if (targetAuth != null && targetAuth.isNotEmpty) {
+        resolveUrl += '&track_authorization=$targetAuth';
+      }
 
       final response = await service._dio.get(resolveUrl);
       if (response.statusCode == 200 && response.data != null) {
         final streamUrl = response.data['url']?.toString();
         if (streamUrl != null && streamUrl.isNotEmpty) {
-          _streamCache[songId] = streamUrl;
+          // Cache stream URL with 10-minute expiration
+          _streamCache[songId] = _CachedStream(
+            streamUrl,
+            DateTime.now().add(const Duration(minutes: 10)),
+          );
           return streamUrl;
         }
       }
     } on DioException catch (dioErr) {
-      if (dioErr.response?.statusCode == 401 && !isRetry) {
-        printINFO("SoundCloud resolveStreamUrl 401, refreshing client ID...");
+      final status = dioErr.response?.statusCode;
+      final errBody = dioErr.response?.data?.toString();
+      final trunc = errBody != null ? (errBody.length > 200 ? '${errBody.substring(0, 200)}...' : errBody) : 'none';
+      printERROR("SoundCloud resolveStreamUrl failed [HTTP $status] for $songId: ${dioErr.message}, body: $trunc");
+
+      if ((status == 401 || status == 403) && !isRetry) {
+        printINFO("SoundCloud resolveStreamUrl $status, refreshing client ID...");
         await SoundCloudService().refreshClientId();
-        return await resolveStreamUrl(songId, transcodingUrl: transcodingUrl, isRetry: true);
+        return await resolveStreamUrl(songId,
+            transcodingUrl: transcodingUrl,
+            trackAuthorization: trackAuthorization,
+            isRetry: true);
       }
-      printERROR("SoundCloud resolveStreamUrl dio error: $dioErr");
     } catch (e) {
       printERROR("SoundCloud resolveStreamUrl error: $e");
     }

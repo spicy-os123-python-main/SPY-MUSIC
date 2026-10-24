@@ -18,6 +18,16 @@ class PlatformSearchService {
   /// Cache of matched stream IDs for Spotify/Amazon tracks
   static final Map<String, String> _matchCache = {};
 
+  /// Cache of full matched MediaItems for Spotify/Amazon tracks
+  static final Map<String, MediaItem> _matchedItemCache = {};
+
+  /// Invalidate match cache when playback fails or match was dead
+  static void invalidateMatch(String trackId) {
+    _matchCache.remove(trackId);
+    _matchedItemCache.remove(trackId);
+    printINFO("Invalidated match cache for: $trackId");
+  }
+
   /// Search specifically for Spotify tracks
   static Future<List<MediaItem>> searchSpotify(String query,
       {int limit = 25}) async {
@@ -121,7 +131,7 @@ class PlatformSearchService {
     return await searchAmazon('Amazon Music Best Hits', limit: limit);
   }
 
-  /// Fast fallback search
+  /// Fast fallback search with explicit YouTube labeling
   static Future<List<MediaItem>> _queryFilteredEngine(
       String query, String platformName) async {
     try {
@@ -131,7 +141,8 @@ class PlatformSearchService {
       if (rawList != null && rawList.isNotEmpty) {
         return rawList.whereType<MediaItem>().map((item) {
           final extras = Map<String, dynamic>.from(item.extras ?? {});
-          extras['platform'] = platformName;
+          extras['platform'] = '$platformName (via YouTube)';
+          extras['isFallback'] = true;
           return item.copyWith(extras: extras);
         }).toList();
       }
@@ -139,27 +150,37 @@ class PlatformSearchService {
     return [];
   }
 
-  /// Resolve audio stream for Spotify or Amazon track by matching track title & artist
-  static Future<String?> resolveMatchedStreamId(
-      String trackId, String searchQuery) async {
-    if (_matchCache.containsKey(trackId)) {
-      return _matchCache[trackId];
+  /// Resolve audio stream for Spotify or Amazon track by matching track title, artist & duration
+  static Future<MediaItem?> resolveMatchedTrack(
+      String trackId, String searchQuery,
+      {MediaItem? originalTrack}) async {
+    if (_matchedItemCache.containsKey(trackId)) {
+      return _matchedItemCache[trackId];
     }
+
+    final cleanQuery = searchQuery
+        .replaceAll(RegExp(r'\(feat\.[^)]*\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\[feat\.[^\]]*\]', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\(official video\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\[official video\]', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\(official audio\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\[official audio\]', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\(lyrics\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\[lyrics\]', caseSensitive: false), '')
+        .trim();
+    final q = cleanQuery.isNotEmpty ? cleanQuery : searchQuery;
 
     // 1. Resolve via SoundCloud first (independent CDN, no rate limits, doesn't touch YouTube)
     try {
-      final cleanQuery = searchQuery
-          .replaceAll(RegExp(r'\(feat\.[^)]*\)', caseSensitive: false), '')
-          .replaceAll(RegExp(r'\[feat\.[^\]]*\]', caseSensitive: false), '')
-          .replaceAll(RegExp(r'\(official video\)', caseSensitive: false), '')
-          .replaceAll(RegExp(r'\[official video\]', caseSensitive: false), '')
-          .trim();
-      final q = cleanQuery.isNotEmpty ? cleanQuery : searchQuery;
-      final scTracks = await SoundCloudService().searchTracks(q, limit: 3);
+      final scTracks = await SoundCloudService().searchTracks(q, limit: 5);
       if (scTracks.isNotEmpty) {
-        final match = scTracks.first;
-        _matchCache[trackId] = match.id;
-        return match.id;
+        final match = _findBestMatch(scTracks, originalTrack);
+        if (match != null) {
+          _matchedItemCache[trackId] = match;
+          _matchCache[trackId] = match.id;
+          printINFO("Matched $trackId to SoundCloud: '${match.title}' by '${match.artist}' (${match.duration})");
+          return match;
+        }
       }
     } catch (e) {
       printERROR("SoundCloud resolution failed for $trackId: $e");
@@ -169,15 +190,21 @@ class PlatformSearchService {
     try {
       final musicServices = Get.find<MusicServices>();
       final res =
-          await musicServices.search(searchQuery, filter: 'songs', limit: 3);
+          await musicServices.search(searchQuery, filter: 'songs', limit: 5);
       final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
       if (rawList != null && rawList.isNotEmpty) {
-        final match = rawList.firstWhere(
-            (e) => e is MediaItem && !e.id.startsWith('sp_') && !e.id.startsWith('az_'),
-            orElse: () => null);
-        if (match != null && match is MediaItem) {
-          _matchCache[trackId] = match.id;
-          return match.id;
+        final ytTracks = rawList
+            .whereType<MediaItem>()
+            .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
+            .toList();
+        if (ytTracks.isNotEmpty) {
+          final match = _findBestMatch(ytTracks, originalTrack);
+          if (match != null) {
+            _matchedItemCache[trackId] = match;
+            _matchCache[trackId] = match.id;
+            printINFO("Matched $trackId to YouTube: '${match.title}' by '${match.artist}'");
+            return match;
+          }
         }
       }
     } catch (e) {
@@ -186,5 +213,81 @@ class PlatformSearchService {
 
     return null;
   }
-}
 
+  /// Backward-compatible method returning matched stream ID
+  static Future<String?> resolveMatchedStreamId(
+      String trackId, String searchQuery,
+      {MediaItem? originalTrack}) async {
+    final matched = await resolveMatchedTrack(trackId, searchQuery, originalTrack: originalTrack);
+    return matched?.id;
+  }
+
+  /// Match candidates against original track by comparing title, artist, and duration
+  static MediaItem? _findBestMatch(List<MediaItem> candidates, MediaItem? original) {
+    if (candidates.isEmpty) return null;
+    if (original == null) return candidates.first;
+
+    final expectedTitle = _normalizeString(original.title);
+    final expectedArtist = _normalizeString(original.artist ?? '');
+    final expectedDurationSec = original.duration?.inSeconds ?? 0;
+
+    MediaItem? bestMatch;
+    double bestScore = -1.0;
+
+    for (var candidate in candidates) {
+      double score = 0.0;
+      final cTitle = _normalizeString(candidate.title);
+      final cArtist = _normalizeString(candidate.artist ?? '');
+      final cDurationSec = candidate.duration?.inSeconds ?? 0;
+
+      // 1. Title matching
+      if (cTitle == expectedTitle) {
+        score += 50.0;
+      } else if (cTitle.contains(expectedTitle) || expectedTitle.contains(cTitle)) {
+        score += 35.0;
+      } else {
+        final expectedWords = expectedTitle.split(' ').where((w) => w.length > 2);
+        int matchedWords = expectedWords.where((w) => cTitle.contains(w)).length;
+        if (expectedWords.isNotEmpty) {
+          score += (matchedWords / expectedWords.length) * 30.0;
+        }
+      }
+
+      // 2. Artist matching
+      if (expectedArtist.isNotEmpty) {
+        if (cArtist.contains(expectedArtist) || cTitle.contains(expectedArtist)) {
+          score += 25.0;
+        }
+      }
+
+      // 3. Duration matching (penalize if difference is large)
+      if (expectedDurationSec > 0 && cDurationSec > 0) {
+        final diff = (expectedDurationSec - cDurationSec).abs();
+        if (diff <= 10) {
+          score += 25.0;
+        } else if (diff <= 30) {
+          score += 15.0;
+        } else if (diff <= 60) {
+          score += 5.0;
+        } else {
+          score -= 25.0; // Heavy penalty for hour-long mixes or 30-sec snippets
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = candidate;
+      }
+    }
+
+    return bestScore >= 15.0 ? bestMatch : candidates.first;
+  }
+
+  static String _normalizeString(String str) {
+    return str
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+}
