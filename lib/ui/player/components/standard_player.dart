@@ -1,13 +1,9 @@
-import 'dart:ui';
-
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../widgets/songinfo_bottom_sheet.dart';
 import '../player_controller.dart';
 import 'albumart_lyrics.dart';
-import 'backgroud_image.dart';
 import 'lyrics_switch.dart';
 import 'player_control.dart';
 import 'player_mode_switch.dart';
@@ -36,50 +32,31 @@ class StandardPlayer extends StatelessWidget {
         : playerArtImageSize;
     return Stack(
       children: [
-        /// Stack first child
-        /// Album art image in background covering the whole screen
-        BackgroudImage(
-          key: Key("${playerController.currentSong.value?.id}_background"),
-          cacheHeight: 200,
+        /// Clean solid dark background (not full-screen album art)
+        Positioned.fill(
+          child: Container(
+            color: const Color(0xFF070913),
+          ),
         ),
 
-        /// Stack child
-        /// Blur effect on background
-        BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-          child: Stack(
-            children: [
-              /// opacity effect on background
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor.withOpacity(0.8),
-                  ),
-                ),
+        /// used to hide queue header when player is minimized
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            height: 65 + Get.mediaQuery.padding.bottom + 120,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF070913),
+                  Color(0xFF070913),
+                  Color(0x66070913),
+                  Color(0x00070913),
+                ],
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                stops: [0, 0.5, 0.8, 1],
               ),
-
-              /// used to hide queue header when player is minimized
-              /// gradient to used here
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Container(
-                  height: 65 + Get.mediaQuery.padding.bottom + 120,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Theme.of(context).primaryColor,
-                        Theme.of(context).primaryColor,
-                        Theme.of(context).primaryColor.withOpacity(0.4),
-                        Theme.of(context).primaryColor.withOpacity(0),
-                      ],
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      stops: const [0, 0.5, 0.8, 1],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
 

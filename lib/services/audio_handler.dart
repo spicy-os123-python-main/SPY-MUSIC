@@ -21,8 +21,6 @@ import 'platform_search_service.dart';
 import 'chunked_audio_source.dart';
 import 'watchtime_service.dart';
 import '/models/album.dart';
-import '../models/music_source.dart';
-import '../ui/widgets/platform_selector_widget.dart';
 import '../models/playlist.dart';
 import '/services/equalizer.dart';
 import '/services/stream_service.dart';
@@ -974,12 +972,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     return super.stop();
   }
 
-  MusicSource _activeSource() {
-    if (Get.isRegistered<PlatformSelectorController>()) {
-      return Get.find<PlatformSelectorController>().selectedSource.value;
-    }
-    return MusicSource.all;
-  }
 
   void _applyMatchedDuration(MediaItem? song, MediaItem matched) {
     if (song == null) return;
@@ -1231,11 +1223,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         streamInfo = HMStreamingData.fromJson(streamInfoJson);
         if (streamInfo.playable) {
           songsUrlCacheBox.put(songId, streamInfoJson);
-        } else if (!allowFallback || _activeSource() == MusicSource.youtube) {
-          // YouTube is selected (or this id already came from a fallback), so no other platform is used
+        } else if (!allowFallback) {
           printERROR("YouTube failed for $songId: ${streamInfo.statusMSG}");
         } else {
-          printINFO("YouTube failed for $songId (${streamInfo.statusMSG}), trying SoundCloud");
+          printINFO("YouTube failed for $songId (${streamInfo.statusMSG}), trying SoundCloud fallback");
           final sSong = targetSong ??
               queue.value.firstWhereOrNull((item) => item.id == songId) ??
               (mediaItem.value?.id == songId ? mediaItem.value : null);

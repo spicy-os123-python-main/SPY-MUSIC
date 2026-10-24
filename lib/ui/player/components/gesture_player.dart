@@ -1,16 +1,16 @@
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:spymusic/ui/player/components/backgroud_image.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:widget_marquee/widget_marquee.dart';
 
+import '../../widgets/image_widget.dart';
 import '../../widgets/songinfo_bottom_sheet.dart';
-import '../../utils/theme_controller.dart';
 import '../player_controller.dart';
+import 'animated_play_button.dart';
 
 class GesturePlayer extends StatelessWidget {
   const GesturePlayer({super.key});
@@ -18,86 +18,226 @@ class GesturePlayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final PlayerController playerController = Get.find<PlayerController>();
+    final size = MediaQuery.of(context).size;
+    final double squareSize = min(size.width - 64, size.height - 360).clamp(180.0, 360.0);
+
     return Stack(
       children: [
-        GestureDetector(
-          /// Full screen Background image is acting as album art
-          child: const BackgroudImage(),
-          onHorizontalDragEnd: (DragEndDetails details) {
-            final v = details.primaryVelocity ?? 0;
-            if (v < -120) {
-              playerController.next();
-            } else if (v > 120) {
-              playerController.prev();
-            }
-          },
-          onDoubleTap: () {
-            playerController.playPause();
-          },
-          onLongPress: () {
-            showModalBottomSheet(
-              constraints: const BoxConstraints(maxWidth: 500),
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
-              ),
-              isScrollControlled: true,
-              context: playerController.homeScaffoldkey.currentState!.context,
-              barrierColor: Colors.transparent.withAlpha(100),
-              builder: (context) => SongInfoBottomSheet(
-                playerController.currentSong.value!,
-                calledFromPlayer: true,
-              ),
-            ).whenComplete(() => Get.delete<SongInfoController>());
-          },
+        /// Solid dark background (no full-screen stretched image)
+        Positioned.fill(
+          child: Container(
+            color: const Color(0xFF070913),
+          ),
         ),
+
+        /// Top bar with minimize button and song options
+        Padding(
+          padding: EdgeInsets.only(
+            top: Get.mediaQuery.padding.top + 16,
+            left: 12,
+            right: 12,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.keyboard_arrow_down, size: 28, color: Colors.white),
+                onPressed: playerController.playerPanelController.close,
+              ),
+              Expanded(
+                child: Obx(
+                  () => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        playerController.playinfrom.value.typeString,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70),
+                      ),
+                      Text(
+                        "\"${playerController.playinfrom.value.nameString}\"",
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.more_vert, size: 24, color: Colors.white),
+                onPressed: () {
+                  showModalBottomSheet(
+                    constraints: const BoxConstraints(maxWidth: 500),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
+                    ),
+                    isScrollControlled: true,
+                    context: playerController.homeScaffoldkey.currentState!.context,
+                    barrierColor: Colors.transparent.withAlpha(100),
+                    builder: (context) => SongInfoBottomSheet(
+                      playerController.currentSong.value!,
+                      calledFromPlayer: true,
+                    ),
+                  ).whenComplete(() => Get.delete<SongInfoController>());
+                },
+              ),
+            ],
+          ),
+        ),
+
+        /// Centered 4-cornered square box (Kasten 4-eckig) for the song image
+        Positioned.fill(
+          child: Align(
+            alignment: Alignment.center,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 120),
+              child: GestureDetector(
+                onTap: () {
+                  playerController.playPause();
+                },
+                onDoubleTap: () {
+                  playerController.playPause();
+                },
+                onHorizontalDragEnd: (DragEndDetails details) {
+                  final v = details.primaryVelocity ?? 0;
+                  if (v < -120) {
+                    playerController.next();
+                  } else if (v > 120) {
+                    playerController.prev();
+                  }
+                },
+                onLongPress: () {
+                  showModalBottomSheet(
+                    constraints: const BoxConstraints(maxWidth: 500),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
+                    ),
+                    isScrollControlled: true,
+                    context: playerController.homeScaffoldkey.currentState!.context,
+                    barrierColor: Colors.transparent.withAlpha(100),
+                    builder: (context) => SongInfoBottomSheet(
+                      playerController.currentSong.value!,
+                      calledFromPlayer: true,
+                    ),
+                  ).whenComplete(() => Get.delete<SongInfoController>());
+                },
+                child: Container(
+                  width: squareSize,
+                  height: squareSize,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFF00D2FF).withOpacity(0.40),
+                      width: 1.8,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00D2FF).withOpacity(0.35),
+                        blurRadius: 26,
+                        spreadRadius: 2,
+                        offset: const Offset(-2, 6),
+                      ),
+                      BoxShadow(
+                        color: const Color(0xFFFF0055).withOpacity(0.30),
+                        blurRadius: 30,
+                        spreadRadius: 2,
+                        offset: const Offset(2, 10),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: Obx(
+                      () => ImageWidget(
+                        size: squareSize,
+                        song: playerController.currentSong.value,
+                        isPlayerArtImage: true,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        /// Transient Play/Pause icon feedback on double-tap
         IgnorePointer(
           child: Align(
-            child: Center(
+            alignment: Alignment.center,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 120),
               child: Obx(
                 () => FadeTransition(
                   opacity: playerController.gesturePlayerStateAnimation!,
                   child: playerController.gesturePlayerVisibleState.value == 2
                       ? const SizedBox.shrink()
-                      : Icon(
-                          playerController.gesturePlayerVisibleState.value == 1
-                              ? Icons.play_arrow
-                              : Icons.pause,
-                          size: 180,
-                          color: Colors.white,
+                      : Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            playerController.gesturePlayerVisibleState.value == 1
+                                ? Icons.play_arrow_rounded
+                                : Icons.pause_rounded,
+                            size: 72,
+                            color: Colors.white,
+                          ),
                         ),
                 ),
               ),
             ),
           ),
         ),
+
+        /// Bottom player controls panel
         Align(
           alignment: Alignment.bottomCenter,
           child: Padding(
             padding: EdgeInsets.only(
-                bottom: Get.mediaQuery.padding.bottom != 0
-                    ? Get.mediaQuery.padding.bottom + 10
-                    : 20,
-                left: 20,
-                right: 20),
+              bottom: Get.mediaQuery.padding.bottom != 0
+                  ? Get.mediaQuery.padding.bottom + 10
+                  : 20,
+              left: 20,
+              right: 20,
+            ),
             child: Container(
               decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(10)),
+                color: const Color(0xF2080A14),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: const Color(0xFF00D2FF).withOpacity(0.30),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF00D2FF).withOpacity(0.18),
+                    blurRadius: 20,
+                    offset: const Offset(0, -2),
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFFFF0055).withOpacity(0.12),
+                    blurRadius: 24,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
               constraints: const BoxConstraints(maxWidth: 500),
-              height: 142,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(18),
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 15, vertical: 10),
-                    child: Column(children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Column(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        /// Title & Artist marquee + Favorite button
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Obx(() {
@@ -108,167 +248,168 @@ class GesturePlayer extends StatelessWidget {
                                       child: Text(
                                         playerController.currentSong.value?.title ?? "NA",
                                         textAlign: TextAlign.start,
-                                        style: (Theme.of(context)
-                                                .textTheme
-                                                .titleMedium ??
-                                            const TextStyle())
-                                            .copyWith(
-                                                color: Theme.of(context)
-                                                    .primaryColor
-                                                    .complementaryColor),
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
                                       ),
                                     );
                                   }),
-                                  const SizedBox(
-                                    height: 7,
-                                  ),
-                                  GetX<PlayerController>(builder: (controller) {
+                                  const SizedBox(height: 4),
+                                  Obx(() {
                                     return Marquee(
                                       delay: const Duration(milliseconds: 300),
                                       duration: const Duration(seconds: 10),
                                       id: "${playerController.currentSong.value?.id ?? 'idle'}_subtitle",
                                       child: Text(
-                                        controller.currentSong.value?.artist ?? "NA",
+                                        playerController.currentSong.value?.artist ?? "NA",
                                         textAlign: TextAlign.start,
                                         overflow: TextOverflow.ellipsis,
-                                        style: (Theme.of(context)
-                                                .textTheme
-                                                .titleSmall ??
-                                            const TextStyle())
-                                            .copyWith(
-                                                color: Theme.of(context)
-                                                    .primaryColor
-                                                    .complementaryColor,
-                                                fontWeight: FontWeight.normal),
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.white.withOpacity(0.7),
+                                        ),
                                       ),
                                     );
                                   }),
-                                ]),
-                          ),
-                          SizedBox(
-                            width: 75,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                IconButton(
-                                    splashRadius: 10,
-                                    iconSize: 20,
-                                    visualDensity: const VisualDensity(
-                                        horizontal: -4, vertical: -4),
-                                    onPressed: playerController.toggleFavourite,
-                                    icon: Obx(() => Icon(
-                                          playerController
-                                                  .isCurrentSongFav.isFalse
-                                              ? Icons.favorite_border
-                                              : Icons.favorite,
-                                          color: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium
-                                                  ?.color ??
-                                              Colors.white,
-                                        ))),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    Obx(() {
-                                      final titleLargeColor = Theme.of(context)
-                                              .textTheme
-                                              .titleLarge
-                                              ?.color ??
-                                          Colors.white;
-                                      return IconButton(
-                                          splashRadius: 10,
-                                          visualDensity: const VisualDensity(
-                                              horizontal: -4, vertical: -4),
-                                          iconSize: 18,
-                                          onPressed:
-                                              playerController.toggleLoopMode,
-                                          icon: Icon(
-                                            Icons.all_inclusive,
-                                            color: playerController
-                                                    .isLoopModeEnabled.value
-                                                ? titleLargeColor
-                                                : titleLargeColor
-                                                    .withOpacity(0.2),
-                                          ));
-                                    }),
-                                    IconButton(
-                                      iconSize: 18,
-                                      splashRadius: 10,
-                                      visualDensity: const VisualDensity(
-                                          horizontal: -4, vertical: -4),
-                                      onPressed:
-                                          playerController.toggleShuffleMode,
-                                      icon: Obx(
-                                        () {
-                                          final titleLargeColor = Theme.of(context)
-                                                  .textTheme
-                                                  .titleLarge
-                                                  ?.color ??
-                                              Colors.white;
-                                          return Icon(
-                                            Ionicons.shuffle,
-                                            color: playerController
-                                                    .isShuffleModeEnabled.value
-                                                ? titleLargeColor
-                                                : titleLargeColor
-                                                    .withOpacity(0.2),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(
-                        height: 5,
-                      ),
-                      GetX<PlayerController>(builder: (controller) {
-                        return ProgressBar(
-                          thumbRadius: 6,
-                          baseBarColor:
-                              Theme.of(context).sliderTheme.inactiveTrackColor,
-                          bufferedBarColor:
-                              Theme.of(context).sliderTheme.valueIndicatorColor,
-                          progressBarColor:
-                              Theme.of(context).sliderTheme.activeTrackColor,
-                          thumbColor: Theme.of(context).sliderTheme.thumbColor,
-                          timeLabelTextStyle: Theme.of(context)
-                              .textTheme
-                              .titleSmall!
-                              .copyWith(
-                                  color: Theme.of(context)
-                                      .primaryColor
-                                      .complementaryColor),
-                          progress: controller.progressBarStatus.value.current,
-                          total: controller.progressBarStatus.value.total,
-                          buffered: controller.progressBarStatus.value.buffered,
-                          onSeek: controller.seek,
-                        );
-                      }),
-                    ]),
+                            IconButton(
+                              iconSize: 22,
+                              onPressed: playerController.toggleFavourite,
+                              icon: Obx(
+                                () => Icon(
+                                  playerController.isCurrentSongFav.isFalse
+                                      ? Icons.favorite_border
+                                      : Icons.favorite,
+                                  color: playerController.isCurrentSongFav.isFalse
+                                      ? Colors.white70
+                                      : const Color(0xFFFF0055),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        /// Progress Bar
+                        GetX<PlayerController>(builder: (controller) {
+                          return ProgressBar(
+                            thumbRadius: 6,
+                            barHeight: 4,
+                            baseBarColor: Colors.white24,
+                            bufferedBarColor: Colors.white38,
+                            progressBarColor: const Color(0xFF00D2FF),
+                            thumbColor: const Color(0xFF00D2FF),
+                            timeLabelTextStyle: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                            progress: controller.progressBarStatus.value.current,
+                            total: controller.progressBarStatus.value.total,
+                            buffered: controller.progressBarStatus.value.buffered,
+                            onSeek: controller.seek,
+                          );
+                        }),
+
+                        const SizedBox(height: 6),
+
+                        /// Controls row with combined Play & Pause Button
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            /// Shuffle
+                            IconButton(
+                              iconSize: 20,
+                              onPressed: playerController.toggleShuffleMode,
+                              icon: Obx(
+                                () => Icon(
+                                  Ionicons.shuffle,
+                                  color: playerController.isShuffleModeEnabled.value
+                                      ? const Color(0xFF00D2FF)
+                                      : Colors.white30,
+                                ),
+                              ),
+                            ),
+
+                            /// Previous Song
+                            IconButton(
+                              iconSize: 28,
+                              icon: const Icon(Icons.skip_previous, color: Colors.white),
+                              onPressed: playerController.prev,
+                            ),
+
+                            /// Combined Play & Pause Button in one button
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF00D2FF), Color(0xFFFF0055)],
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFFF0055).withOpacity(0.55),
+                                    blurRadius: 18,
+                                    spreadRadius: 2,
+                                  ),
+                                  BoxShadow(
+                                    color: const Color(0xFF00D2FF).withOpacity(0.40),
+                                    blurRadius: 12,
+                                  ),
+                                ],
+                              ),
+                              child: const CircleAvatar(
+                                radius: 30,
+                                backgroundColor: Colors.transparent,
+                                child: AnimatedPlayButton(key: Key("gesturePlayButton"), iconSize: 36),
+                              ),
+                            ),
+
+                            /// Next Song
+                            IconButton(
+                              iconSize: 28,
+                              icon: const Icon(Icons.skip_next, color: Colors.white),
+                              onPressed: playerController.next,
+                            ),
+
+                            /// Loop
+                            IconButton(
+                              iconSize: 20,
+                              onPressed: playerController.toggleLoopMode,
+                              icon: Obx(
+                                () => Icon(
+                                  Icons.all_inclusive,
+                                  color: playerController.isLoopModeEnabled.value
+                                      ? const Color(0xFF00D2FF)
+                                      : Colors.white30,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
         ),
-        // absorb pointer to prevent the next,prev gesture from being triggered when the user tries to switch app
+
+        /// Absorb pointer at bottom edge
         Align(
           alignment: Alignment.bottomCenter,
           child: AbsorbPointer(
             child: SizedBox(
-              height: Get.mediaQuery.padding.bottom + 20,
+              height: Get.mediaQuery.padding.bottom + 10,
               child: Container(),
             ),
           ),
-        )
+        ),
       ],
     );
   }

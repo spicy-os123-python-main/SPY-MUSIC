@@ -3,7 +3,8 @@ import 'package:get/get.dart';
 import 'package:spymusic/ui/player/player_controller.dart';
 import '../../widgets/loader.dart';
 
-/// A button that animates between a play and pause icon with glowing neon fire pulse.
+/// A combined Play & Pause button that animates between play and pause icons
+/// with a glowing neon pulse.
 class AnimatedPlayButton extends StatefulWidget {
   final double iconSize;
 
@@ -20,9 +21,12 @@ class _AnimatedPlayButtonState extends State<AnimatedPlayButton>
   @override
   void initState() {
     super.initState();
+    final isPlaying =
+        Get.find<PlayerController>().buttonState.value == PlayButtonState.playing;
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 250),
+      value: isPlaying ? 1.0 : 0.0,
     );
   }
 
@@ -39,9 +43,9 @@ class _AnimatedPlayButtonState extends State<AnimatedPlayButton>
       final isPlaying = buttonState == PlayButtonState.playing;
       final isLoading = buttonState == PlayButtonState.loading;
 
-      if (isPlaying) {
+      if (isPlaying && _controller.value < 0.99) {
         _controller.forward();
-      } else if (!isLoading) {
+      } else if (!isPlaying && !isLoading && _controller.value > 0.01) {
         _controller.reverse();
       }
 
@@ -52,29 +56,39 @@ class _AnimatedPlayButtonState extends State<AnimatedPlayButton>
               ? [
                   BoxShadow(
                     color: const Color(0xFFFF0055).withOpacity(0.55),
-                    blurRadius: 16,
+                    blurRadius: 18,
                     spreadRadius: 2,
                   ),
                   BoxShadow(
-                    color: const Color(0xFF00D2FF).withOpacity(0.35),
-                    blurRadius: 8,
+                    color: const Color(0xFF00D2FF).withOpacity(0.40),
+                    blurRadius: 10,
                   ),
                 ]
-              : [],
+              : [
+                  BoxShadow(
+                    color: const Color(0xFF00D2FF).withOpacity(0.25),
+                    blurRadius: 8,
+                  ),
+                ],
         ),
         child: IconButton(
           iconSize: widget.iconSize,
           onPressed: () {
-            isPlaying ? controller.pause() : controller.play();
+            if (isLoading) return;
+            if (isPlaying) {
+              controller.pause();
+            } else {
+              controller.play();
+            }
           },
           icon: isLoading
               ? const LoadingIndicator(
-                  dimension: 20,
+                  dimension: 22,
                 )
               : AnimatedIcon(
                   icon: AnimatedIcons.play_pause,
                   progress: _controller,
-                  color: isPlaying ? const Color(0xFF00D2FF) : Colors.white,
+                  color: Colors.white,
                 ),
         ),
       );

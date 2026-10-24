@@ -57,8 +57,14 @@ class AlbumArtNLyrics extends StatelessWidget {
                   }
                 },
                 child: Container(
+                  width: playerArtImageSize,
+                  height: playerArtImageSize,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFF00D2FF).withOpacity(0.40),
+                      width: 1.5,
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: const Color(0xFF00D2FF).withOpacity(0.35),
@@ -75,7 +81,7 @@ class AlbumArtNLyrics extends StatelessWidget {
                     ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(16),
                     child: ImageWidget(
                       size: playerArtImageSize,
                       song: playerController.currentSong.value!,

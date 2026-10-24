@@ -16,9 +16,9 @@ class StreamProvider {
   static Future<StreamManifest> _manifestWithClients(
       YoutubeExplode yt, String videoId) async {
     final clients = <String, YoutubeApiClient>{
+      'ios': YoutubeApiClient.ios,
       'androidSdkless': YoutubeApiClient.androidSdkless,
       'android': YoutubeApiClient.android,
-      'ios': YoutubeApiClient.ios,
       'androidMusic': YoutubeApiClient.androidMusic,
     };
     final watch = Stopwatch()..start();
