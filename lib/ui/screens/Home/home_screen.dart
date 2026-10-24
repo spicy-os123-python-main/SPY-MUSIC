@@ -14,7 +14,7 @@ import '/ui/widgets/create_playlist_dialog.dart';
 import '../../navigator.dart';
 import '../../widgets/content_list_widget.dart';
 import '../../widgets/quickpickswidget.dart';
-import '../../widgets/shimmer_widgets/home_shimmer.dart';
+import '../../widgets/spy_music_loading_widget.dart';
 import 'home_screen_controller.dart';
 import '../../widgets/platform_selector_widget.dart';
 import '../../widgets/spy_music_header_widget.dart';
@@ -196,28 +196,28 @@ class Body extends StatelessWidget {
                     : Obx(() {
                         // dispose all detachached scroll controllers
                         homeScreenController.disposeDetachedScrollControllers();
-                        final items = homeScreenController
-                                .isContentFetched.value
-                            ? [
-                                const SpyMusicHeaderWidget(),
-                                const PlatformSelectorWidget(),
-                                Obx(() {
-                                  final scrollController = ScrollController();
-                                  homeScreenController.contentScrollControllers
-                                      .add(scrollController);
-                                  return QuickPicksWidget(
-                                      content:
-                                          homeScreenController.quickPicks.value,
-                                      scrollController: scrollController);
-                                }),
-                                ...getWidgetList(
-                                    homeScreenController.middleContent,
-                                    homeScreenController),
-                                ...getWidgetList(
-                                    homeScreenController.fixedContent,
-                                    homeScreenController)
-                              ]
-                            : [const HomeShimmer()];
+                        if (!homeScreenController.isContentFetched.value) {
+                          return const SpyMusicLoadingWidget();
+                        }
+                        final items = [
+                          const SpyMusicHeaderWidget(),
+                          const PlatformSelectorWidget(),
+                          Obx(() {
+                            final scrollController = ScrollController();
+                            homeScreenController.contentScrollControllers
+                                .add(scrollController);
+                            return QuickPicksWidget(
+                                content:
+                                    homeScreenController.quickPicks.value,
+                                scrollController: scrollController);
+                          }),
+                          ...getWidgetList(
+                              homeScreenController.middleContent,
+                              homeScreenController),
+                          ...getWidgetList(
+                              homeScreenController.fixedContent,
+                              homeScreenController)
+                        ];
                         return ListView.builder(
                           padding:
                               EdgeInsets.only(bottom: 200, top: topPadding),

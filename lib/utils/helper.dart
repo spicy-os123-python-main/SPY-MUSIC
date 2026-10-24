@@ -160,28 +160,69 @@ void sortArtist(
   }
 }
 
+/// Checks GitHub tags and returns full update details
+Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
+  try {
+    currentVer ??= "v1.0.0";
+    final response = await Dio().get(
+      "https://api.github.com/repos/spicy-os123-python-main/SPY-MUSIC/tags",
+      options: Options(
+        sendTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 8),
+      ),
+    );
+    final tags = response.data as List;
+    if (tags.isEmpty) {
+      return {'hasUpdate': false, 'latest': currentVer, 'current': currentVer};
+    }
+    final latestTag = tags[0]['name'] as String;
+
+    final cleanCurrent = currentVer.toLowerCase().replaceAll('v', '').trim();
+    final cleanLatest = latestTag.toLowerCase().replaceAll('v', '').trim();
+
+    final curParts =
+        cleanCurrent.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final latParts =
+        cleanLatest.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+
+    while (curParts.length < 3) {
+      curParts.add(0);
+    }
+    while (latParts.length < 3) {
+      latParts.add(0);
+    }
+
+    bool hasUpdate = false;
+    for (int i = 0; i < 3; i++) {
+      if (latParts[i] > curParts[i]) {
+        hasUpdate = true;
+        break;
+      } else if (latParts[i] < curParts[i]) {
+        break;
+      }
+    }
+
+    return {
+      'hasUpdate': hasUpdate,
+      'latest': latestTag,
+      'current': currentVer,
+    };
+  } catch (e) {
+    printERROR("checkAppUpdateDetails error: $e");
+    return {
+      'hasUpdate': false,
+      'error': e.toString(),
+      'latest': currentVer ?? "v1.0.0",
+      'current': currentVer ?? "v1.0.0",
+    };
+  }
+}
+
 /// Return true if new version available
 Future<bool> newVersionCheck(String currentVersion) async {
   try {
-    final tags = (await Dio()
-            .get("https://api.github.com/repos/anandnet/Harmony-Music/tags"))
-        .data;
-    final availableVersion = tags[0]['name'] as String;
-    List currentVersion_ = currentVersion.substring(1).split(".");
-    List availableVersion_ = availableVersion.substring(1).split(".");
-    if (int.parse(availableVersion_[0]) > int.parse(currentVersion_[0])) {
-      return true;
-    } else if (int.parse(availableVersion_[1]) >
-            int.parse(currentVersion_[1]) &&
-        int.parse(availableVersion_[0]) == int.parse(currentVersion_[0])) {
-      return true;
-    } else if (int.parse(availableVersion_[2]) >
-            int.parse(currentVersion_[2]) &&
-        int.parse(availableVersion_[0]) == int.parse(currentVersion_[0]) &&
-        int.parse(availableVersion_[1]) == int.parse(currentVersion_[1])) {
-      return true;
-    }
-    return false;
+    final details = await checkAppUpdateDetails(currentVer: currentVersion);
+    return details['hasUpdate'] == true;
   } catch (e) {
     return false;
   }

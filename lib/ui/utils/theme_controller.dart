@@ -22,10 +22,10 @@ class ThemeController extends GetxController {
         WidgetsBinding.instance.platformDispatcher.platformBrightness;
 
     primaryColor.value =
-        Color(Hive.box('appPrefs').get("themePrimaryColor") ?? 4294901845);
+        Color(Hive.box('AppPrefs').get("themePrimaryColor") ?? 4294901845);
 
     changeThemeModeType(
-        ThemeType.values[Hive.box('appPrefs').get("themeModeType") ?? 0]);
+        ThemeType.values[Hive.box('AppPrefs').get("themeModeType") ?? 0]);
 
     _listenSystemBrightness();
 
@@ -37,7 +37,7 @@ class ThemeController extends GetxController {
     platformDispatcher.onPlatformBrightnessChanged = () {
       systemBrightness = platformDispatcher.platformBrightness;
       changeThemeModeType(
-          ThemeType.values[Hive.box('appPrefs').get("themeModeType")],
+          ThemeType.values[Hive.box('AppPrefs').get("themeModeType")],
           sysCall: true);
     };
   }
@@ -82,7 +82,7 @@ class ThemeController extends GetxController {
         textColor: textColor.value,
         titleColorSwatch: _createMaterialColor(textColor.value));
     currentSongId = songId;
-    Hive.box('appPrefs').put("themePrimaryColor", (primaryColor.value!).value);
+    Hive.box('AppPrefs').put("themePrimaryColor", (primaryColor.value!).value);
     setWindowsTitleBarColor(themedata.value!.scaffoldBackgroundColor);
   }
 

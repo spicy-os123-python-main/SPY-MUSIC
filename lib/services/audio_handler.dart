@@ -99,7 +99,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _notifyAudioHandlerAboutPlaybackEvents();
     _listenToPlaybackForNextSong();
     _listenForSequenceStateChanges();
-    final appPrefsBox = Hive.box("appPrefs");
+    final appPrefsBox = Hive.box("AppPrefs");
     _player
         .setSkipSilenceEnabled(appPrefsBox.get("skipSilenceEnabled") ?? false);
     loopModeEnabled = appPrefsBox.get("isLoopModeEnabled") ?? false;

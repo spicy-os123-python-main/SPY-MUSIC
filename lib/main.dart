@@ -27,14 +27,34 @@ import 'utils/update_check_flag_file.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  MediaKit.ensureInitialized();
-  await initHive();
-  _setAppInitPrefs();
-  startApplicationServices();
-  Get.put<AudioHandler>(await initAudioService(), permanent: true);
-  WidgetsBinding.instance.addObserver(LifecycleHandler());
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  TerminateRestart.instance.initialize();
+  try {
+    MediaKit.ensureInitialized();
+  } catch (e) {
+    debugPrint('MediaKit init: $e');
+  }
+  try {
+    await initHive();
+    _setAppInitPrefs();
+  } catch (e) {
+    debugPrint('Hive init: $e');
+  }
+  try {
+    startApplicationServices();
+  } catch (e) {
+    debugPrint('Services init: $e');
+  }
+  try {
+    Get.put<AudioHandler>(await initAudioService(), permanent: true);
+  } catch (e) {
+    debugPrint('AudioService init: $e');
+  }
+  try {
+    WidgetsBinding.instance.addObserver(LifecycleHandler());
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    TerminateRestart.instance.initialize();
+  } catch (e) {
+    debugPrint('System UI init: $e');
+  }
   runApp(const MyApp());
 }
 
@@ -134,6 +154,7 @@ initHive() async {
   await Hive.openBox("SongDownloads");
   await Hive.openBox('SongsUrlCache');
   await Hive.openBox("AppPrefs");
+  await Hive.openBox("appPrefs");
 }
 
 void _setAppInitPrefs() {
