@@ -54,7 +54,11 @@ android {
     }
 
     signingConfigs {
-        debug {
+        release {
+            storeFile file('release.keystore')
+            storePassword 'spymusic123'
+            keyAlias 'spymusic'
+            keyPassword 'spymusic123'
             v1SigningEnabled true
             v2SigningEnabled true
         }
@@ -62,9 +66,7 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled false
             shrinkResources false
         }
