@@ -68,6 +68,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   bool isSongLoading = true;
   int _songErrorRetryCount = 0;
   String? _lastFailedSongId;
+  static final Set<String> _failedYouTubeSongs = {};
 
   // list of shuffled queue songs ids
   List<String> shuffledQueue = [];
@@ -223,6 +224,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           (currentIndex != null && queue.value.isNotEmpty
               ? queue.value[currentIndex!].id
               : null);
+
+      if (currentId != null) {
+        _failedYouTubeSongs.add(currentId);
+        try {
+          Hive.box("SongsUrlCache").delete(currentId);
+        } catch (_) {}
+        if (currentId.startsWith("sp_") || currentId.startsWith("az_")) {
+          PlatformSearchService.invalidateMatch(currentId);
+        }
+      }
 
       if (_lastFailedSongId != currentId) {
         _lastFailedSongId = currentId;
@@ -382,6 +393,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         url: url,
         totalBytes: size > 0 ? size : 10 * 1024 * 1024,
         contentType: contentType,
+        songId: mediaItem.id,
+        onStreamError: (failedId) {
+          _failedYouTubeSongs.add(failedId);
+          try {
+            Hive.box("SongsUrlCache").delete(failedId);
+          } catch (_) {}
+          if (failedId.startsWith("sp_") || failedId.startsWith("az_")) {
+            PlatformSearchService.invalidateMatch(failedId);
+          }
+        },
         tag: mediaItem,
       );
     }
@@ -990,6 +1011,70 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     mediaItem.add(updated);
   }
 
+  Future<HMStreamingData?> _trySoundCloudFallback(
+      String songId, MediaItem? targetSong) async {
+    final sSong = targetSong ??
+        queue.value.firstWhereOrNull((item) => item.id == songId) ??
+        (mediaItem.value?.id == songId ? mediaItem.value : null);
+    var title = sSong?.title ?? '';
+    var artist = sSong?.artist ?? '';
+    if (title.isEmpty) {
+      try {
+        final libBox = Hive.box("LibrarySongs");
+        if (libBox.containsKey(songId)) {
+          final s = libBox.get(songId);
+          title = s?['title']?.toString() ?? '';
+          artist = s?['artist']?.toString() ?? '';
+        }
+      } catch (_) {}
+    }
+    if (title.isNotEmpty) {
+      String query = title;
+      if (artist.isNotEmpty &&
+          !title.toLowerCase().contains(artist.toLowerCase())) {
+        query = '$title $artist';
+      }
+      query = query
+          .replaceAll(RegExp(r'\(official video\)', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\[official video\]', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\(official audio\)', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\[official audio\]', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\(lyrics\)', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\[lyrics\]', caseSensitive: false), '')
+          .trim();
+      final scTracks = await SoundCloudService()
+          .searchTracks(query, limit: 8)
+          .timeout(const Duration(seconds: 8), onTimeout: () => []);
+      final scTrack = PlatformSearchService.findBestMatch(scTracks, sSong);
+      if (scTrack != null) {
+        final scUrl = await SoundCloudService.resolveStreamUrl(scTrack.id,
+            transcodingUrl: scTrack.extras?['transcodingUrl'] as String?,
+            trackAuthorization:
+                scTrack.extras?['track_authorization'] as String?);
+        if (scUrl != null && scUrl.isNotEmpty) {
+          printINFO(
+              "Successfully recovered playback via SoundCloud CDN for: $query");
+          final audio = Audio(
+            audioCodec: Codec.mp4a,
+            bitrate: 160000,
+            loudnessDb: 0,
+            duration: sSong?.duration?.inMilliseconds ?? 0,
+            size: 0,
+            url: scUrl,
+            itag: 140,
+          );
+          return HMStreamingData(
+            playable: true,
+            statusMSG: "OK",
+            lowQualityAudio: audio,
+            highQualityAudio: audio,
+          );
+        }
+      }
+    }
+    return null;
+  }
+
 // Work around used [useNewInstanceOfExplode = false] to Fix Connection closed before full header was received issue
   Future<HMStreamingData> checkNGetUrl(String songId,
       {MediaItem? targetMediaItem,
@@ -1069,6 +1154,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     // Spotify or Amazon Native Track Stream Matching
     if (songId.startsWith("sp_") || songId.startsWith("az_")) {
       printINFO("Resolving Spotify/Amazon track stream for: $songId");
+      if (generateNewUrl) {
+        PlatformSearchService.invalidateMatch(songId);
+      }
       final query = (targetSong?.extras?['searchQuery'] as String?) ??
           ('${targetSong?.title ?? ''} ${targetSong?.artist ?? ''}').trim();
       var matchedTrack = await PlatformSearchService.resolveMatchedTrack(
@@ -1079,10 +1167,18 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         _applyMatchedDuration(targetSong, matchedTrack);
 
         if (!matchedTrack.id.startsWith("sc_")) {
-          return checkNGetUrl(matchedTrack.id,
+          final res = await checkNGetUrl(matchedTrack.id,
               targetMediaItem: targetSong,
               generateNewUrl: generateNewUrl,
-              allowFallback: false);
+              allowFallback: true);
+          if (res.playable) return res;
+
+          // If YouTube failed, invalidate match and retry
+          PlatformSearchService.invalidateMatch(songId);
+          matchedTrack = await PlatformSearchService.resolveMatchedTrack(
+              songId, query,
+              originalTrack: targetSong, skipSoundCloud: false);
+          continue;
         }
 
         final scStreamUrl = await SoundCloudService.resolveStreamUrl(
@@ -1192,7 +1288,18 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           (Hive.box('AppPrefs').get('streamingQuality', defaultValue: 0) as int)
               .clamp(0, 2);
       HMStreamingData? streamInfo;
-      if (songsUrlCacheBox.containsKey(songId) && !generateNewUrl) {
+
+      // If YouTube failed previously for this song, attempt SoundCloud fallback immediately
+      if (_failedYouTubeSongs.contains(songId) && allowFallback) {
+        printINFO("Song $songId previously failed on YouTube, attempting direct SoundCloud fallback...");
+        final fallback = await _trySoundCloudFallback(songId, targetSong);
+        if (fallback != null && fallback.playable) {
+          fallback.setQualityIndex(qualityIndex);
+          return fallback;
+        }
+      }
+
+      if (songsUrlCacheBox.containsKey(songId) && !generateNewUrl && !_failedYouTubeSongs.contains(songId)) {
         final streamInfoJson = songsUrlCacheBox.get(songId);
         if (streamInfoJson.runtimeType.toString().contains("Map") &&
             !isExpired(url: (streamInfoJson['lowQualityAudio']['url']))) {
@@ -1227,61 +1334,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           printERROR("YouTube failed for $songId: ${streamInfo.statusMSG}");
         } else {
           printINFO("YouTube failed for $songId (${streamInfo.statusMSG}), trying SoundCloud fallback");
-          final sSong = targetSong ??
-              queue.value.firstWhereOrNull((item) => item.id == songId) ??
-              (mediaItem.value?.id == songId ? mediaItem.value : null);
-          var title = sSong?.title ?? '';
-          var artist = sSong?.artist ?? '';
-          if (title.isEmpty) {
-            try {
-              final libBox = Hive.box("LibrarySongs");
-              if (libBox.containsKey(songId)) {
-                final s = libBox.get(songId);
-                title = s?['title']?.toString() ?? '';
-                artist = s?['artist']?.toString() ?? '';
-              }
-            } catch (_) {}
-          }
-          if (title.isNotEmpty) {
-            String query = title;
-            if (artist.isNotEmpty && !title.toLowerCase().contains(artist.toLowerCase())) {
-              query = '$title $artist';
-            }
-            query = query
-                .replaceAll(RegExp(r'\(official video\)', caseSensitive: false), '')
-                .replaceAll(RegExp(r'\[official video\]', caseSensitive: false), '')
-                .replaceAll(RegExp(r'\(official audio\)', caseSensitive: false), '')
-                .replaceAll(RegExp(r'\[official audio\]', caseSensitive: false), '')
-                .replaceAll(RegExp(r'\(lyrics\)', caseSensitive: false), '')
-                .replaceAll(RegExp(r'\[lyrics\]', caseSensitive: false), '')
-                .trim();
-            final scTracks = await SoundCloudService()
-                .searchTracks(query, limit: 8)
-                .timeout(const Duration(seconds: 8), onTimeout: () => []);
-            final scTrack = PlatformSearchService.findBestMatch(scTracks, sSong);
-            if (scTrack != null) {
-              final scUrl = await SoundCloudService.resolveStreamUrl(scTrack.id,
-                  transcodingUrl: scTrack.extras?['transcodingUrl'] as String?,
-                  trackAuthorization: scTrack.extras?['track_authorization'] as String?);
-              if (scUrl != null && scUrl.isNotEmpty) {
-                printINFO("Successfully recovered playback via SoundCloud CDN for: $query");
-                final audio = Audio(
-                  audioCodec: Codec.mp4a,
-                  bitrate: 160000,
-                  loudnessDb: 0,
-                  duration: sSong?.duration?.inMilliseconds ?? 0,
-                  size: 0,
-                  url: scUrl,
-                  itag: 140,
-                );
-                streamInfo = HMStreamingData(
-                  playable: true,
-                  statusMSG: "OK",
-                  lowQualityAudio: audio,
-                  highQualityAudio: audio,
-                );
-              }
-            }
+          final fallback = await _trySoundCloudFallback(songId, targetSong);
+          if (fallback != null && fallback.playable) {
+            streamInfo = fallback;
           }
         }
       }

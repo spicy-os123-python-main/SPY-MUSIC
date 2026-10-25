@@ -4,20 +4,24 @@ import 'dart:math';
 import 'package:just_audio/just_audio.dart';
 import '../utils/helper.dart';
 
-/// Custom StreamAudioSource that proxies YouTube audio streams through
-/// bounded 512KB HTTP range chunks with authentic client headers.
-/// Automatically matches client platform (iOS/Android/Web) and gracefully retries.
+/// Custom StreamAudioSource that proxies YouTube audio streams using
+/// NewPipe's proven streaming parameters (rn sequence, range parameter,
+/// YouTube Origin/Referer headers, and matching User-Agents).
 class ChunkedStreamAudioSource extends StreamAudioSource {
   final String url;
   final int totalBytes;
   final String contentType;
   final Map<String, String>? customHeaders;
+  final String? songId;
+  final void Function(String id)? onStreamError;
 
   ChunkedStreamAudioSource({
     required this.url,
     required this.totalBytes,
     this.contentType = 'audio/mp4',
     this.customHeaders,
+    this.songId,
+    this.onStreamError,
     super.tag,
   });
 
@@ -25,7 +29,7 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
     if (streamUrl.contains('c=IOS')) {
       return 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)';
     } else if (streamUrl.contains('c=WEB')) {
-      return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+      return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0';
     }
     return 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
   }
@@ -55,10 +59,12 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
         : (totalBytes > 0 ? totalBytes - 1 : null);
     const chunkSize = 1024 * 512; // 512 KB chunks
     int current = start;
+    int chunkIndex = 0;
 
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 10);
     final defaultUa = _resolveUserAgent(url);
+    final isAndroid = url.contains('c=ANDROID');
 
     try {
       while (targetEnd == null || current <= targetEnd) {
@@ -68,22 +74,39 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
 
         HttpClientResponse? resp;
         int attempts = 0;
-        final candidateUas = [
-          defaultUa,
-          defaultUa.contains('IOS')
-              ? 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip'
-              : 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
-          '', // No User-Agent fallback
-        ];
 
-        while (attempts < candidateUas.length) {
-          final ua = candidateUas[attempts];
-          final req = await client.getUrl(Uri.parse(url));
-          if (ua.isNotEmpty) {
-            req.headers.set('User-Agent', ua);
+        while (attempts < 3) {
+          // Attempt 0: Use NewPipe pattern (query range for iOS/Web, header Range for Android)
+          // Attempt 1: Swap range mechanism (header vs query)
+          // Attempt 2: Use NewPipe desktop Firefox User-Agent
+          final useQueryRange = attempts == 0 ? !isAndroid : isAndroid;
+          final ua = attempts < 2
+              ? defaultUa
+              : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0';
+
+          Uri reqUri = Uri.parse(url);
+          final qParams = Map<String, String>.from(reqUri.queryParameters);
+          qParams['rn'] = '$chunkIndex';
+          if (useQueryRange) {
+            qParams['range'] = '$current-$nextEnd';
+          } else {
+            qParams.remove('range');
           }
-          req.headers.set('Range', 'bytes=$current-$nextEnd');
+          reqUri = reqUri.replace(queryParameters: qParams);
+
+          final req = await client.getUrl(reqUri);
+          req.headers.set('User-Agent', ua);
+          req.headers.set('Origin', 'https://www.youtube.com');
+          req.headers.set('Referer', 'https://www.youtube.com');
+          req.headers.set('Sec-Fetch-Dest', 'empty');
+          req.headers.set('Sec-Fetch-Mode', 'cors');
+          req.headers.set('Sec-Fetch-Site', 'cross-site');
+          req.headers.set('TE', 'trailers');
           req.headers.set('Connection', 'keep-alive');
+
+          if (!useQueryRange) {
+            req.headers.set('Range', 'bytes=$current-$nextEnd');
+          }
 
           if (customHeaders != null) {
             customHeaders!.forEach((k, v) {
@@ -95,23 +118,26 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
           }
 
           resp = await req.close();
-          if (resp.statusCode == 206 || resp.statusCode == 200) {
+          if (resp.statusCode == 200 || resp.statusCode == 206) {
             break;
           }
 
           printERROR(
-              "ChunkedStreamAudioSource HTTP ${resp.statusCode} for range $current-$nextEnd (attempt ${attempts + 1}, UA: $ua)");
+              "ChunkedStreamAudioSource HTTP ${resp.statusCode} for chunk $chunkIndex ($current-$nextEnd, attempt ${attempts + 1})");
           await resp.drain();
           attempts++;
-          if (attempts < candidateUas.length) {
-            await Future.delayed(const Duration(milliseconds: 300));
+          if (attempts < 3) {
+            await Future.delayed(const Duration(milliseconds: 250));
           }
         }
 
-        if (resp == null || (resp.statusCode != 206 && resp.statusCode != 200)) {
+        if (resp == null || (resp.statusCode != 200 && resp.statusCode != 206)) {
           final sCode = resp?.statusCode ?? 500;
-          printERROR("ChunkedStreamAudioSource unrecoverable HTTP $sCode at offset $current");
-          throw HttpException("ChunkedStreamAudioSource HTTP $sCode at offset $current");
+          printERROR("ChunkedStreamAudioSource unrecoverable HTTP $sCode at offset $current for song: $songId");
+          if (songId != null) {
+            onStreamError?.call(songId!);
+          }
+          throw HttpException("YouTube chunked streaming failed with HTTP $sCode at byte $current");
         }
 
         int bytesInChunk = 0;
@@ -125,12 +151,16 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
         }
 
         current += bytesInChunk;
+        chunkIndex++;
         if (targetEnd != null && current > targetEnd) {
           break;
         }
       }
     } catch (e) {
       printERROR("ChunkedStreamAudioSource streaming error: $e");
+      if (songId != null) {
+        onStreamError?.call(songId!);
+      }
       rethrow;
     } finally {
       client.close();

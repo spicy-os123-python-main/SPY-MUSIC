@@ -280,7 +280,7 @@ class PlatformSearchService {
       }
     }
 
-    return bestScore >= 30.0 ? bestMatch : null;
+    return bestScore >= 20.0 ? bestMatch : null;
   }
 
   static String _normalizeString(String str) {
