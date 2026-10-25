@@ -22,6 +22,8 @@ import 'chunked_audio_source.dart';
 import 'watchtime_service.dart';
 import '/models/album.dart';
 import '../models/playlist.dart';
+import '../models/music_source.dart';
+import '../ui/widgets/platform_selector_widget.dart';
 import '/services/equalizer.dart';
 import '/services/stream_service.dart';
 import '/models/hm_streaming_data.dart';
@@ -382,6 +384,30 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
     }
 
+    // Direct AudioSource.uri for streams with ratebypass=yes (itag 18 muxed MP4), SoundCloud, Piped, HLS
+    // Avoids ChunkedStreamAudioSource which triggers Google Video 403 blocks on range requests
+    if (url.contains('ratebypass=yes') ||
+        url.contains('itag=18') ||
+        url.contains('.m3u8') ||
+        url.contains('piped') ||
+        url.contains('soundcloud') ||
+        url.contains('sndcdn') ||
+        mediaItem.id.startsWith("sc_") ||
+        (mediaItem.extras?['isSoundCloud'] == true)) {
+      printINFO("Playing direct stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
+      isPlayingUsingLockCachingSource = false;
+      return AudioSource.uri(
+        Uri.parse(url),
+        headers: url.contains('googlevideo.com')
+            ? {
+                'User-Agent':
+                    'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+              }
+            : null,
+        tag: mediaItem,
+      );
+    }
+
     // Direct chunked stream proxy for YouTube streams to bypass Google 403 Forbidden
     if (url.contains('googlevideo.com')) {
       final size = (mediaItem.extras?['size'] as int?) ?? 0;
@@ -403,28 +429,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             PlatformSearchService.invalidateMatch(failedId);
           }
         },
-        tag: mediaItem,
-      );
-    }
-
-    if (url.contains('.m3u8')) {
-      printINFO("Playing HLS stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
-      isPlayingUsingLockCachingSource = false;
-      return AudioSource.uri(
-        Uri.parse(url),
-        tag: mediaItem,
-      );
-    }
-
-    if (url.contains('soundcloud') ||
-        url.contains('sndcdn') ||
-        url.contains('piped') ||
-        mediaItem.id.startsWith("sc_") ||
-        (mediaItem.extras?['isSoundCloud'] == true)) {
-      printINFO("Playing direct stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
-      isPlayingUsingLockCachingSource = false;
-      return AudioSource.uri(
-        Uri.parse(url),
         tag: mediaItem,
       );
     }
@@ -1289,9 +1293,20 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               .clamp(0, 2);
       HMStreamingData? streamInfo;
 
-      // If YouTube failed previously for this song, attempt SoundCloud fallback immediately
-      if (_failedYouTubeSongs.contains(songId) && allowFallback) {
-        printINFO("Song $songId previously failed on YouTube, attempting direct SoundCloud fallback...");
+      bool isAllInOne = false;
+      try {
+        if (Get.isRegistered<PlatformSelectorController>()) {
+          isAllInOne = Get.find<PlatformSelectorController>().selectedSource.value == MusicSource.all;
+        }
+      } catch (_) {}
+
+      // Fallback to SoundCloud is ONLY allowed in All-In-One mode or when matching Spotify/Amazon tracks.
+      // For YouTube tracks in YouTube mode, YouTube = YouTube, errors must be reported directly!
+      final bool shouldFallbackToSoundCloud = allowFallback && isAllInOne;
+
+      // If YouTube failed previously for this song, attempt SoundCloud fallback immediately (only in All-In-One mode)
+      if (_failedYouTubeSongs.contains(songId) && shouldFallbackToSoundCloud) {
+        printINFO("Song $songId previously failed on YouTube, attempting direct SoundCloud fallback (All-In-One mode)...");
         final fallback = await _trySoundCloudFallback(songId, targetSong);
         if (fallback != null && fallback.playable) {
           fallback.setQualityIndex(qualityIndex);
@@ -1330,10 +1345,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         streamInfo = HMStreamingData.fromJson(streamInfoJson);
         if (streamInfo.playable) {
           songsUrlCacheBox.put(songId, streamInfoJson);
-        } else if (!allowFallback) {
+        } else if (!shouldFallbackToSoundCloud) {
           printERROR("YouTube failed for $songId: ${streamInfo.statusMSG}");
         } else {
-          printINFO("YouTube failed for $songId (${streamInfo.statusMSG}), trying SoundCloud fallback");
+          printINFO("YouTube failed for $songId (${streamInfo.statusMSG}), trying SoundCloud fallback (All-In-One mode)");
           final fallback = await _trySoundCloudFallback(songId, targetSong);
           if (fallback != null && fallback.playable) {
             streamInfo = fallback;

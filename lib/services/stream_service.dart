@@ -1,4 +1,6 @@
 import 'dart:io';
+// ignore: depend_on_referenced_packages
+import 'package:collection/collection.dart';
 import 'package:dio/dio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../utils/helper.dart';
@@ -10,22 +12,20 @@ class StreamProvider {
   StreamProvider(
       {required this.playable, this.audioFormats, this.statusMSG = ""});
 
-  /// Each client gets its own short attempt. The library retries a failing
-  /// client up to five times, so a single dead client used to eat the whole
-  /// time budget before the next one was even tried.
+  /// Each client gets its own attempt. Android clients (androidSdkless, android)
+  /// return muxed and audio streams reliably with ratebypass.
   static Future<StreamManifest> _manifestWithClients(
       YoutubeExplode yt, String videoId) async {
     final clients = <String, YoutubeApiClient>{
-      'ios': YoutubeApiClient.ios,
       'androidSdkless': YoutubeApiClient.androidSdkless,
       'android': YoutubeApiClient.android,
-      'androidMusic': YoutubeApiClient.androidMusic,
+      'ios': YoutubeApiClient.ios,
     };
     final watch = Stopwatch()..start();
     Object? lastError;
 
     for (final entry in clients.entries) {
-      if (watch.elapsed > const Duration(seconds: 8)) break;
+      if (watch.elapsed > const Duration(seconds: 14)) break;
       try {
         final manifest = await yt.videos.streamsClient
             .getManifest(
@@ -33,12 +33,12 @@ class StreamProvider {
               ytClients: [entry.value],
               requireWatchPage: false,
             )
-            .timeout(const Duration(seconds: 4));
-        if (manifest.audioOnly.isNotEmpty) {
-          printINFO("YouTube client ${entry.key} worked for $videoId");
+            .timeout(const Duration(seconds: 8));
+        if (manifest.streams.isNotEmpty) {
+          printINFO("YouTube client ${entry.key} worked for $videoId (${manifest.streams.length} streams)");
           return manifest;
         }
-        printERROR("YouTube client ${entry.key} returned no audio for $videoId");
+        printERROR("YouTube client ${entry.key} returned no streams for $videoId");
       } catch (e) {
         lastError = e;
         printERROR("YouTube client ${entry.key} failed for $videoId: $e");
@@ -53,21 +53,60 @@ class StreamProvider {
 
     try {
       final res = await _manifestWithClients(yt, videoId);
-      final audio = res.audioOnly;
+      final List<Audio> formats = [];
+
+      // 1. Prioritize ratebypass muxed streams (itag 18 has AAC stereo audio and ratebypass=yes, immune to 403 blocks)
+      for (final m in res.muxed) {
+        if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+          formats.add(Audio(
+            itag: m.tag,
+            audioCodec: Codec.mp4a,
+            bitrate: 128000,
+            duration: 0,
+            loudnessDb: 0.0,
+            url: m.url.toString(),
+            size: m.size.totalBytes,
+          ));
+        }
+      }
+
+      // 2. Also add standalone audio streams
+      for (final a in res.audioOnly) {
+        formats.add(Audio(
+          itag: a.tag,
+          audioCodec:
+              a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
+          bitrate: a.bitrate.bitsPerSecond,
+          duration: 0,
+          loudnessDb: 0.0,
+          url: a.url.toString(),
+          size: a.size.totalBytes,
+        ));
+      }
+
+      // Fallback: any other muxed stream if formats still empty
+      if (formats.isEmpty && res.muxed.isNotEmpty) {
+        final m = res.muxed.first;
+        formats.add(Audio(
+          itag: m.tag,
+          audioCodec: Codec.mp4a,
+          bitrate: 128000,
+          duration: 0,
+          loudnessDb: 0.0,
+          url: m.url.toString(),
+          size: m.size.totalBytes,
+        ));
+      }
+
+      if (formats.isEmpty) {
+        throw VideoUnavailableException('Keine abspielbaren Audio-Streams für $videoId gefunden');
+      }
+
       return StreamProvider(
-          playable: true,
-          statusMSG: "OK",
-          audioFormats: audio
-              .map((e) => Audio(
-                  itag: e.tag,
-                  audioCodec:
-                      e.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
-                  bitrate: e.bitrate.bitsPerSecond,
-                  duration: 0,
-                  loudnessDb: 0.0,
-                  url: e.url.toString(),
-                  size: e.size.totalBytes))
-              .toList());
+        playable: true,
+        statusMSG: "OK",
+        audioFormats: formats,
+      );
     } catch (e, stack) {
       printERROR("StreamProvider.fetch YouTube error for $videoId: $e (Type: ${e.runtimeType})\n$stack");
 
@@ -222,25 +261,46 @@ class StreamProvider {
     return null;
   }
 
-  Audio? get highestQualityAudio =>
-      audioFormats?.lastWhere((item) => item.itag == 251 || item.itag == 140,
-          orElse: () => audioFormats!.first);
+  Audio? get highestQualityAudio {
+    final rateBypass = audioFormats?.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
 
-  Audio? get highestBitrateMp4aAudio =>
-      audioFormats?.lastWhere((item) => item.itag == 140 || item.itag == 139,
-          orElse: () => audioFormats!.first);
+    return audioFormats?.lastWhere((item) => item.itag == 251 || item.itag == 140,
+        orElse: () => audioFormats!.first);
+  }
+
+  Audio? get highestBitrateMp4aAudio {
+    final rateBypass = audioFormats?.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
+
+    return audioFormats?.lastWhere((item) => item.itag == 140 || item.itag == 139,
+        orElse: () => audioFormats!.first);
+  }
 
   Audio? get highestBitrateOpusAudio =>
       audioFormats?.lastWhere((item) => item.itag == 251 || item.itag == 250,
           orElse: () => audioFormats!.first);
 
-  Audio? get lowQualityAudio =>
-      audioFormats?.lastWhere((item) => item.itag == 249 || item.itag == 139,
-          orElse: () => audioFormats!.first);
+  Audio? get lowQualityAudio {
+    final rateBypass = audioFormats?.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
 
-  Audio? get midQualityAudio => audioFormats?.lastWhere(
-      (item) => item.itag == 250 || item.itag == 140,
-      orElse: () => lowQualityAudio ?? audioFormats!.first);
+    return audioFormats?.lastWhere((item) => item.itag == 249 || item.itag == 139,
+        orElse: () => audioFormats!.first);
+  }
+
+  Audio? get midQualityAudio {
+    final rateBypass = audioFormats?.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
+
+    return audioFormats?.lastWhere(
+        (item) => item.itag == 250 || item.itag == 140,
+        orElse: () => lowQualityAudio ?? audioFormats!.first);
+  }
 
   Map<String, dynamic> get hmStreamingData {
     return {
