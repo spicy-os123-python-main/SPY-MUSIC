@@ -14,6 +14,10 @@ class SpyVideoPlayer extends StatelessWidget {
     final playerController = Get.find<PlayerController>();
 
     return Obx(() {
+      final current = playerController.currentSong.value;
+      if (!playerController.isYouTubeSong(current)) {
+        return const SizedBox.shrink();
+      }
       final isLoading = playerController.isVideoLoading.value;
       final controller = playerController.videoController;
 

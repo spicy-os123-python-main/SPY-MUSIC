@@ -11,16 +11,7 @@ class PlayerModeSwitch extends StatelessWidget {
 
     return Obx(() {
       final currentSong = playerController.currentSong.value;
-      if (currentSong == null) return const SizedBox.shrink();
-
-      // Videos are strictly available only for YouTube tracks!
-      final songId = currentSong.id;
-      final isYouTubeSong = !songId.startsWith('sc_') &&
-          !songId.startsWith('sp_') &&
-          !songId.startsWith('az_') &&
-          currentSong.extras?['isSoundCloud'] != true;
-
-      if (!isYouTubeSong) {
+      if (currentSong == null || !playerController.isYouTubeSong(currentSong)) {
         return const SizedBox.shrink();
       }
 

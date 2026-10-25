@@ -21,7 +21,8 @@ class AlbumArtNLyrics extends StatelessWidget {
       if (playerController.currentSong.value == null) {
         return const SizedBox.shrink();
       }
-      if (playerController.isVideoMode.isTrue) {
+      if (playerController.isVideoMode.isTrue &&
+          playerController.isYouTubeSong(playerController.currentSong.value)) {
         return SpyVideoPlayer(size: playerArtImageSize);
       }
       return Stack(

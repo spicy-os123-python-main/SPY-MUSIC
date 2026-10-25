@@ -70,6 +70,18 @@ class PlayerController extends GetxController
   final currentVideoUrl = "".obs;
   Player? videoPlayer;
   VideoController? videoController;
+
+  bool isYouTubeSong(MediaItem? song) {
+    if (song == null) return false;
+    final id = song.id;
+    if (id.startsWith('sc_') || id.startsWith('sp_') || id.startsWith('az_')) {
+      return false;
+    }
+    if (song.extras?['isSoundCloud'] == true) {
+      return false;
+    }
+    return true;
+  }
   final showLyricsflag = false.obs;
   final isLyricsLoading = false.obs;
   final lyricsMode = 0.obs;
@@ -282,7 +294,14 @@ class PlayerController extends GetxController
         if (isDesktopLyricsDialogOpen) {
           Navigator.pop(Get.context!);
         }
-        if (isVideoMode.isTrue) {
+        if (!isYouTubeSong(mediaItem)) {
+          isVideoMode.value = false;
+          isVideoLoading.value = false;
+          try {
+            videoPlayer?.stop();
+          } catch (_) {}
+          currentVideoUrl.value = '';
+        } else if (isVideoMode.isTrue) {
           startVideoForSong(mediaItem);
         }
 
@@ -595,36 +614,57 @@ class PlayerController extends GetxController
   }
 
   void initVideoPlayer() {
-    videoPlayer ??= Player();
-    videoController ??= VideoController(videoPlayer!);
-    videoPlayer!.stream.completed.listen((completed) {
-      if (completed && isVideoMode.isTrue) {
-        next();
-      }
-    });
-    videoPlayer!.stream.position.listen((pos) {
-      if (isVideoMode.isTrue) {
-        progressBarStatus.update((val) {
-          if (val != null) val.current = pos;
-        });
-      }
-    });
-    videoPlayer!.stream.duration.listen((dur) {
-      if (isVideoMode.isTrue && dur != Duration.zero) {
-        progressBarStatus.update((val) {
-          if (val != null) val.total = dur;
-        });
-      }
-    });
-    videoPlayer!.stream.playing.listen((playing) {
-      if (isVideoMode.isTrue) {
-        buttonState.value =
-            playing ? PlayButtonState.playing : PlayButtonState.paused;
-      }
-    });
+    if (videoPlayer != null && videoController != null) return;
+    try {
+      MediaKit.ensureInitialized();
+    } catch (e) {
+      debugPrint('MediaKit init: $e');
+    }
+    try {
+      videoPlayer ??= Player();
+      videoController ??= VideoController(videoPlayer!);
+      videoPlayer!.stream.completed.listen((completed) {
+        if (completed && isVideoMode.isTrue && isYouTubeSong(currentSong.value)) {
+          next();
+        }
+      });
+      videoPlayer!.stream.position.listen((pos) {
+        if (isVideoMode.isTrue && isYouTubeSong(currentSong.value)) {
+          progressBarStatus.update((val) {
+            if (val != null) val.current = pos;
+          });
+        }
+      });
+      videoPlayer!.stream.duration.listen((dur) {
+        if (isVideoMode.isTrue && isYouTubeSong(currentSong.value) && dur != Duration.zero) {
+          progressBarStatus.update((val) {
+            if (val != null) val.total = dur;
+          });
+        }
+      });
+      videoPlayer!.stream.playing.listen((playing) {
+        if (isVideoMode.isTrue && isYouTubeSong(currentSong.value)) {
+          buttonState.value =
+              playing ? PlayButtonState.playing : PlayButtonState.paused;
+        }
+      });
+    } catch (e, st) {
+      debugPrint('Error initializing VideoPlayer: $e\n$st');
+      videoPlayer = null;
+      videoController = null;
+    }
   }
 
   Future<void> startVideoForSong(MediaItem song) async {
+    if (!isYouTubeSong(song)) {
+      isVideoMode.value = false;
+      isVideoLoading.value = false;
+      try {
+        videoPlayer?.stop();
+      } catch (_) {}
+      currentVideoUrl.value = '';
+      return;
+    }
     final dataSaver =
         Hive.box('AppPrefs').get('dataSaverMode', defaultValue: 0);
     if (dataSaver == 2) {
@@ -635,13 +675,18 @@ class PlayerController extends GetxController
               size: SanckBarSize.MEDIUM),
         );
       }
+      isVideoMode.value = false;
+      isVideoLoading.value = false;
       return;
     }
     isVideoMode.value = true;
     isVideoLoading.value = true;
-    initVideoPlayer();
-    _audioHandler.pause();
     try {
+      initVideoPlayer();
+      if (videoPlayer == null) {
+        throw Exception("Video-Player konnte nicht initialisiert werden.");
+      }
+      _audioHandler.pause();
       final vUrl = await StreamProvider.getVideoUrl(song.id);
       if (vUrl != null && vUrl.isNotEmpty) {
         currentVideoUrl.value = vUrl;
@@ -669,12 +714,20 @@ class PlayerController extends GetxController
   }
 
   Future<void> toggleVideoMode() async {
-    if (currentSong.value == null) return;
+    final current = currentSong.value;
+    if (current == null || !isYouTubeSong(current)) {
+      isVideoMode.value = false;
+      isVideoLoading.value = false;
+      return;
+    }
     if (isVideoMode.isTrue) {
       // Turn Video OFF -> resume Audio
       isVideoMode.value = false;
-      final pos = videoPlayer?.state.position ?? Duration.zero;
-      await videoPlayer?.pause();
+      isVideoLoading.value = false;
+      final pos = videoPlayer?.state.position ?? progressBarStatus.value.current;
+      try {
+        await videoPlayer?.pause();
+      } catch (_) {}
       seek(pos);
       play();
     } else {
@@ -693,11 +746,14 @@ class PlayerController extends GetxController
       // Turn Video ON -> pause Audio, start Video at current audio position
       isVideoMode.value = true;
       isVideoLoading.value = true;
-      initVideoPlayer();
-      final pos = progressBarStatus.value.current;
-      _audioHandler.pause();
       try {
-        final vUrl = await StreamProvider.getVideoUrl(currentSong.value!.id);
+        initVideoPlayer();
+        if (videoPlayer == null) {
+          throw Exception("Video-Player konnte nicht initialisiert werden.");
+        }
+        final pos = progressBarStatus.value.current;
+        _audioHandler.pause();
+        final vUrl = await StreamProvider.getVideoUrl(current.id);
         if (vUrl != null && vUrl.isNotEmpty) {
           currentVideoUrl.value = vUrl;
           await videoPlayer!.open(Media(vUrl, start: pos, httpHeaders: {
@@ -719,6 +775,12 @@ class PlayerController extends GetxController
         printINFO("Error toggling video: $e");
         isVideoMode.value = false;
         _audioHandler.play();
+        if (Get.context != null) {
+          ScaffoldMessenger.of(Get.context!).showSnackBar(
+            snackbar(Get.context!, "Fehler beim Laden des Videos.",
+                size: SanckBarSize.MEDIUM),
+          );
+        }
       } finally {
         isVideoLoading.value = false;
       }
@@ -726,7 +788,7 @@ class PlayerController extends GetxController
   }
 
   void play() {
-    if (isVideoMode.isTrue && videoPlayer != null) {
+    if (isVideoMode.isTrue && isYouTubeSong(currentSong.value) && videoPlayer != null) {
       videoPlayer!.play();
       buttonState.value = PlayButtonState.playing;
     } else {
@@ -735,7 +797,7 @@ class PlayerController extends GetxController
   }
 
   void pause() {
-    if (isVideoMode.isTrue && videoPlayer != null) {
+    if (isVideoMode.isTrue && isYouTubeSong(currentSong.value) && videoPlayer != null) {
       videoPlayer!.pause();
       buttonState.value = PlayButtonState.paused;
     } else {
@@ -745,7 +807,7 @@ class PlayerController extends GetxController
 
   void playPause() {
     if (initFlagForPlayer) return;
-    if (isVideoMode.isTrue && videoPlayer != null) {
+    if (isVideoMode.isTrue && isYouTubeSong(currentSong.value) && videoPlayer != null) {
       videoPlayer!.playOrPause();
       buttonState.value =
           videoPlayer!.state.playing ? PlayButtonState.paused : PlayButtonState.playing;
@@ -770,7 +832,7 @@ class PlayerController extends GetxController
   }
 
   void seek(Duration position) {
-    if (isVideoMode.isTrue && videoPlayer != null) {
+    if (isVideoMode.isTrue && isYouTubeSong(currentSong.value) && videoPlayer != null) {
       videoPlayer!.seek(position);
     }
     _audioHandler.seek(position);

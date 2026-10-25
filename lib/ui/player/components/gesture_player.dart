@@ -153,7 +153,8 @@ class GesturePlayer extends StatelessWidget {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(18),
                         child: Obx(
-                          () => playerController.isVideoMode.isTrue
+                          () => (playerController.isVideoMode.isTrue &&
+                                  playerController.isYouTubeSong(playerController.currentSong.value))
                               ? SpyVideoPlayer(size: squareSize)
                               : ImageWidget(
                                   size: squareSize,
