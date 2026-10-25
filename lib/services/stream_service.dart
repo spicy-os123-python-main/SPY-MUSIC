@@ -234,14 +234,19 @@ class StreamProvider {
   }
 
   static Future<String?> getVideoUrl(String videoId) async {
+    final cleanId = videoId.replaceAll("MPED", "").trim();
+    if (cleanId.startsWith("sc_") ||
+        cleanId.startsWith("sp_") ||
+        cleanId.startsWith("az_")) {
+      return null;
+    }
     final yt = YoutubeExplode();
     try {
       final manifest = await yt.videos.streamsClient.getManifest(
-        videoId,
+        cleanId,
         ytClients: [
           YoutubeApiClient.androidSdkless,
-          YoutubeApiClient.androidMusic,
-          YoutubeApiClient.ios,
+          YoutubeApiClient.android,
         ],
         requireWatchPage: false,
       );
@@ -254,7 +259,7 @@ class StreamProvider {
         return videoOnly.withHighestBitrate().url.toString();
       }
     } catch (e) {
-      printERROR("getVideoUrl failed for $videoId: $e");
+      printERROR("getVideoUrl failed for $cleanId: $e");
     } finally {
       yt.close();
     }

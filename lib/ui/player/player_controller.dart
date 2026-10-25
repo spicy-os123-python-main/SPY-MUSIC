@@ -645,7 +645,10 @@ class PlayerController extends GetxController
       final vUrl = await StreamProvider.getVideoUrl(song.id);
       if (vUrl != null && vUrl.isNotEmpty) {
         currentVideoUrl.value = vUrl;
-        await videoPlayer!.open(Media(vUrl));
+        await videoPlayer!.open(Media(vUrl, httpHeaders: {
+          'User-Agent':
+              'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+        }));
       } else {
         isVideoMode.value = false;
         _audioHandler.play();
@@ -697,7 +700,10 @@ class PlayerController extends GetxController
         final vUrl = await StreamProvider.getVideoUrl(currentSong.value!.id);
         if (vUrl != null && vUrl.isNotEmpty) {
           currentVideoUrl.value = vUrl;
-          await videoPlayer!.open(Media(vUrl, start: pos));
+          await videoPlayer!.open(Media(vUrl, start: pos, httpHeaders: {
+            'User-Agent':
+                'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+          }));
         } else {
           isVideoMode.value = false;
           _audioHandler.play();

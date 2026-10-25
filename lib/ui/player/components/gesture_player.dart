@@ -11,6 +11,8 @@ import '../../widgets/image_widget.dart';
 import '../../widgets/songinfo_bottom_sheet.dart';
 import '../player_controller.dart';
 import 'animated_play_button.dart';
+import 'player_mode_switch.dart';
+import 'spy_video_player.dart';
 
 class GesturePlayer extends StatelessWidget {
   const GesturePlayer({super.key});
@@ -84,77 +86,85 @@ class GesturePlayer extends StatelessWidget {
           ),
         ),
 
-        /// Centered 4-cornered square box (Kasten 4-eckig) for the song image
+        /// Centered 4-cornered square box (Kasten 4-eckig) for the song image / video
         Positioned.fill(
           child: Align(
             alignment: Alignment.center,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 120),
-              child: GestureDetector(
-                onTap: () {
-                  playerController.playPause();
-                },
-                onDoubleTap: () {
-                  playerController.playPause();
-                },
-                onHorizontalDragEnd: (DragEndDetails details) {
-                  final v = details.primaryVelocity ?? 0;
-                  if (v < -120) {
-                    playerController.next();
-                  } else if (v > 120) {
-                    playerController.prev();
-                  }
-                },
-                onLongPress: () {
-                  showModalBottomSheet(
-                    constraints: const BoxConstraints(maxWidth: 500),
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
-                    ),
-                    isScrollControlled: true,
-                    context: playerController.homeScaffoldkey.currentState!.context,
-                    barrierColor: Colors.transparent.withAlpha(100),
-                    builder: (context) => SongInfoBottomSheet(
-                      playerController.currentSong.value!,
-                      calledFromPlayer: true,
-                    ),
-                  ).whenComplete(() => Get.delete<SongInfoController>());
-                },
-                child: Container(
-                  width: squareSize,
-                  height: squareSize,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: const Color(0xFF00D2FF).withOpacity(0.40),
-                      width: 1.8,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF00D2FF).withOpacity(0.35),
-                        blurRadius: 26,
-                        spreadRadius: 2,
-                        offset: const Offset(-2, 6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const PlayerModeSwitch(),
+                  GestureDetector(
+                    onTap: () {
+                      playerController.playPause();
+                    },
+                    onDoubleTap: () {
+                      playerController.playPause();
+                    },
+                    onHorizontalDragEnd: (DragEndDetails details) {
+                      final v = details.primaryVelocity ?? 0;
+                      if (v < -120) {
+                        playerController.next();
+                      } else if (v > 120) {
+                        playerController.prev();
+                      }
+                    },
+                    onLongPress: () {
+                      showModalBottomSheet(
+                        constraints: const BoxConstraints(maxWidth: 500),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
+                        ),
+                        isScrollControlled: true,
+                        context: playerController.homeScaffoldkey.currentState!.context,
+                        barrierColor: Colors.transparent.withAlpha(100),
+                        builder: (context) => SongInfoBottomSheet(
+                          playerController.currentSong.value!,
+                          calledFromPlayer: true,
+                        ),
+                      ).whenComplete(() => Get.delete<SongInfoController>());
+                    },
+                    child: Container(
+                      width: squareSize,
+                      height: squareSize,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFF00D2FF).withOpacity(0.40),
+                          width: 1.8,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF00D2FF).withOpacity(0.35),
+                            blurRadius: 26,
+                            spreadRadius: 2,
+                            offset: const Offset(-2, 6),
+                          ),
+                          BoxShadow(
+                            color: const Color(0xFFFF0055).withOpacity(0.30),
+                            blurRadius: 30,
+                            spreadRadius: 2,
+                            offset: const Offset(2, 10),
+                          ),
+                        ],
                       ),
-                      BoxShadow(
-                        color: const Color(0xFFFF0055).withOpacity(0.30),
-                        blurRadius: 30,
-                        spreadRadius: 2,
-                        offset: const Offset(2, 10),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Obx(
+                          () => playerController.isVideoMode.isTrue
+                              ? SpyVideoPlayer(size: squareSize)
+                              : ImageWidget(
+                                  size: squareSize,
+                                  song: playerController.currentSong.value,
+                                  isPlayerArtImage: true,
+                                ),
+                        ),
                       ),
-                    ],
+                    ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: Obx(
-                      () => ImageWidget(
-                        size: squareSize,
-                        song: playerController.currentSong.value,
-                        isPlayerArtImage: true,
-                      ),
-                    ),
-                  ),
-                ),
+                ],
               ),
             ),
           ),
