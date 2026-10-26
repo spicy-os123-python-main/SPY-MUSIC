@@ -339,26 +339,10 @@ class HomeScreenController extends GetxController {
   ///and applicable/useful if bottom nav enabled
   void whenHomeScreenOnTop() {
     if (Get.find<SettingsScreenController>().isBottomNavBarEnabled.isTrue) {
-      final currentRoute = getCurrentRouteName();
-      final isHomeOnTop = currentRoute == '/homeScreen';
-      final isResultScreenOnTop = currentRoute == '/searchResultScreen';
+      isHomeSreenOnTop.value = true;
       final playerCon = Get.find<PlayerController>();
-
-      isHomeSreenOnTop.value = isHomeOnTop;
-
-      // Set miniplayer height accordingly
       if (!playerCon.initFlagForPlayer) {
-        if (isHomeOnTop) {
-          playerCon.playerPanelMinHeight.value = 75.0;
-        } else {
-          Future.delayed(
-              isResultScreenOnTop
-                  ? const Duration(milliseconds: 300)
-                  : Duration.zero, () {
-            playerCon.playerPanelMinHeight.value =
-                75.0 + Get.mediaQuery.viewPadding.bottom;
-          });
-        }
+        playerCon.playerPanelMinHeight.value = 75.0;
       }
     }
   }

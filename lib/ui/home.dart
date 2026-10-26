@@ -72,8 +72,7 @@ class Home extends StatelessWidget {
               bottomNavigationBar: settingsScreenController
                       .isBottomNavBarEnabled.isTrue
                   ? ScrollToHideWidget(
-                      isVisible: homeScreenController.isHomeSreenOnTop.isTrue &&
-                          playerController.isPanelGTHOpened.isFalse,
+                      isVisible: playerController.isPanelGTHOpened.isFalse,
                       child: const BottomNavBar())
                   : null,
               key: playerController.homeScaffoldkey,
@@ -200,12 +199,7 @@ class Home extends StatelessWidget {
                     },
                     panel: const Player(),
                     body: const ScreenNavigation(),
-                    header: !isWideScreen
-                        ? InkWell(
-                            onTap: playerController.playerPanelController.open,
-                            child: const MiniPlayer(),
-                          )
-                        : const MiniPlayer(),
+                    header: const MiniPlayer(),
                   ))),
             ),
           ),

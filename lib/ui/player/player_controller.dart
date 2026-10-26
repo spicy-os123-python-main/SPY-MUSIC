@@ -831,6 +831,17 @@ class PlayerController extends GetxController
     await _audioHandler.skipToNext();
   }
 
+  void dismissPlayer() {
+    _audioHandler.stop();
+    playerPanelMinHeight.value = 0.0;
+    initFlagForPlayer = true;
+    try {
+      if (playerPanelController.isAttached) {
+        playerPanelController.close();
+      }
+    } catch (_) {}
+  }
+
   void seek(Duration position) {
     if (isVideoMode.isTrue && isYouTubeSong(currentSong.value) && videoPlayer != null) {
       videoPlayer!.seek(position);

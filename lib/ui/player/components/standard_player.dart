@@ -32,10 +32,19 @@ class StandardPlayer extends StatelessWidget {
         : playerArtImageSize;
     return Stack(
       children: [
-        /// Clean solid dark background (not full-screen album art)
+        /// Clean solid dark background with swipe down to close
         Positioned.fill(
-          child: Container(
-            color: const Color(0xFF070913),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragEnd: (DragEndDetails details) {
+              final v = details.primaryVelocity ?? 0;
+              if (v > 100) {
+                playerController.playerPanelController.close();
+              }
+            },
+            child: Container(
+              color: const Color(0xFF070913),
+            ),
           ),
         ),
 

@@ -25,10 +25,19 @@ class GesturePlayer extends StatelessWidget {
 
     return Stack(
       children: [
-        /// Solid dark background (no full-screen stretched image)
+        /// Solid dark background with swipe-down to close
         Positioned.fill(
-          child: Container(
-            color: const Color(0xFF070913),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragEnd: (DragEndDetails details) {
+              final v = details.primaryVelocity ?? 0;
+              if (v > 100) {
+                playerController.playerPanelController.close();
+              }
+            },
+            child: Container(
+              color: const Color(0xFF070913),
+            ),
           ),
         ),
 
@@ -109,6 +118,12 @@ class GesturePlayer extends StatelessWidget {
                         playerController.next();
                       } else if (v > 120) {
                         playerController.prev();
+                      }
+                    },
+                    onVerticalDragEnd: (DragEndDetails details) {
+                      final v = details.primaryVelocity ?? 0;
+                      if (v > 100) {
+                        playerController.playerPanelController.close();
                       }
                     },
                     onLongPress: () {

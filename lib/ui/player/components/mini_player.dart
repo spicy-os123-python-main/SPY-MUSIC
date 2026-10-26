@@ -31,9 +31,28 @@ class MiniPlayer extends StatelessWidget {
         child: AnimatedOpacity(
           opacity: playerController.playerPaneOpacity.value,
           duration: Duration.zero,
-          child: Container(
-            height: playerController.playerPanelMinHeight.value,
-            width: size.width,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: playerController.playerPanelController.open,
+            onHorizontalDragEnd: (DragEndDetails details) {
+              final v = details.primaryVelocity ?? 0;
+              if (v < -80) {
+                playerController.next();
+              } else if (v > 80) {
+                playerController.prev();
+              }
+            },
+            onVerticalDragEnd: (DragEndDetails details) {
+              final v = details.primaryVelocity ?? 0;
+              if (v < -80) {
+                playerController.playerPanelController.open();
+              } else if (v > 80) {
+                playerController.dismissPlayer();
+              }
+            },
+            child: Container(
+              height: playerController.playerPanelMinHeight.value,
+              width: size.width,
             decoration: BoxDecoration(
               color: const Color(0xF2080A14),
               border: Border(
@@ -141,70 +160,57 @@ class MiniPlayer extends StatelessWidget {
                           width: 10,
                         ),
                         Expanded(
-                          child: GestureDetector(
-                            onHorizontalDragEnd: (DragEndDetails details) {
-                              final v = details.primaryVelocity ?? 0;
-                              if (v < -120) {
-                                playerController.next();
-                              } else if (v > 120) {
-                                playerController.prev();
-                              }
-                            },
-                            onTap: () {
-                              playerController.playerPanelController.open();
-                            },
-                            child: ColoredBox(
-                              color: Colors.transparent,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          playerController.currentSong.value?.title ?? "",
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                                color: Colors.white,
-                                              ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Obx(() => MiniEqualizer(
-                                            isPlaying: playerController
-                                                    .buttonState.value ==
-                                                PlayButtonState.playing,
-                                            height: 11,
-                                          )),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  SizedBox(
-                                    height: 18,
-                                    child: Marquee(
-                                      id: "${playerController.currentSong.value?.id ?? 'idle'}_mini",
-                                      delay: const Duration(milliseconds: 300),
-                                      duration: const Duration(seconds: 5),
+                          child: ColoredBox(
+                            color: Colors.transparent,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
                                       child: Text(
-                                        playerController.currentSong.value?.artist ?? "",
+                                        playerController.currentSong.value?.title ?? "",
                                         maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: Theme.of(context)
                                             .textTheme
-                                            .titleSmall
+                                            .titleMedium
                                             ?.copyWith(
-                                              color: Colors.white60,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.white,
                                             ),
                                       ),
                                     ),
+                                    const SizedBox(width: 6),
+                                    Obx(() => MiniEqualizer(
+                                          isPlaying: playerController
+                                                  .buttonState.value ==
+                                              PlayButtonState.playing,
+                                          height: 11,
+                                        )),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                SizedBox(
+                                  height: 18,
+                                  child: Marquee(
+                                    id: "${playerController.currentSong.value?.id ?? 'idle'}_mini",
+                                    delay: const Duration(milliseconds: 300),
+                                    duration: const Duration(seconds: 5),
+                                    child: Text(
+                                      playerController.currentSong.value?.artist ?? "",
+                                      maxLines: 1,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            color: Colors.white60,
+                                          ),
+                                    ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -560,7 +566,8 @@ class MiniPlayer extends StatelessWidget {
             ),
           ),
         ),
-      );
-    });
-  }
+      ),
+    );
+  });
+}
 }

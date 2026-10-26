@@ -6,11 +6,12 @@ import 'image_widget.dart';
 
 class ContentListItem extends StatefulWidget {
   const ContentListItem(
-      {super.key, required this.content, this.isLibraryItem = false});
+      {super.key, required this.content, this.isLibraryItem = false, this.customWidth});
 
   ///content will be of Type class Album or Playlist
   final dynamic content;
   final bool isLibraryItem;
+  final double? customWidth;
 
   @override
   State<ContentListItem> createState() => _ContentListItemState();
@@ -22,6 +23,10 @@ class _ContentListItemState extends State<ContentListItem> {
   @override
   Widget build(BuildContext context) {
     final isAlbum = widget.content.runtimeType.toString() == "Album";
+    final double itemW = widget.customWidth ?? 130.0;
+    final double imgSize = (itemW - 10.0).clamp(65.0, 160.0);
+    final double itemH = imgSize + 58.0;
+
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) => setState(() => _isPressed = false),
@@ -42,9 +47,9 @@ class _ContentListItemState extends State<ContentListItem> {
         duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
         child: Container(
-          width: 130,
-          height: 185,
-          padding: const EdgeInsets.symmetric(horizontal: 5),
+          width: itemW,
+          height: itemH,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -61,7 +66,7 @@ class _ContentListItemState extends State<ContentListItem> {
                 ),
                 child: isAlbum
                     ? ImageWidget(
-                        size: 120,
+                        size: imgSize,
                         album: widget.content,
                       )
                     : widget.content.isCloudPlaylist ||
@@ -70,11 +75,11 @@ class _ContentListItemState extends State<ContentListItem> {
                                 widget.content.playlistId == 'SongsCache' ||
                                 widget.content.playlistId == 'SongDownloads')
                         ? SizedBox.square(
-                            dimension: 120,
+                            dimension: imgSize,
                             child: Stack(
                               children: [
                                 ImageWidget(
-                                  size: 120,
+                                  size: imgSize,
                                   playlist: widget.content,
                                 ),
                                 if (widget.content.isPipedPlaylist)
@@ -131,8 +136,8 @@ class _ContentListItemState extends State<ContentListItem> {
                             ),
                           )
                         : Container(
-                            height: 120,
-                            width: 120,
+                            height: imgSize,
+                            width: imgSize,
                             decoration: BoxDecoration(
                                 color: Theme.of(context).primaryColorLight,
                                 borderRadius: BorderRadius.circular(10)),

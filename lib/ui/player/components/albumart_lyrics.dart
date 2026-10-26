@@ -57,6 +57,12 @@ class AlbumArtNLyrics extends StatelessWidget {
                     playerController.prev();
                   }
                 },
+                onVerticalDragEnd: (DragEndDetails details) {
+                  final v = details.primaryVelocity ?? 0;
+                  if (v > 100) {
+                    playerController.playerPanelController.close();
+                  }
+                },
                 child: Container(
                   width: playerArtImageSize,
                   height: playerArtImageSize,

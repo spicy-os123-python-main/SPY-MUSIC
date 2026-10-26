@@ -106,9 +106,6 @@ class PlaylistNAlbumLibraryWidget extends StatelessWidget {
     final librplstCntrller = Get.find<LibraryPlaylistsController>();
     final settingscrnController = Get.find<SettingsScreenController>();
     final size = MediaQuery.of(context).size;
-
-    const double itemHeight = 180;
-    const double itemWidth = 130;
     final topPadding = context.isLandscape ? 50.0 : 90.0;
 
     return Padding(
@@ -183,12 +180,12 @@ class PlaylistNAlbumLibraryWidget extends StatelessWidget {
                       ? libralbumCntrller.libraryAlbums.isNotEmpty
                       : librplstCntrller.libraryPlaylists.isNotEmpty)
                   ? LayoutBuilder(builder: (context, constraints) {
-                      //Fix for grid in mobile screen
-                      final availableWidth = constraints.maxWidth > 300 &&
-                              constraints.maxWidth < 394
-                          ? 310.0
-                          : constraints.maxWidth;
-                      int columns = (availableWidth / itemWidth).floor();
+                      final availableWidth = constraints.maxWidth;
+                      final int columns = constraints.maxWidth > 700
+                          ? (availableWidth / 120).floor().clamp(3, 8)
+                          : 3;
+                      final double itemW = (availableWidth - (columns * 6)) / columns;
+                      final double itemH = (itemW - 10.0).clamp(65.0, 160.0) + 58.0;
                       return SizedBox(
                         width: availableWidth,
                         child: GridView.builder(
@@ -196,7 +193,9 @@ class PlaylistNAlbumLibraryWidget extends StatelessWidget {
                             gridDelegate:
                                 SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: columns,
-                              childAspectRatio: (itemWidth / itemHeight),
+                              childAspectRatio: (itemW / itemH),
+                              crossAxisSpacing: 4,
+                              mainAxisSpacing: 6,
                             ),
                             controller:
                                 ScrollController(keepScrollOffset: false),
@@ -214,6 +213,7 @@ class PlaylistNAlbumLibraryWidget extends StatelessWidget {
                                         : librplstCntrller
                                             .libraryPlaylists[index],
                                     isLibraryItem: true,
+                                    customWidth: itemW,
                                   ),
                                 )),
                       );
