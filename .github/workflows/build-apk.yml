@@ -60,6 +60,7 @@ jobs:
           mkdir -p output
           cp build/app/outputs/flutter-apk/app-release.apk output/spymusic.apk
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk output/spymusic-arm64-v8a.apk || true
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk output/spymusic-armeabi-v7a.apk || true
           ls -lh output/
 
       - name: Upload APK as Artifact
