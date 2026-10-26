@@ -247,9 +247,9 @@ class SettingsScreen extends StatelessWidget {
                                       color: Colors.white, size: 18),
                                 ),
                                 const SizedBox(width: 10),
-                                const Text(
-                                  "Discord Song-Aktivität",
-                                  style: TextStyle(
+                                Text(
+                                  "discordActivity".tr,
+                                  style: const TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
@@ -269,10 +269,10 @@ class SettingsScreen extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        const Text(
-                          "Zeigt deinen Freunden in Discord in Echtzeit an, welchen Song du gerade auf SPY MUSIC hörst ('Listening to ... on SPY MUSIC').",
+                        Text(
+                          "discordActivityDes".tr,
                           style:
-                              TextStyle(fontSize: 12.5, color: Colors.white70),
+                              const TextStyle(fontSize: 12.5, color: Colors.white70),
                         ),
                         const SizedBox(height: 10),
                         Container(
@@ -296,9 +296,9 @@ class SettingsScreen extends StatelessWidget {
                                   return Text(
                                     isEnabled
                                         ? (hasToken
-                                            ? "Status: Aktiv • Live Discord-Gateway verbunden (Smartphone & PC)."
-                                            : "Status: Aktiv • Synchronisiert deine Musik auf PC und via Android MediaSession.")
-                                        : "Status: Deaktiviert",
+                                            ? "discordStatusActive".tr
+                                            : "Status: Active • Synchronized on PC & Android")
+                                        : "Status: Disabled",
                                     style: TextStyle(
                                       fontSize: 11.5,
                                       color: isEnabled
@@ -450,14 +450,14 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   ListTile(
                     contentPadding: const EdgeInsets.only(left: 5, right: 10),
-                    title: const Text("Streaming-Qualität"),
+                    title: Text("streamingQuality".tr),
                     subtitle: Obx(
                       () => Text(
                         settingsController.streamingQuality.value == AudioQuality.Ultra
-                            ? "Ultra Datensparmodus (spart ca. 85% Daten)"
+                            ? "streamingQualityUltra".tr
                             : settingsController.streamingQuality.value == AudioQuality.Mid
-                                ? "Mittlere Qualität (Datensparer)"
-                                : "Beste Audioqualität (Normal)",
+                                ? "streamingQualityMid".tr
+                                : "streamingQualityNormal".tr,
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
@@ -466,18 +466,18 @@ class SettingsScreen extends StatelessWidget {
                         dropdownColor: Theme.of(context).cardColor,
                         underline: const SizedBox.shrink(),
                         value: settingsController.streamingQuality.value,
-                        items: const [
+                        items: [
                           DropdownMenuItem(
                             value: AudioQuality.Normal,
-                            child: Text("Normal"),
+                            child: Text("qualityNormal".tr),
                           ),
                           DropdownMenuItem(
                             value: AudioQuality.Mid,
-                            child: Text("Mid"),
+                            child: Text("qualityMid".tr),
                           ),
                           DropdownMenuItem(
                             value: AudioQuality.Ultra,
-                            child: Text("Ultra (-85% Daten)"),
+                            child: Text("qualityUltra".tr),
                           ),
                         ],
                         onChanged: (val) {
@@ -817,8 +817,8 @@ class SettingsScreen extends StatelessWidget {
                   ListTile(
                     leading: const Icon(Icons.system_update_rounded,
                         color: Color(0xFF00D2FF)),
-                    title: const Text("Auf Updates überprüfen"),
-                    subtitle: const Text("Prüft online auf die neueste SPY MUSIC Version"),
+                    title: Text("checkForUpdates".tr),
+                    subtitle: Text("checkForUpdatesDes".tr),
                     trailing: const Icon(Icons.arrow_forward_ios_rounded,
                         size: 16, color: Colors.white54),
                     onTap: () =>
@@ -831,7 +831,7 @@ class SettingsScreen extends StatelessWidget {
                     contentPadding: const EdgeInsets.only(left: 15, right: 10),
                     title: const Text("GitHub Repository"),
                     subtitle: Text(
-                      "Quellcode & Releases auf GitHub\n${settingsController.currentVersion} by SPY",
+                      "${"githubSource".tr}\n${settingsController.currentVersion} by SPY",
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     isThreeLine: true,
@@ -1047,8 +1047,8 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
       snackbar(
         context,
         text.isNotEmpty
-            ? "✅ Discord Token gespeichert! Live-Status aktiv."
-            : "Discord Token entfernt.",
+            ? "discordTokenSaved".tr
+            : "discordTokenRemoved".tr,
         size: SanckBarSize.BIG,
       ),
     );
@@ -1082,9 +1082,9 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
                 color: isConnected ? const Color(0xFF5865F2) : Colors.white70,
               ),
               const SizedBox(width: 8),
-              const Text(
-                "Handy-Status (Discord Token)",
-                style: TextStyle(
+              Text(
+                "discordMobileStatus".tr,
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
@@ -1101,9 +1101,9 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
                     border: Border.all(
                         color: const Color(0xFF5865F2), width: 0.8),
                   ),
-                  child: const Text(
-                    "Verbunden",
-                    style: TextStyle(
+                  child: Text(
+                    "connected".tr,
+                    style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF5865F2),
@@ -1114,7 +1114,7 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
           ),
           const SizedBox(height: 6),
           Text(
-            "Trage optional deinen Discord-Token ein oder melde dich direkt im Browser an, damit dein Smartphone deinen Song live direkt an Discord sendet ('Hört SPY MUSIC').",
+            "discordTokenDes".tr,
             style: TextStyle(
               fontSize: 11.5,
               color: Colors.white.withOpacity(0.6),
@@ -1180,7 +1180,7 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
-                  "oder Token manuell einfügen",
+                  "orManualToken".tr,
                   style: TextStyle(
                     fontSize: 10.5,
                     color: Colors.white.withOpacity(0.4),
@@ -1206,7 +1206,7 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
                     obscureText: _obscureText,
                     style: const TextStyle(fontSize: 12.5, color: Colors.white),
                     decoration: InputDecoration(
-                      hintText: "Discord Token hier einfügen...",
+                      hintText: "discordTokenHint".tr,
                       hintStyle:
                           const TextStyle(fontSize: 12, color: Colors.white30),
                       contentPadding:
@@ -1256,7 +1256,7 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                   ),
                   onPressed: _saveToken,
-                  child: const Text("Speichern", style: TextStyle(fontSize: 12)),
+                  child: Text("save".tr, style: const TextStyle(fontSize: 12)),
                 ),
               ),
               if (hasToken) ...[
@@ -1265,7 +1265,7 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
                   height: 40,
                   child: IconButton(
                     iconSize: 20,
-                    tooltip: "Token löschen",
+                    tooltip: "deleteToken".tr,
                     icon: const Icon(Icons.delete_outline, color: Colors.white54),
                     onPressed: () {
                       _controller.clear();

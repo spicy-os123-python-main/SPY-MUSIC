@@ -99,9 +99,9 @@ class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
               ],
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Füge einen Spotify- oder YouTube-Playlist-Link ein, um alle Songs automatisch in deine SPY MUSIC Library zu laden:',
-              style: TextStyle(fontSize: 12.5, color: Colors.white70),
+            Text(
+              'importPlaylistHint'.tr,
+              style: const TextStyle(fontSize: 12.5, color: Colors.white70),
             ),
             const SizedBox(height: 16),
             Container(
@@ -126,7 +126,7 @@ class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.content_paste_rounded, color: Color(0xFF00D2FF), size: 20),
-                    tooltip: 'Einfügen',
+                    tooltip: 'paste'.tr,
                     onPressed: _pasteFromClipboard,
                   ),
                 ],
@@ -141,9 +141,9 @@ class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
                   visualDensity: VisualDensity.compact,
                 ),
                 icon: const Icon(Icons.folder_open_rounded, size: 16, color: Color(0xFF00D2FF)),
-                label: const Text(
-                  'Oder Playlist aus JSON-Datei laden',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                label: Text(
+                  'importPlaylistDesc'.tr,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
                 onPressed: () {
                   Navigator.of(context).pop();
@@ -158,7 +158,7 @@ class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
               children: [
                 TextButton(
                   onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Abbrechen', style: TextStyle(color: Colors.white54)),
+                  child: Text('cancel'.tr, style: const TextStyle(color: Colors.white54)),
                 ),
                 const SizedBox(width: 12),
                 GestureDetector(

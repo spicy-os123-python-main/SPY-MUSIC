@@ -66,7 +66,7 @@ class _SpyMusicLoadingWidgetState extends State<SpyMusicLoadingWidget>
         ScaffoldMessenger.of(context).showSnackBar(
           snackbar(
             context,
-            "✅ SPY MUSIC ist auf dem neuesten Stand ($verName)",
+            "✅ ${"appUpToDate".tr} ($verName)",
             size: SanckBarSize.BIG,
             duration: const Duration(seconds: 3),
           ),
@@ -77,7 +77,7 @@ class _SpyMusicLoadingWidgetState extends State<SpyMusicLoadingWidget>
         ScaffoldMessenger.of(context).showSnackBar(
           snackbar(
             context,
-            "⚠️ Fehler bei der Update-Prüfung",
+            "⚠️ ${"updateCheckError".tr}",
             size: SanckBarSize.BIG,
           ),
         );
@@ -252,8 +252,8 @@ class _SpyMusicLoadingWidgetState extends State<SpyMusicLoadingWidget>
                         const SizedBox(width: 10),
                         Text(
                           _isCheckingUpdate
-                              ? "Prüfe auf Updates..."
-                              : "Auf Updates überprüfen",
+                              ? "checkingForUpdates".tr
+                              : "checkForUpdates".tr,
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,

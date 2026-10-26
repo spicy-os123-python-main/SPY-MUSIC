@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../../../services/watchtime_service.dart';
 
 class WatchtimeScreen extends StatelessWidget {
@@ -60,22 +61,22 @@ class WatchtimeScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 14),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Gesamte Spielzeit",
-                              style: TextStyle(
+                              "totalPlaytime".tr,
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                               ),
                             ),
-                            SizedBox(height: 4),
+                            const SizedBox(height: 4),
                             Text(
-                              "Kombinierte Hörzeit aller Plattformen\n(YouTube • SoundCloud • Spotify • Amazon)",
-                              style: TextStyle(
+                              "watchtimeSubtitle".tr,
+                              style: const TextStyle(
                                 color: Colors.white60,
                                 fontSize: 12,
                                 height: 1.3,
@@ -94,21 +95,21 @@ class WatchtimeScreen extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _buildMetricCard(
-                        title: "Heute",
+                        title: "today".tr,
                         timeStr: WatchtimeService.formatDuration(dailySec),
                         icon: Icons.today_rounded,
                         accentColor: const Color(0xFF00D2FF),
-                        subtitle: "Tägliche Playtime",
+                        subtitle: "dailyPlaytime".tr,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildMetricCard(
-                        title: "Woche",
+                        title: "week".tr,
                         timeStr: WatchtimeService.formatDuration(weeklySec),
                         icon: Icons.date_range_rounded,
                         accentColor: const Color(0xFF38EF7D),
-                        subtitle: "Letzte 7 Tage",
+                        subtitle: "last7Days".tr,
                       ),
                     ),
                   ],
@@ -118,21 +119,21 @@ class WatchtimeScreen extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _buildMetricCard(
-                        title: "Monat",
+                        title: "month".tr,
                         timeStr: WatchtimeService.formatDuration(monthlySec),
                         icon: Icons.calendar_month_rounded,
                         accentColor: const Color(0xFFFF9900),
-                        subtitle: "Aktueller Monat",
+                        subtitle: "currentMonth".tr,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildMetricCard(
-                        title: "Jahr",
+                        title: "year".tr,
                         timeStr: WatchtimeService.formatDuration(yearlySec),
                         icon: Icons.hourglass_top_rounded,
                         accentColor: const Color(0xFFB537F2),
-                        subtitle: "Aktuelles Jahr",
+                        subtitle: "currentYear".tr,
                       ),
                     ),
                   ],
@@ -141,17 +142,17 @@ class WatchtimeScreen extends StatelessWidget {
                 const SizedBox(height: 28),
 
                 // Platform Breakdown Section
-                _buildSectionHeader("Plattform-Übersicht", Icons.pie_chart_rounded),
+                _buildSectionHeader("platformOverview".tr, Icons.pie_chart_rounded),
                 const SizedBox(height: 10),
                 _buildPlatformBar(platforms, totalPlatformSec),
 
                 const SizedBox(height: 28),
 
                 // Top Artists Section
-                _buildSectionHeader("Meistgehörte Künstler", Icons.star_rounded),
+                _buildSectionHeader("topArtists".tr, Icons.star_rounded),
                 const SizedBox(height: 10),
                 if (topArtists.isEmpty)
-                  _buildEmptyState("Noch keine Künstler-Statistiken vorhanden.")
+                  _buildEmptyState("noArtistsYet".tr)
                 else
                   ...topArtists.asMap().entries.map((entry) {
                     final index = entry.key;
@@ -165,10 +166,10 @@ class WatchtimeScreen extends StatelessWidget {
                 const SizedBox(height: 28),
 
                 // Top Songs Section
-                _buildSectionHeader("Meistgehörte Songs", Icons.library_music_rounded),
+                _buildSectionHeader("topSongs".tr, Icons.library_music_rounded),
                 const SizedBox(height: 10),
                 if (topSongs.isEmpty)
-                  _buildEmptyState("Noch keine Song-Statistiken vorhanden.")
+                  _buildEmptyState("noSongsYet".tr)
                 else
                   ...topSongs.asMap().entries.map((entry) {
                     final index = entry.key;
@@ -206,7 +207,7 @@ class WatchtimeScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_sweep_outlined, color: Colors.white70),
-            tooltip: "Statistiken zurücksetzen",
+            tooltip: "resetStats".tr,
             onPressed: () => _confirmReset(context),
           ),
         ],
@@ -483,18 +484,18 @@ class WatchtimeScreen extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF16161F),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          "Statistiken zurücksetzen?",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          "resetStatsConfirmTitle".tr,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        content: const Text(
-          "Möchtest du wirklich alle aufgezeichneten Spielzeiten und Top-Künstler löschen?",
-          style: TextStyle(color: Colors.white70),
+        content: Text(
+          "resetStatsConfirmMsg".tr,
+          style: const TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text("Abbrechen", style: TextStyle(color: Colors.white60)),
+            child: Text("cancel".tr, style: const TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
@@ -502,7 +503,7 @@ class WatchtimeScreen extends StatelessWidget {
               Navigator.of(ctx).pop();
               await WatchtimeService.resetAllStats();
             },
-            child: const Text("Zurücksetzen", style: TextStyle(color: Colors.white)),
+            child: Text("reset".tr, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),

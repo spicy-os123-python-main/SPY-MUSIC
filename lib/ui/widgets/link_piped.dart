@@ -38,9 +38,9 @@ class LinkPiped extends StatelessWidget {
                         color: const Color(0xFF00D2FF).withOpacity(0.2),
                       ),
                     ),
-                    child: const Text(
-                      "Hinweis: Ein Account ist rein optional. In SPY MUSIC werden alle Favoriten & Playlists automatisch lokal gespeichert – kein Login nötig!",
-                      style: TextStyle(fontSize: 11, color: Colors.white70),
+                    child: Text(
+                      "pipedAccountOptional".tr,
+                      style: const TextStyle(fontSize: 11, color: Colors.white70),
                       textAlign: TextAlign.center,
                     ),
                   ),

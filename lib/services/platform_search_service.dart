@@ -21,6 +21,13 @@ class PlatformSearchService {
   /// Cache of full matched MediaItems for Spotify/Amazon tracks
   static final Map<String, MediaItem> _matchedItemCache = {};
 
+  /// Clear all matched track caches
+  static void clearAllCache() {
+    _matchCache.clear();
+    _matchedItemCache.clear();
+    printINFO("Cleared PlatformSearchService match cache");
+  }
+
   /// Invalidate match cache when playback fails or match was dead
   static void invalidateMatch(String trackId) {
     _matchCache.remove(trackId);

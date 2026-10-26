@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../services/discord_service.dart';
 import 'snackbar.dart';
@@ -160,7 +161,7 @@ class _DiscordLoginDialogState extends State<DiscordLoginDialog> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      "Melde dich normal bei Discord an oder scanne den QR-Code. Die App übernimmt deinen Login automatisch.",
+                      "discordLoginHint".tr,
                       style: TextStyle(fontSize: 11.5, color: Colors.white.withOpacity(0.75)),
                     ),
                   ),

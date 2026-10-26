@@ -80,7 +80,7 @@ class WatchtimeHomeWidget extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                "Heute: ${WatchtimeService.formatDuration(todaySec)}",
+                                "${"watchtimeHomeToday".tr}${WatchtimeService.formatDuration(todaySec)}",
                                 style: const TextStyle(
                                   color: Color(0xFF00D2FF),
                                   fontWeight: FontWeight.bold,
@@ -92,7 +92,7 @@ class WatchtimeHomeWidget extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          "Diese Woche: ${WatchtimeService.formatDuration(weeklySec)} • Alle Statistiken & Top-Künstler ansehen",
+                          "${"watchtimeHomeWeek".tr}${WatchtimeService.formatDuration(weeklySec)}${"watchtimeHomeDetails".tr}",
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.6),
                             fontSize: 11,

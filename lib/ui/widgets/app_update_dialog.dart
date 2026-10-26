@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AppUpdateDialog extends StatelessWidget {
@@ -40,10 +41,10 @@ class AppUpdateDialog extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Text(
-              "Update-Prüfung",
-              style: TextStyle(
+              "updateCheckTitle".tr,
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
@@ -85,8 +86,8 @@ class AppUpdateDialog extends StatelessWidget {
                   Expanded(
                     child: Text(
                       hasUpdate
-                          ? "Neue Version verfügbar! ($latest)"
-                          : "✅ SPY MUSIC ist aktuell!",
+                          ? "${"newVersionAvailable".tr} ($latest)"
+                          : "✅ ${"appUpToDate".tr}!",
                       style: TextStyle(
                         color: hasUpdate
                             ? const Color(0xFF1DB954)
@@ -100,9 +101,9 @@ class AppUpdateDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _buildInfoRow("Installierte Version:", current),
+            _buildInfoRow("installedVersion".tr, current),
             const SizedBox(height: 6),
-            _buildInfoRow("Neueste Release:", latest),
+            _buildInfoRow("latestRelease".tr, latest),
             if (releaseBody.isNotEmpty) ...[
               const SizedBox(height: 14),
               const Text(
@@ -135,7 +136,7 @@ class AppUpdateDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text("Schließen", style: TextStyle(color: Colors.white60)),
+          child: Text("close".tr, style: const TextStyle(color: Colors.white60)),
         ),
         TextButton.icon(
           onPressed: () {

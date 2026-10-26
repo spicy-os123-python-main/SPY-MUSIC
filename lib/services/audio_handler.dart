@@ -437,11 +437,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         (Get.find<SettingsScreenController>().cacheSongs.isTrue &&
             url.contains("http") &&
             !url.contains('googlevideo.com'))) {
+      final cacheFile = File("$_cacheDir/cachedSongs/${mediaItem.id}.mp3");
+      if (cacheFile.existsSync() && cacheFile.lengthSync() < 1024) {
+        try {
+          cacheFile.deleteSync();
+        } catch (_) {}
+      }
       printINFO("Playing Using LockCaching");
       isPlayingUsingLockCachingSource = true;
       return LockCachingAudioSource(
         Uri.parse(url),
-        cacheFile: File("$_cacheDir/cachedSongs/${mediaItem.id}.mp3"),
+        cacheFile: cacheFile,
         tag: mediaItem,
       );
     }
@@ -607,6 +613,22 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         super.stop();
         break;
 
+      case 'resetLoadingState':
+        isSongLoading = false;
+        try {
+          if (_playList.children.isNotEmpty) {
+            await _playList.clear();
+          }
+        } catch (_) {}
+        try {
+          await _player.stop();
+        } catch (_) {}
+        playbackState.add(playbackState.value.copyWith(
+          processingState: AudioProcessingState.idle,
+          playing: false,
+        ));
+        break;
+
       case 'playByIndex':
         final songIndex = extras!['index'];
         currentIndex = songIndex;
@@ -660,7 +682,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           WatchtimeService.recordSongStart(playableSong);
           playbackState
               .add(playbackState.value.copyWith(queueIndex: currentIndex));
-          await _playList.add(_createAudioSource(playableSong));
+          await _playList.add(_createAudioSource(playableSong)).timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              throw TimeoutException("Playback loading timed out after 15 seconds");
+            },
+          );
 
           isSongLoading = false;
           if (loudnessNormalizationEnabled && GetPlatform.isAndroid) {
@@ -769,7 +796,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           WatchtimeService.recordSongStart(playableSong);
 
           playbackState.add(playbackState.value.copyWith(queueIndex: 0));
-          await _playList.add(_createAudioSource(playableSong));
+          await _playList.add(_createAudioSource(playableSong)).timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              throw TimeoutException("Playback loading timed out after 15 seconds");
+            },
+          );
           isSongLoading = false;
 
           // Normalize audio

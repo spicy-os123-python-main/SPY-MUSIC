@@ -699,7 +699,7 @@ class PlayerController extends GetxController
         _audioHandler.play();
         if (Get.context != null) {
           ScaffoldMessenger.of(Get.context!).showSnackBar(
-            snackbar(Get.context!, "Kein Video für diesen Track verfügbar.",
+            snackbar(Get.context!, "noVideoAvailable".tr,
                 size: SanckBarSize.MEDIUM),
           );
         }
@@ -766,7 +766,7 @@ class PlayerController extends GetxController
           if (Get.context != null) {
             ScaffoldMessenger.of(Get.context!).showSnackBar(
               snackbar(Get.context!,
-                  "Kein Video-Stream für diesen Track verfügbar.",
+                  "noVideoAvailable".tr,
                   size: SanckBarSize.MEDIUM),
             );
           }

@@ -15,6 +15,8 @@ import '../Library/library_controller.dart';
 import '../../widgets/snackbar.dart';
 import '../../../utils/helper.dart';
 import '/services/music_service.dart';
+import '/services/platform_search_service.dart';
+import 'package:audio_service/audio_service.dart';
 import '/ui/player/player_controller.dart';
 import '../Home/home_screen_controller.dart';
 import '/ui/utils/theme_controller.dart';
@@ -82,19 +84,19 @@ class SettingsScreenController extends GetxController {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => const Center(
+      builder: (ctx) => Center(
         child: Card(
-          color: Color(0xFF16161F),
+          color: const Color(0xFF16161F),
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(color: Color(0xFF00D2FF)),
-                SizedBox(width: 16),
+                const CircularProgressIndicator(color: Color(0xFF00D2FF)),
+                const SizedBox(width: 16),
                 Text(
-                  "Prüfe auf Updates...",
-                  style: TextStyle(color: Colors.white, fontSize: 14),
+                  "checkingForUpdates".tr,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
                 ),
               ],
             ),
@@ -290,15 +292,73 @@ class SettingsScreenController extends GetxController {
   }
 
   Future<void> clearImagesCache() async {
-    final tempImgDirPath =
-        "${(await getApplicationCacheDirectory()).path}/libCachedImageData";
-    final tempImgDir = Directory(tempImgDirPath);
+    // 1. Clear image cache on disk
     try {
+      final cacheDir = await getApplicationCacheDirectory();
+      final tempImgDir = Directory("${cacheDir.path}/libCachedImageData");
       if (await tempImgDir.exists()) {
         await tempImgDir.delete(recursive: true);
       }
-      // ignore: empty_catches
-    } catch (e) {}
+    } catch (e) {
+      printINFO("Error clearing image disk cache: $e");
+    }
+
+    // Clear image cache in memory
+    try {
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+    } catch (_) {}
+
+    // 2. Clear temporary audio files and song cache
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final cachedSongsDir = Directory("${tempDir.path}/cachedSongs");
+      if (await cachedSongsDir.exists()) {
+        await cachedSongsDir.delete(recursive: true);
+        await cachedSongsDir.create(recursive: true);
+      }
+      final justAudioCache = Directory("${tempDir.path}/just_audio_cache");
+      if (await justAudioCache.exists()) {
+        await justAudioCache.delete(recursive: true);
+      }
+      final entries = tempDir.listSync(followLinks: false);
+      for (final entry in entries) {
+        if (entry is File) {
+          final p = entry.path.toLowerCase();
+          if (p.endsWith('.tmp') || p.endsWith('.part') || p.endsWith('.mp3')) {
+            try {
+              entry.deleteSync();
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (e) {
+      printINFO("Error clearing audio temp cache: $e");
+    }
+
+    // 3. Clear Hive URL and cache boxes so stale stream URLs are evicted
+    try {
+      if (Hive.isBoxOpen("SongsUrlCache")) {
+        await Hive.box("SongsUrlCache").clear();
+      }
+    } catch (_) {}
+
+    try {
+      if (Hive.isBoxOpen("SongsCache")) {
+        await Hive.box("SongsCache").clear();
+      }
+    } catch (_) {}
+
+    // 4. Invalidate search match caches
+    try {
+      PlatformSearchService.clearAllCache();
+    } catch (_) {}
+
+    // 5. Reset audio player / loading state if stuck
+    try {
+      final audioHandler = Get.find<AudioHandler>();
+      await audioHandler.customAction("resetLoadingState");
+    } catch (_) {}
   }
 
   void resetDownloadLocation() {
