@@ -20,8 +20,6 @@ import '/ui/player/player_controller.dart';
 import '/ui/utils/theme_controller.dart';
 import 'components/custom_expansion_tile.dart';
 import 'settings_screen_controller.dart';
-import '../Watchtime/watchtime_screen.dart';
-import '../../../services/watchtime_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, this.isBottomNavActive = false});
@@ -637,88 +635,6 @@ class SettingsScreen extends StatelessWidget {
                         )
                       : const SizedBox.shrink(),
                 ],
-              ),
-              // Watchtime Tracking Tile (between Music & Playback and Download)
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF141A29), Color(0xFF1B2338)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFF00D2FF).withOpacity(0.35),
-                    width: 1.2,
-                  ),
-                ),
-                child: ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00D2FF).withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.timer_rounded,
-                      color: Color(0xFF00D2FF),
-                      size: 24,
-                    ),
-                  ),
-                  title: const Text(
-                    "Watchtime Tracking",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                  subtitle: const Text(
-                    "Tägliche, wöchentliche & monatliche Spielzeit aller Plattformen",
-                    style: TextStyle(color: Colors.white60, fontSize: 12),
-                  ),
-                  trailing: ValueListenableBuilder<int>(
-                    valueListenable: WatchtimeService.watchtimeNotifier,
-                    builder: (context, _, __) {
-                      final todaySec = WatchtimeService.getDailyPlaytimeSec();
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00D2FF).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color:
-                                    const Color(0xFF00D2FF).withOpacity(0.5),
-                              ),
-                            ),
-                            child: Text(
-                              WatchtimeService.formatDuration(todaySec),
-                              style: const TextStyle(
-                                color: Color(0xFF00D2FF),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.arrow_forward_ios_rounded,
-                            size: 14,
-                            color: Colors.white38,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  onTap: () => Get.to(() => const WatchtimeScreen()),
-                ),
               ),
               CustomExpansionTile(
                 title: "download".tr,

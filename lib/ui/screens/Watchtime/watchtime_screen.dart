@@ -3,50 +3,35 @@ import 'package:flutter/material.dart';
 import '../../../services/watchtime_service.dart';
 
 class WatchtimeScreen extends StatelessWidget {
-  const WatchtimeScreen({super.key});
+  const WatchtimeScreen({super.key, this.isEmbedded = false});
+  final bool isEmbedded;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F0F14),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          "Watchtime Tracking",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-            color: Colors.white,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_sweep_outlined, color: Colors.white70),
-            tooltip: "Statistiken zurücksetzen",
-            onPressed: () => _confirmReset(context),
-          ),
-        ],
-      ),
-      body: ValueListenableBuilder<int>(
-        valueListenable: WatchtimeService.watchtimeNotifier,
-        builder: (context, _, __) {
-          final dailySec = WatchtimeService.getDailyPlaytimeSec();
-          final weeklySec = WatchtimeService.getWeeklyPlaytimeSec();
-          final monthlySec = WatchtimeService.getMonthlyPlaytimeSec();
-          final yearlySec = WatchtimeService.getYearlyPlaytimeSec();
-          final topArtists = WatchtimeService.getTopArtists(limit: 10);
-          final topSongs = WatchtimeService.getTopSongs(limit: 10);
-          final platforms = WatchtimeService.getPlatformBreakdown();
+    final bodyContent = ValueListenableBuilder<int>(
+      valueListenable: WatchtimeService.watchtimeNotifier,
+      builder: (context, _, __) {
+        final dailySec = WatchtimeService.getDailyPlaytimeSec();
+        final weeklySec = WatchtimeService.getWeeklyPlaytimeSec();
+        final monthlySec = WatchtimeService.getMonthlyPlaytimeSec();
+        final yearlySec = WatchtimeService.getYearlyPlaytimeSec();
+        final topArtists = WatchtimeService.getTopArtists(limit: 10);
+        final topSongs = WatchtimeService.getTopSongs(limit: 10);
+        final platforms = WatchtimeService.getPlatformBreakdown();
 
-          final int totalPlatformSec = platforms.values.fold(0, (a, b) => a + b);
+        final int totalPlatformSec = platforms.values.fold(0, (a, b) => a + b);
 
-          return SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: isEmbedded ? 12 : 12,
+            bottom: isEmbedded ? 120 : 30,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
                 // Header Banner
                 Container(
                   width: double.infinity,
@@ -196,7 +181,37 @@ class WatchtimeScreen extends StatelessWidget {
             ),
           );
         },
+      );
+
+    if (isEmbedded) {
+      return Container(
+        color: const Color(0xFF0F0F14),
+        child: bodyContent,
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F0F14),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          "Watchtime Tracking",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+            color: Colors.white,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_outlined, color: Colors.white70),
+            tooltip: "Statistiken zurücksetzen",
+            onPressed: () => _confirmReset(context),
+          ),
+        ],
       ),
+      body: bodyContent,
     );
   }
 

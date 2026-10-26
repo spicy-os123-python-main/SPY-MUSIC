@@ -143,9 +143,9 @@ class PlatformSearchService {
     return await searchAmazon('Popular Hits', limit: limit);
   }
 
-  /// Spotify and Amazon results only carry metadata (they come from Deezer),
-  /// so the audio has to be matched on another source. SoundCloud is tried
-  /// first, YouTube Music only if SoundCloud has no usable match.
+  /// Spotify and Amazon tracks carry official studio metadata (from Deezer/Spotify),
+  /// so the audio is matched against official studio releases on YouTube Music FIRST.
+  /// SoundCloud is only queried as an absolute last resort with strict tempo/pitch checks.
   static Future<MediaItem?> resolveMatchedTrack(
       String trackId, String searchQuery,
       {MediaItem? originalTrack, bool skipSoundCloud = false}) async {
@@ -155,23 +155,7 @@ class PlatformSearchService {
 
     final q = _cleanQuery(searchQuery);
 
-    if (!skipSoundCloud) {
-      try {
-        final scTracks = await SoundCloudService()
-            .searchTracks(q, limit: 8)
-            .timeout(const Duration(seconds: 6));
-        final match = findBestMatch(scTracks, originalTrack);
-        if (match != null) {
-          _remember(trackId, match);
-          printINFO("Matched $trackId to SoundCloud: '${match.title}' by '${match.artist}'");
-          return match;
-        }
-        printINFO("No SoundCloud match for $trackId ('$q')");
-      } catch (e) {
-        printERROR("SoundCloud match failed for $trackId: $e");
-      }
-    }
-
+    // 1. YouTube Music FIRST! (Official studio releases from record labels at 1.0x speed)
     try {
       final musicServices = Get.find<MusicServices>();
       final res = await musicServices
@@ -185,11 +169,50 @@ class PlatformSearchService {
       final match = findBestMatch(ytTracks, originalTrack);
       if (match != null) {
         _remember(trackId, match);
-        printINFO("Matched $trackId to YouTube: '${match.title}' by '${match.artist}'");
+        printINFO("Matched $trackId to YouTube Music: '${match.title}' by '${match.artist}'");
         return match;
       }
     } catch (e) {
-      printERROR("YouTube match failed for $trackId: $e");
+      printERROR("YouTube Music matching failed for $trackId: $e");
+    }
+
+    // 2. YouTube Search with 'official audio' (label topic releases)
+    try {
+      final musicServices = Get.find<MusicServices>();
+      final res = await musicServices
+          .search('$q official audio', limit: 6)
+          .timeout(const Duration(seconds: 6));
+      final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
+      final ytTracks = (rawList ?? const [])
+          .whereType<MediaItem>()
+          .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
+          .toList();
+      final match = findBestMatch(ytTracks, originalTrack);
+      if (match != null) {
+        _remember(trackId, match);
+        printINFO("Matched $trackId to YouTube Official Audio: '${match.title}' by '${match.artist}'");
+        return match;
+      }
+    } catch (e) {
+      printERROR("YouTube Official Audio search failed for $trackId: $e");
+    }
+
+    // 3. SoundCloud as absolute LAST resort ONLY (with strict tempo/pitch rejection)
+    if (!skipSoundCloud) {
+      try {
+        final scTracks = await SoundCloudService()
+            .searchTracks(q, limit: 6)
+            .timeout(const Duration(seconds: 6));
+        final match = findBestMatch(scTracks, originalTrack, strictSpeedCheck: true);
+        if (match != null) {
+          _remember(trackId, match);
+          printINFO("Matched $trackId to SoundCloud fallback: '${match.title}' by '${match.artist}'");
+          return match;
+        }
+        printINFO("No suitable SoundCloud match for $trackId ('$q')");
+      } catch (e) {
+        printERROR("SoundCloud fallback failed for $trackId: $e");
+      }
     }
 
     return null;
@@ -220,13 +243,40 @@ class PlatformSearchService {
     return matched?.id;
   }
 
-  /// Picks the candidate that fits the original track best (title, artist,
-  /// duration). Returns null if nothing is close enough.
-  static MediaItem? findBestMatch(List<MediaItem> candidates, MediaItem? original) {
+  static final List<String> _unwantedTags = [
+    'sped up',
+    'speed up',
+    'slowed',
+    'slow',
+    'reverb',
+    'nightcore',
+    'pitch',
+    'pitched',
+    'chipmunk',
+    '8d audio',
+    'bass boosted',
+    'bassboost',
+    'remix',
+    'bootleg',
+    'mashup',
+    'cover',
+    'tribute',
+    'karaoke',
+    'instrumental',
+    'parody',
+    'live',
+    'concert',
+  ];
+
+  /// Picks the candidate that fits the original studio track best.
+  /// Strictly rejects sped-up, slowed, nightcore, remix, or wrong-length tracks.
+  static MediaItem? findBestMatch(List<MediaItem> candidates, MediaItem? original,
+      {bool strictSpeedCheck = false}) {
     if (candidates.isEmpty) return null;
     if (original == null) return candidates.first;
 
-    final expectedTitle = _normalizeString(original.title);
+    final origTitleLower = original.title.toLowerCase();
+    final expectedTitle = _normalizeString(_coreTitle(original.title));
     final expectedArtist = _normalizeString(original.artist ?? '');
     final expectedDurationSec = original.duration?.inSeconds ?? 0;
 
@@ -235,42 +285,69 @@ class PlatformSearchService {
 
     for (var candidate in candidates) {
       double score = 0.0;
-      final cTitle = _normalizeString(candidate.title);
+      final rawTitleLower = candidate.title.toLowerCase();
+      final cTitle = _normalizeString(_coreTitle(candidate.title));
       if (cTitle.isEmpty) continue;
       final cArtist = _normalizeString(candidate.artist ?? '');
       final cDurationSec = candidate.duration?.inSeconds ?? 0;
 
-      // 1. Title matching
-      if (cTitle == expectedTitle) {
-        score += 50.0;
-      } else if (cTitle.contains(expectedTitle) || expectedTitle.contains(cTitle)) {
-        score += 35.0;
-      } else {
-        final expectedWords = expectedTitle.split(' ').where((w) => w.length > 2);
-        int matchedWords = expectedWords.where((w) => cTitle.contains(w)).length;
-        if (expectedWords.isNotEmpty) {
-          score += (matchedWords / expectedWords.length) * 30.0;
+      // 1. Strict rejection of unwanted modifications (sped up, nightcore, slowed, remix, cover)
+      // unless original track explicitly has that tag
+      bool hasUnwanted = false;
+      for (final tag in _unwantedTags) {
+        if (rawTitleLower.contains(tag) && !origTitleLower.contains(tag)) {
+          hasUnwanted = true;
+          break;
         }
       }
-
-      // 2. Artist matching
-      if (expectedArtist.isNotEmpty) {
-        if (cArtist.contains(expectedArtist) || cTitle.contains(expectedArtist)) {
-          score += 25.0;
-        }
+      if (hasUnwanted) {
+        continue; // Immediately drop altered/remixed audio
       }
 
-      // 3. Duration matching (penalize if difference is large)
+      // 2. Duration matching: Studio master tracks on YT Music and Spotify match within seconds
       if (expectedDurationSec > 0 && cDurationSec > 0) {
         final diff = (expectedDurationSec - cDurationSec).abs();
-        if (diff <= 10) {
-          score += 25.0;
-        } else if (diff <= 30) {
-          score += 15.0;
-        } else if (diff <= 60) {
-          score += 5.0;
+        if (strictSpeedCheck && diff > 7) {
+          continue; // SoundCloud track differs too much -> skip
+        }
+        if (diff <= 2) {
+          score += 45.0; // Near identical length -> studio master
+        } else if (diff <= 5) {
+          score += 35.0;
+        } else if (diff <= 10) {
+          score += 20.0;
+        } else if (diff <= 20) {
+          score -= 30.0;
         } else {
-          score -= 25.0; // Heavy penalty for hour-long mixes or 30-sec snippets
+          score -= 100.0; // Heavy penalty for wrong length
+        }
+      }
+
+      // 3. Title matching
+      if (cTitle == expectedTitle) {
+        score += 55.0;
+      } else if (cTitle.startsWith(expectedTitle) || expectedTitle.startsWith(cTitle)) {
+        score += 40.0;
+      } else if (cTitle.contains(expectedTitle) || expectedTitle.contains(cTitle)) {
+        score += 30.0;
+      } else {
+        final expectedWords = expectedTitle.split(' ').where((w) => w.length > 2).toList();
+        if (expectedWords.isNotEmpty) {
+          int matchedWords = expectedWords.where((w) => cTitle.contains(w)).length;
+          score += (matchedWords / expectedWords.length) * 25.0;
+        }
+      }
+
+      // 4. Artist matching
+      if (expectedArtist.isNotEmpty) {
+        if (cArtist == expectedArtist) {
+          score += 35.0;
+        } else if (cArtist.contains(expectedArtist) || expectedArtist.contains(cArtist)) {
+          score += 25.0;
+        } else if (cTitle.contains(expectedArtist) || rawTitleLower.contains(expectedArtist)) {
+          score += 20.0;
+        } else {
+          score -= 15.0; // Wrong artist penalty
         }
       }
 
@@ -280,7 +357,22 @@ class PlatformSearchService {
       }
     }
 
-    return bestScore >= 20.0 ? bestMatch : null;
+    final minThreshold = strictSpeedCheck ? 65.0 : 55.0;
+    return bestScore >= minThreshold ? bestMatch : null;
+  }
+
+  static String _coreTitle(String title) {
+    return title
+        .replaceAll(RegExp(r'\s*\(feat\.[^)]*\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*\[feat\.[^\]]*\]', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*-\s*(feat|with)\s+.*$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*-\s*.*remaster.*$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*\(.*remaster.*\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*-\s*single version.*$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*\(.*single version.*\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*\((official )?(video|audio)\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*\[(official )?(video|audio)\]', caseSensitive: false), '')
+        .trim();
   }
 
   static String _normalizeString(String str) {

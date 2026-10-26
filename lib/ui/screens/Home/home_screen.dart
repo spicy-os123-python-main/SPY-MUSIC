@@ -18,6 +18,7 @@ import '../../widgets/spy_music_loading_widget.dart';
 import 'home_screen_controller.dart';
 import '../../widgets/platform_selector_widget.dart';
 import '../../widgets/spy_music_header_widget.dart';
+import '../../widgets/watchtime_home_widget.dart';
 import '../Settings/settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -202,6 +203,7 @@ class Body extends StatelessWidget {
                         final items = [
                           const SpyMusicHeaderWidget(),
                           const PlatformSelectorWidget(),
+                          const WatchtimeHomeWidget(),
                           Obx(() {
                             final scrollController = ScrollController();
                             homeScreenController.contentScrollControllers

@@ -5,6 +5,7 @@ import '/ui/screens/Settings/settings_screen_controller.dart';
 import '/ui/widgets/piped_sync_widget.dart';
 import '../../widgets/create_playlist_dialog.dart';
 import '../../widgets/import_playlist_dialog.dart';
+import '../Watchtime/watchtime_screen.dart';
 import 'library.dart';
 
 class CombinedLibrary extends StatelessWidget {
@@ -25,6 +26,24 @@ class CombinedLibrary extends StatelessWidget {
               ? const PipedSyncWidget(
                   padding: EdgeInsets.only(right: 10, top: 50))
               : const SizedBox.shrink()),
+          Padding(
+            padding: const EdgeInsets.only(top: 50.0, right: 10),
+            child: SizedBox(
+              height: 40,
+              width: 50,
+              child: FittedBox(
+                child: FloatingActionButton(
+                    heroTag: 'watchtimeStatsBtn',
+                    elevation: 0,
+                    tooltip: 'Watchtime Tracking',
+                    backgroundColor: const Color(0xFF1B2338),
+                    onPressed: () {
+                      tabCon.tabController.animateTo(4);
+                    },
+                    child: const Icon(Icons.timer_rounded, color: Color(0xFF00D2FF))),
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(top: 50.0, right: 10),
             child: SizedBox(
@@ -82,6 +101,16 @@ class CombinedLibrary extends StatelessWidget {
             Tab(text: "playlists".tr),
             Tab(text: "albums".tr),
             Tab(text: "artists".tr),
+            const Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.timer_rounded, size: 16, color: Color(0xFF00D2FF)),
+                  SizedBox(width: 6),
+                  Text("Watchtime"),
+                ],
+              ),
+            ),
           ],
         ),
         title: Padding(
@@ -100,6 +129,7 @@ class CombinedLibrary extends StatelessWidget {
               isAlbumContent: false, isBottomNavActive: true),
           PlaylistNAlbumLibraryWidget(isBottomNavActive: true),
           LibraryArtistWidget(isBottomNavActive: true),
+          WatchtimeScreen(isEmbedded: true),
         ],
       ),
     );
@@ -113,7 +143,7 @@ class CombinedLibraryController extends GetxController
   @override
   void onInit() {
     super.onInit();
-    tabController = TabController(vsync: this, length: 4);
+    tabController = TabController(vsync: this, length: 5);
   }
 
   @override

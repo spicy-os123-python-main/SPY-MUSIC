@@ -7,6 +7,7 @@ import '../models/media_Item_builder.dart';
 import '../models/playlist.dart';
 import '../ui/screens/Library/library_controller.dart';
 import 'music_service.dart';
+import 'platform_search_service.dart';
 
 class PlaylistImportService {
   static final PlaylistImportService _instance = PlaylistImportService._internal();
@@ -40,20 +41,45 @@ class PlaylistImportService {
 
   Future<Map<String, dynamic>> _importSpotify(String url) async {
     try {
-      // Extract playlist ID
-      final reg = RegExp(r'playlist/([a-zA-Z0-9]+)');
-      final match = reg.firstMatch(url);
-      if (match == null) {
+      // 1. Extract playlist ID (supporting direct links, shortened spotify.link, and URIs)
+      String playlistId = '';
+      if (url.contains('spotify.link')) {
+        try {
+          final redirectResp = await _dio.get(
+            url,
+            options: Options(
+              followRedirects: true,
+              maxRedirects: 5,
+              headers: {
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              },
+            ),
+          );
+          final real = redirectResp.realUri.toString();
+          final reg = RegExp(r'playlist/([a-zA-Z0-9]+)');
+          final match = reg.firstMatch(real);
+          if (match != null) playlistId = match.group(1)!;
+        } catch (_) {}
+      }
+      if (playlistId.isEmpty) {
+        final reg = RegExp(r'playlist[/:]+([a-zA-Z0-9]+)');
+        final match = reg.firstMatch(url);
+        if (match != null) {
+          playlistId = match.group(1)!;
+        }
+      }
+      if (playlistId.isEmpty) {
         return {'success': false, 'message': 'Keine gültige Spotify Playlist-ID gefunden.'};
       }
-      final playlistId = match.group(1);
 
-      // Fetch embed page HTML
+      // 2. Fetch embed page HTML
       final embedUrl = 'https://open.spotify.com/embed/playlist/$playlistId';
       final response = await _dio.get(
         embedUrl,
         options: Options(headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         }),
       );
 
@@ -75,35 +101,66 @@ class PlaylistImportService {
         return {'success': false, 'message': 'Spotify Playlist ist leer.'};
       }
 
-      // Convert tracks to MediaItem objects
+      String? coverArtUrl;
+      try {
+        final sources = entity['coverArt']?['sources'] as List?;
+        if (sources != null && sources.isNotEmpty) {
+          coverArtUrl = sources[0]['url']?.toString();
+        }
+      } catch (_) {}
+
+      // 3. Convert all tracks to high-precision MediaItem objects
       final List<MediaItem> items = [];
       final musicServices = Get.find<MusicServices>();
 
-      for (var t in trackList.take(40)) { // Import top 40 tracks
-        final trackName = t['title'] ?? 'Unbekannt';
-        final trackArtist = t['subtitle'] ?? '';
-        final durationMs = (t['duration'] is int) ? t['duration'] as int : 180000;
+      for (var t in trackList) {
+        final trackName = (t['title'] ?? 'Unbekannt').toString().trim();
+        final trackArtist = (t['subtitle'] ?? '').toString().trim();
+        final durationMs = (t['duration'] is int)
+            ? t['duration'] as int
+            : (int.tryParse(t['duration']?.toString() ?? '180000') ?? 180000);
+        final uri = t['uri']?.toString() ?? 'spotify:track:${items.length}';
 
-        // Fast search match on stream engine
+        final targetItem = MediaItem(
+          id: 'sp_${uri.replaceAll(':', '_')}',
+          title: trackName,
+          artist: trackArtist.isNotEmpty ? trackArtist : 'Spotify Artist',
+          duration: Duration(milliseconds: durationMs),
+          artUri: coverArtUrl != null
+              ? Uri.tryParse(coverArtUrl)
+              : Uri.tryParse(Playlist.thumbPlaceholderUrl),
+          extras: {
+            'searchQuery': '$trackName $trackArtist',
+            'isSpotify': true,
+            'platform': 'Spotify',
+            'duration': durationMs ~/ 1000,
+            'length':
+                "${(durationMs ~/ 1000) ~/ 60}:${((durationMs ~/ 1000) % 60).toString().padLeft(2, '0')}",
+          },
+        );
+
+        // High-precision studio match on YouTube Music (official releases at 1.0x speed)
         try {
-          final res = await musicServices.search('$trackName $trackArtist', filter: 'songs', limit: 1);
-          if (res.containsKey('Songs') && (res['Songs'] as List).isNotEmpty) {
-            items.add((res['Songs'] as List).first as MediaItem);
+          final res = await musicServices
+              .search('$trackName $trackArtist', filter: 'songs', limit: 6)
+              .timeout(const Duration(seconds: 4));
+          final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
+          final candidates = (rawList ?? const [])
+              .whereType<MediaItem>()
+              .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
+              .toList();
+          final best = PlatformSearchService.findBestMatch(candidates, targetItem);
+          if (best != null) {
+            items.add(best);
             continue;
           }
         } catch (_) {}
 
-        // Fallback: create mock item that resolves on play
-        items.add(MediaItem(
-          id: 'sp_${items.length}_${DateTime.now().millisecondsSinceEpoch}',
-          title: trackName,
-          artist: trackArtist,
-          duration: Duration(milliseconds: durationMs),
-          artUri: Uri.tryParse(Playlist.thumbPlaceholderUrl),
-        ));
+        // Fallback: add targetItem with full metadata to resolve seamlessly on play
+        items.add(targetItem);
       }
 
-      // Save to local library
+      // 4. Save to local library
       await _savePlaylistToLibrary(title, items);
       return {
         'success': true,
