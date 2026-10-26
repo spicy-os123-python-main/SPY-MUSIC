@@ -1,9 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:spymusic/ui/screens/Settings/settings_screen_controller.dart';
-import 'package:spymusic/ui/widgets/new_version_dialog.dart';
-import 'package:spymusic/ui/widgets/snackbar.dart';
-import 'package:spymusic/utils/helper.dart';
 
 class SpyMusicLoadingWidget extends StatefulWidget {
   const SpyMusicLoadingWidget({super.key});
@@ -13,264 +8,230 @@ class SpyMusicLoadingWidget extends StatefulWidget {
 }
 
 class _SpyMusicLoadingWidgetState extends State<SpyMusicLoadingWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
-  bool _isCheckingUpdate = false;
+    with TickerProviderStateMixin {
+  late AnimationController _barsController;
+  late AnimationController _lettersController;
+
+  static const String _title = "SPY MUSIC";
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
+    // Soundwave equalizer bars pulsating smoothly
+    _barsController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
+
+    // Letter-by-letter entrance over 2 seconds
+    _lettersController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
   }
 
   @override
   void dispose() {
-    _animController.dispose();
+    _barsController.dispose();
+    _lettersController.dispose();
     super.dispose();
-  }
-
-  Future<void> _handleCheckUpdate() async {
-    if (_isCheckingUpdate) return;
-    setState(() {
-      _isCheckingUpdate = true;
-    });
-
-    try {
-      final currentVer = Get.isRegistered<SettingsScreenController>()
-          ? Get.find<SettingsScreenController>().currentVersion
-          : "v1.0.0";
-
-      final details = await checkAppUpdateDetails(currentVer: currentVer);
-
-      if (!mounted) return;
-
-      if (details['hasUpdate'] == true) {
-        showDialog(
-          context: context,
-          builder: (context) => const NewVersionDialog(),
-        );
-      } else if (details['error'] != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          snackbar(
-            context,
-            "⚠️ Keine Verbindung zum Update-Server",
-            size: SanckBarSize.BIG,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      } else {
-        final verName = details['latest'] ?? currentVer;
-        ScaffoldMessenger.of(context).showSnackBar(
-          snackbar(
-            context,
-            "✅ ${"appUpToDate".tr} ($verName)",
-            size: SanckBarSize.BIG,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          snackbar(
-            context,
-            "⚠️ ${"updateCheckError".tr}",
-            size: SanckBarSize.BIG,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isCheckingUpdate = false;
-        });
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return SizedBox(
-      height: size.height * 0.78,
+      height: size.height * 0.75,
       width: double.infinity,
-      child: Stack(
-        children: [
-          // Centered voice / equalizer waveform animation
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Animated soundwave bars
-                AnimatedBuilder(
-                  animation: _animController,
-                  builder: (context, child) {
-                    final t = _animController.value;
-                    final heights = [
-                      24.0 + 32.0 * ((t + 0.1) % 1.0),
-                      38.0 + 44.0 * ((t + 0.35) % 1.0),
-                      52.0 + 36.0 * ((t + 0.6) % 1.0),
-                      68.0 + 26.0 * ((t + 0.85) % 1.0),
-                      50.0 + 38.0 * ((t + 0.2) % 1.0),
-                      34.0 + 42.0 * ((t + 0.45) % 1.0),
-                    ];
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Soundwave equalizer bars
+            AnimatedBuilder(
+              animation: _barsController,
+              builder: (context, child) {
+                final t = _barsController.value;
+                final heights = [
+                  18.0 + 26.0 * ((t + 0.1) % 1.0),
+                  30.0 + 36.0 * ((t + 0.35) % 1.0),
+                  46.0 + 30.0 * ((t + 0.6) % 1.0),
+                  58.0 + 22.0 * ((t + 0.85) % 1.0),
+                  42.0 + 32.0 * ((t + 0.2) % 1.0),
+                  26.0 + 34.0 * ((t + 0.45) % 1.0),
+                ];
 
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: List.generate(heights.length, (index) {
-                        return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4.5),
-                          width: 8,
-                          height: heights[index],
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: index % 2 == 0
-                                  ? const [
-                                      Color(0xFF00D2FF),
-                                      Color(0xFF0072FF),
-                                    ]
-                                  : const [
-                                      Color(0xFFFF0055),
-                                      Color(0xFFFF5252),
-                                    ],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: (index % 2 == 0
-                                        ? const Color(0xFF00D2FF)
-                                        : const Color(0xFFFF0055))
-                                    .withOpacity(0.55),
-                                blurRadius: 12,
-                                spreadRadius: 1,
-                              ),
-                            ],
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: List.generate(heights.length, (index) {
+                    final isCyan = index % 2 == 0;
+                    final color1 = isCyan
+                        ? const Color(0xFF00D2FF)
+                        : const Color(0xFFFF0055);
+                    final color2 = isCyan
+                        ? const Color(0xFF0072FF)
+                        : const Color(0xFFFF5252);
+
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: 7,
+                      height: heights[index],
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [color1, color2],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: color1.withOpacity(0.55),
+                            blurRadius: 10,
+                            spreadRadius: 1,
                           ),
-                        );
-                      }),
-                    );
-                  },
-                ),
-                const SizedBox(height: 28),
-                // Glowing SPY MUSIC Title
-                ShaderMask(
-                  shaderCallback: (bounds) => const LinearGradient(
-                    colors: [Color(0xFF00D2FF), Color(0xFFFF0055)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ).createShader(bounds),
-                  child: const Text(
-                    "SPY MUSIC",
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 3.5,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "Lade Songs, Playlists & Charts...",
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.white.withOpacity(0.65),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Bottom Center Update Button
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: EdgeInsets.only(bottom: 20 + bottomPadding),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _handleCheckUpdate,
-                  borderRadius: BorderRadius.circular(25),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 22, vertical: 12),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFF00D2FF).withOpacity(0.18),
-                          const Color(0xFFFF0055).withOpacity(0.18),
                         ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(25),
-                      border: Border.all(
-                        color: _isCheckingUpdate
-                            ? const Color(0xFF00D2FF)
-                            : const Color(0xFF00D2FF).withOpacity(0.5),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF00D2FF).withOpacity(0.22),
-                          blurRadius: 14,
-                          spreadRadius: 0,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_isCheckingUpdate)
-                          const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Color(0xFF00D2FF),
+                    );
+                  }),
+                );
+              },
+            ),
+            const SizedBox(height: 32),
+
+            // Animated Letter-by-Letter "SPY MUSIC"
+            AnimatedBuilder(
+              animation: _lettersController,
+              builder: (context, child) {
+                final progress = _lettersController.value;
+
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(_title.length, (index) {
+                    final char = _title[index];
+                    if (char == ' ') {
+                      return const SizedBox(width: 14);
+                    }
+
+                    // Stagger: letters 0..8 enter sequentially within the first 75% of the 2-second cycle
+                    final start = (index / _title.length) * 0.65;
+                    final end = (start + 0.18).clamp(0.0, 1.0);
+
+                    double letterProgress = 0.0;
+                    if (progress >= start) {
+                      letterProgress =
+                          ((progress - start) / (end - start)).clamp(0.0, 1.0);
+                    }
+
+                    // Opacity: fade in as it enters, then soft fade at the end of 2s loop
+                    double opacity = Curves.easeOut.transform(letterProgress);
+                    if (progress > 0.90) {
+                      opacity *=
+                          (1.0 - ((progress - 0.90) / 0.10)).clamp(0.0, 1.0);
+                    }
+
+                    // Scale & bounce curve
+                    final scale =
+                        0.4 + 0.6 * Curves.elasticOut.transform(letterProgress);
+                    final translateY = (1.0 - letterProgress) * 16.0;
+
+                    final isSpy = index < 3;
+                    final color1 = isSpy
+                        ? const Color(0xFF00D2FF)
+                        : const Color(0xFFFF0055);
+                    final color2 = isSpy
+                        ? const Color(0xFF0072FF)
+                        : const Color(0xFFFF5252);
+
+                    final clampedOpacity = opacity.clamp(0.0, 1.0);
+                    return Transform.translate(
+                      offset: Offset(0, translateY),
+                      child: Transform.scale(
+                        scale: scale,
+                        child: Opacity(
+                          opacity: clampedOpacity,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: ShaderMask(
+                              shaderCallback: (bounds) => LinearGradient(
+                                colors: [color1, color2],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ).createShader(bounds),
+                              child: Text(
+                                char,
+                                style: TextStyle(
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 2,
+                                  color: Colors.white,
+                                  shadows: [
+                                    Shadow(
+                                      color: color1.withOpacity((0.85 * clampedOpacity).clamp(0.0, 1.0)),
+                                      blurRadius: 18,
+                                    ),
+                                    Shadow(
+                                      color: color2.withOpacity((0.55 * clampedOpacity).clamp(0.0, 1.0)),
+                                      blurRadius: 28,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          )
-                        else
-                          const Icon(
-                            Icons.system_update_alt_rounded,
-                            size: 19,
-                            color: Color(0xFF00D2FF),
-                          ),
-                        const SizedBox(width: 10),
-                        Text(
-                          _isCheckingUpdate
-                              ? "checkingForUpdates".tr
-                              : "checkForUpdates".tr,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.4,
-                            color: Colors.white,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+                      ),
+                    );
+                  }),
+                );
+              },
             ),
-          ),
-        ],
+            const SizedBox(height: 14),
+
+            // Pulsing subtle loading indicator dots
+            AnimatedBuilder(
+              animation: _barsController,
+              builder: (context, child) {
+                return Opacity(
+                  opacity: 0.45 + 0.45 * _barsController.value,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF00D2FF),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFFFF0055),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF00D2FF),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 }
-
