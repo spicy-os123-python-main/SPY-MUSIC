@@ -117,13 +117,20 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     }
     mediaItem.listen((item) {
       if (item != null) {
-        DiscordService().updatePresence(item, isPlaying: _player.playing);
+        DiscordService().updatePresence(
+          item,
+          isPlaying: _player.playing,
+          position: _player.position,
+        );
       }
     });
     _player.playerStateStream.listen((playerState) {
       if (mediaItem.value != null) {
-        DiscordService()
-            .updatePresence(mediaItem.value, isPlaying: playerState.playing);
+        DiscordService().updatePresence(
+          mediaItem.value,
+          isPlaying: playerState.playing,
+          position: _player.position,
+        );
       }
     });
     _createCacheDir();
@@ -616,7 +623,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   Future<void> pause() => _player.pause();
 
   @override
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) {
+    if (mediaItem.value != null) {
+      DiscordService().updatePresence(
+        mediaItem.value,
+        isPlaying: _player.playing,
+        position: position,
+      );
+    }
+    return _player.seek(position);
+  }
 
   @override
   Future<void> skipToQueueItem(int index) async {
@@ -1269,6 +1285,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   @override
   Future<void> stop() async {
+    DiscordService().clearPresence();
     await _player.stop();
     return super.stop();
   }
