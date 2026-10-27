@@ -17,6 +17,8 @@ import '../../../models/music_source.dart';
 import '../../../services/soundcloud_service.dart';
 import '../../../services/platform_search_service.dart';
 import '../../../services/backup_service.dart';
+import '../../navigator.dart';
+import '../Search/search_screen_controller.dart';
 
 class HomeScreenController extends GetxController {
   final MusicServices _musicServices = Get.find<MusicServices>();
@@ -251,7 +253,7 @@ class HomeScreenController extends GetxController {
   ) {
     List contentTemp = [];
     for (var content in contents) {
-      if((content["contents"]).isEmpty) continue;
+      if ((content["contents"]).isEmpty) continue;
       if ((content["contents"][0]).runtimeType == Playlist) {
         final tmp = PlaylistContent(
             playlistList: (content["contents"]).whereType<Playlist>().toList(),
@@ -325,11 +327,35 @@ class HomeScreenController extends GetxController {
   }
 
   void onSideBarTabSelected(int index) {
-    reverseAnimationtransiton = index > tabIndex.value;
-    tabIndex.value = index;
+    _handleTabSwitch(index);
   }
 
   void onBottonBarTabSelected(int index) {
+    _handleTabSwitch(index);
+  }
+
+  void _handleTabSwitch(int index) {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    // 1. Pop any nested route (SearchResultScreen, AlbumScreen, PlaylistScreen, etc.)
+    try {
+      final navState = Get.nestedKey(ScreenNavigationSetup.id)?.currentState;
+      if (navState != null && navState.canPop()) {
+        navState.popUntil((route) => route.isFirst);
+      }
+    } catch (_) {}
+
+    // 2. If leaving the search tab or switching, reset search field and unfocus
+    try {
+      if (Get.isRegistered<SearchScreenController>()) {
+        final searchCon = Get.find<SearchScreenController>();
+        searchCon.focusNode.unfocus();
+        if (index != 1 || tabIndex.value == 1) {
+          searchCon.reset();
+        }
+      }
+    } catch (_) {}
+
     reverseAnimationtransiton = index > tabIndex.value;
     tabIndex.value = index;
   }

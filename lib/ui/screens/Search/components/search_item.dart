@@ -16,13 +16,11 @@ class SearchItem extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.only(left: 10, right: 20),
       onTap: () {
+        FocusManager.instance.primaryFocus?.unfocus();
         Get.toNamed(ScreenNavigationSetup.searchResultScreen,
             id: ScreenNavigationSetup.id, arguments: queryString);
         searchScreenController.addToHistryQueryList(queryString);
-        // for Desktop searchbar
-        if (GetPlatform.isDesktop) {
-          searchScreenController.focusNode.unfocus();
-        }
+        searchScreenController.focusNode.unfocus();
       },
       leading: isHistoryString
           ? const Icon(Icons.history)

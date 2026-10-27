@@ -78,6 +78,7 @@ class SearchScreen extends StatelessWidget {
                           searchScreenController.reset();
                           return;
                         }
+                        FocusManager.instance.primaryFocus?.unfocus();
                         Get.toNamed(ScreenNavigationSetup.searchResultScreen,
                             id: ScreenNavigationSetup.id, arguments: val);
                         searchScreenController.addToHistryQueryList(val);
