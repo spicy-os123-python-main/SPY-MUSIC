@@ -6,16 +6,14 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/common_dialog_widget.dart';
 import '../../widgets/cust_switch.dart';
 import '../../widgets/export_file_dialog.dart';
-import '../../widgets/backup_dialog.dart';
-import '../../widgets/restore_dialog.dart';
 import '../../widgets/snackbar.dart';
 import '/ui/widgets/inapp_equalizer_sheet.dart';
 import '/services/music_service.dart';
 import '/services/discord_service.dart';
-import '/services/playlist_repair_service.dart';
 import '../../widgets/discord_login_dialog.dart';
 import '/ui/utils/theme_controller.dart';
 import 'components/custom_expansion_tile.dart';
+import 'components/auto_backup_settings_widget.dart';
 import 'settings_screen_controller.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -681,60 +679,8 @@ class SettingsScreen extends StatelessWidget {
               CustomExpansionTile(
                   title: "${"backup".tr} & ${"restore".tr}",
                   icon: Icons.restore,
-                  children: [
-                    ListTile(
-                      contentPadding: const EdgeInsets.only(left: 5, right: 10),
-                      title: Text("backupAppData".tr),
-                      subtitle: Text(
-                        "backupSettingsAndPlaylistsDes".tr,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      isThreeLine: true,
-                      onTap: () => showDialog(
-                        context: context,
-                        builder: (context) => const BackupDialog(),
-                      ).whenComplete(
-                          () => Get.delete<BackupDialogController>()),
-                    ),
-                    ListTile(
-                      contentPadding: const EdgeInsets.only(left: 5, right: 10),
-                      title: Text("restoreAppData".tr),
-                      subtitle: Text(
-                        "restoreSettingsAndPlaylistsDes".tr,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      isThreeLine: true,
-                      onTap: () => showDialog(
-                        context: context,
-                        builder: (context) => const RestoreDialog(),
-                      ).whenComplete(
-                          () => Get.delete<RestoreDialogController>()),
-                    ),
-                    ListTile(
-                      contentPadding: const EdgeInsets.only(left: 5, right: 10),
-                      leading: const Icon(Icons.auto_fix_high_rounded, color: Color(0xFF00D2FF)),
-                      title: const Text("Playlists reparieren & bereinigen"),
-                      subtitle: Text(
-                        "Korrigiert 0:00-Laufzeiten, repariert Streams und bereinigt fehlerhafte Downloads.",
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      isThreeLine: true,
-                      onTap: () async {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          snackbar(context, "Repariere Playlists...", size: SanckBarSize.MEDIUM),
-                        );
-                        final repaired = await PlaylistRepairService().autoRepairOnLaunch();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            snackbar(
-                              context,
-                              "✅ $repaired Songs in Playlists erfolgreich repariert!",
-                              size: SanckBarSize.BIG,
-                            ),
-                          );
-                        }
-                      },
-                    ),
+                  children: const [
+                    AutoBackupSettingsWidget(),
                   ]),
               CustomExpansionTile(
                   icon: Icons.miscellaneous_services,

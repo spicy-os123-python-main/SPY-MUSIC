@@ -23,7 +23,11 @@ class DiscordService {
   WebSocket? _socket;
   Timer? _heartbeatTimer;
   Timer? _reconnectTimer;
+  Timer? _debounceTimer;
+  Timer? _healthCheckTimer;
   bool _isConnecting = false;
+  bool _heartbeatAckReceived = true;
+  int _reconnectAttempts = 0;
   int _heartbeatInterval = 41250;
 
   String get token {
@@ -41,6 +45,7 @@ class DiscordService {
       final box = Hive.box('AppPrefs');
       isEnabled = box.get('discordRpcEnabled', defaultValue: true);
       debugPrint('[SPY MUSIC Discord] Service initialized. Enabled: $isEnabled');
+      _startHealthCheck();
       if (isEnabled && token.isNotEmpty) {
         connectGateway();
       }
@@ -56,10 +61,13 @@ class DiscordService {
     } catch (_) {}
 
     if (enable) {
+      _startHealthCheck();
       if (token.isNotEmpty) {
         connectGateway();
       }
     } else {
+      _healthCheckTimer?.cancel();
+      _healthCheckTimer = null;
       clearPresence();
       disconnectGateway();
     }
@@ -76,6 +84,18 @@ class DiscordService {
     }
   }
 
+  void _startHealthCheck() {
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+      if (isEnabled && token.isNotEmpty && _currentIsPlaying) {
+        if (!isGatewayConnected && !_isConnecting) {
+          debugPrint('[SPY MUSIC Discord] Health check: Reconnecting inactive gateway...');
+          connectGateway();
+        }
+      }
+    });
+  }
+
   /// Connect to Discord Gateway WebSocket
   Future<void> connectGateway() async {
     final currentToken = token;
@@ -89,9 +109,11 @@ class DiscordService {
       debugPrint('[SPY MUSIC Discord] Connecting to Discord Gateway...');
       _socket = await WebSocket.connect(
         'wss://gateway.discord.gg/?v=10&encoding=json',
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 8));
 
       _isConnecting = false;
+      _reconnectAttempts = 0;
+      _heartbeatAckReceived = true;
       debugPrint('[SPY MUSIC Discord] Gateway socket connected');
 
       _socket!.listen(
@@ -118,7 +140,12 @@ class DiscordService {
     if (!isEnabled || token.isEmpty) return;
 
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 15), () {
+    _reconnectAttempts++;
+    final delaySeconds = (_reconnectAttempts <= 1)
+        ? 2
+        : (_reconnectAttempts == 2 ? 5 : 12);
+
+    _reconnectTimer = Timer(Duration(seconds: delaySeconds), () {
       connectGateway();
     });
   }
@@ -126,6 +153,8 @@ class DiscordService {
   void disconnectGateway() {
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _debounceTimer?.cancel();
+    _debounceTimer = null;
     _cleanSocket();
   }
 
@@ -151,6 +180,10 @@ class DiscordService {
         _startHeartbeat(_heartbeatInterval);
         _sendIdentify();
       }
+      // Opcode 11: Heartbeat ACK
+      else if (op == 11) {
+        _heartbeatAckReceived = true;
+      }
       // Opcode 1: Discord requests immediate heartbeat
       else if (op == 1) {
         _sendHeartbeat();
@@ -166,6 +199,7 @@ class DiscordService {
 
   void _startHeartbeat(int intervalMs) {
     _heartbeatTimer?.cancel();
+    _heartbeatAckReceived = true;
     _heartbeatTimer = Timer.periodic(
       Duration(milliseconds: intervalMs),
       (_) => _sendHeartbeat(),
@@ -175,6 +209,12 @@ class DiscordService {
 
   void _sendHeartbeat() {
     if (_socket == null || _socket!.readyState != WebSocket.open) return;
+    if (!_heartbeatAckReceived) {
+      debugPrint('[SPY MUSIC Discord] Heartbeat ACK missing, connection dead. Reconnecting...');
+      _scheduleReconnect();
+      return;
+    }
+    _heartbeatAckReceived = false;
     try {
       _socket!.add(jsonEncode({"op": 1, "d": null}));
     } catch (_) {}
@@ -255,7 +295,7 @@ class DiscordService {
     };
   }
 
-  /// Update presence with current song information
+  /// Update presence with current song information (debounced to avoid rate limits)
   void updatePresence(MediaItem? item, {bool isPlaying = true}) {
     if (!isEnabled) return;
 
@@ -269,8 +309,15 @@ class DiscordService {
     songStartTime = DateTime.now();
     _currentIsPlaying = isPlaying;
 
-    debugPrint('[SPY MUSIC Discord] Updating status: $currentTitle by $currentArtist (playing: $isPlaying)');
+    debugPrint('[SPY MUSIC Discord] Scheduling status update: $currentTitle by $currentArtist (playing: $isPlaying)');
 
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 350), () {
+      _sendPresencePayload(isPlaying: isPlaying);
+    });
+  }
+
+  void _sendPresencePayload({required bool isPlaying}) {
     if (isGatewayConnected) {
       final payload = {
         "op": 3,
@@ -283,8 +330,10 @@ class DiscordService {
 
       try {
         _socket!.add(jsonEncode(payload));
+        debugPrint('[SPY MUSIC Discord] Status updated: $currentTitle (playing: $isPlaying)');
       } catch (e) {
         debugPrint('[SPY MUSIC Discord] Send presence error: $e');
+        _scheduleReconnect();
       }
     } else if (token.isNotEmpty && !_isConnecting) {
       connectGateway();
@@ -292,6 +341,7 @@ class DiscordService {
   }
 
   void clearPresence() {
+    _debounceTimer?.cancel();
     currentTitle = null;
     currentArtist = null;
     _currentIsPlaying = false;

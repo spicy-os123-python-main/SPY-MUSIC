@@ -16,6 +16,7 @@ import '/ui/widgets/new_version_dialog.dart';
 import '../../../models/music_source.dart';
 import '../../../services/soundcloud_service.dart';
 import '../../../services/platform_search_service.dart';
+import '../../../services/backup_service.dart';
 
 class HomeScreenController extends GetxController {
   final MusicServices _musicServices = Get.find<MusicServices>();
@@ -36,6 +37,9 @@ class HomeScreenController extends GetxController {
     super.onInit();
     loadContent();
     if (updateCheckFlag) _checkNewVersion();
+    Future.delayed(const Duration(seconds: 4), () {
+      BackupService().checkAndRunAutoBackup();
+    });
   }
 
   Future<void> filterByPlatform(MusicSource source) async {
