@@ -29,6 +29,33 @@ jobs:
       - name: Get Flutter Packages
         run: flutter pub get
 
+      - name: Patch audiotags for iOS
+        run: |
+          python3 -c "
+          import glob, os, urllib.request, zipfile
+          podspecs = glob.glob(os.path.expanduser('~/.pub-cache/hosted/pub.dev/audiotags-*/ios/audiotags.podspec'))
+          for p in podspecs:
+              print('Found audiotags podspec:', p)
+              with open(p, 'r') as fp:
+                  c = fp.read()
+              c = c.replace('[ ! -d ios.zip ]d', '[ ! -f ios.zip ]')
+              with open(p, 'w') as fp:
+                  fp.write(c)
+              frameworks_dir = os.path.join(os.path.dirname(p), 'Frameworks')
+              os.makedirs(frameworks_dir, exist_ok=True)
+              zip_path = os.path.join(frameworks_dir, 'ios.zip')
+              if not os.path.exists(zip_path):
+                  print('Downloading audiotags iOS framework...')
+                  urllib.request.urlretrieve('https://github.com/erikas-taroza/audiotags/releases/download/v1.4.2/ios.zip', zip_path)
+              dest = os.path.join(frameworks_dir, 'audiotags.xcframework')
+              if not os.path.exists(dest):
+                  print('Extracting audiotags.xcframework...')
+                  with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                      os.makedirs(dest, exist_ok=True)
+                      zip_ref.extractall(dest)
+                  print('Extracted audiotags.xcframework to', dest)
+          "
+
       - name: Install CocoaPods Dependencies
         run: |
           cd ios
@@ -63,3 +90,4 @@ jobs:
           files: output/SPY-MUSIC.ipa
           name: "SPY MUSIC v1.0.0"
           make_latest: true
+
