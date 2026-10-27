@@ -943,6 +943,11 @@ class PlayerController extends GetxController
     });
   }
 
+  Future<void> resetAudioEngine() async {
+    await _audioHandler.customAction("resetAudioEngine");
+    await fetchEqualizerData();
+  }
+
   Future<void> applyEqPreset(String name, List<double> gains) async {
     eqPreset.value = name;
     for (int i = 0; i < eqBands.length && i < gains.length; i++) {

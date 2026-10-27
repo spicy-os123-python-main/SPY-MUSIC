@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../player/player_controller.dart';
+import 'snackbar.dart';
 
 class InAppEqualizerSheet extends StatefulWidget {
   const InAppEqualizerSheet({super.key});
@@ -20,12 +21,15 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
 
   static const Map<String, List<double>> _presets = {
     "Normal": [0.0, 0.0, 0.0, 0.0, 0.0],
-    "Bass-Boost": [6.5, 4.5, 1.0, 0.5, 1.5],
-    "Rock": [5.0, 3.0, -1.0, 3.0, 4.5],
-    "Pop": [2.0, 4.0, 3.5, 2.0, 1.0],
-    "Hip-Hop": [6.0, 4.0, 0.5, 2.5, 3.5],
-    "Elektronisch": [5.5, 3.5, -0.5, 3.5, 5.0],
-    "Klar & Stimmen": [-1.5, 0.5, 4.5, 4.0, 2.5],
+    "Tiefbass": [5.5, 3.0, -0.5, 0.5, 1.0],
+    "Bass & Höhen": [5.0, 2.5, -1.0, 2.5, 4.5],
+    "Hip-Hop & Trap": [6.0, 3.5, 0.0, 2.0, 3.0],
+    "Elektronisch / EDM": [5.0, 3.0, -1.0, 3.0, 4.5],
+    "Rock & Metal": [4.5, 2.5, -0.5, 2.5, 4.0],
+    "Pop": [2.0, 3.0, 2.5, 2.0, 1.5],
+    "Klar & Stimmen": [-1.0, 0.5, 3.5, 3.0, 2.0],
+    "Akustik & Sanft": [2.0, 1.0, 1.5, 2.5, 2.0],
+    "Maximaler Druck": [3.5, 2.0, 1.0, 2.5, 3.5],
   };
 
   String _formatFreq(double freq) {
@@ -38,6 +42,21 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
     return "${freq.toInt()} Hz";
   }
 
+  void _applyQuickBass(double val) {
+    if (playerController.eqBands.length >= 2) {
+      playerController.setEqBandGain(0, val);
+      playerController.setEqBandGain(1, (val * 0.65).clamp(-10.0, 10.0));
+    }
+  }
+
+  void _applyQuickTreble(double val) {
+    final len = playerController.eqBands.length;
+    if (len >= 5) {
+      playerController.setEqBandGain(len - 2, (val * 0.65).clamp(-10.0, 10.0));
+      playerController.setEqBandGain(len - 1, val);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -45,7 +64,7 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.88,
+        maxHeight: MediaQuery.of(context).size.height * 0.90,
       ),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF0F1420) : theme.cardColor,
@@ -112,7 +131,7 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                           ),
                         ),
                         Text(
-                          "Bass, Lautstärke & Frequenzen anpassen",
+                          "In-App Sound & Frequenzen",
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.white.withOpacity(0.55),
@@ -131,16 +150,145 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                   }),
                 ],
               ),
+              const SizedBox(height: 12),
+
+              // Mutual exclusivity badge (In-App vs System Equalizer)
+              Obx(() {
+                final isEqActive = playerController.eqEnabled.value;
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isEqActive
+                        ? const Color(0xFF00D2FF).withOpacity(0.08)
+                        : Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isEqActive
+                          ? const Color(0xFF00D2FF).withOpacity(0.25)
+                          : Colors.white12,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isEqActive
+                            ? Icons.verified_rounded
+                            : Icons.phone_android_rounded,
+                        size: 18,
+                        color: isEqActive
+                            ? const Color(0xFF00D2FF)
+                            : Colors.white60,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          isEqActive
+                              ? "SPY Equalizer aktiv • System-Equalizer ist entkoppelt (keine Verzerrung)"
+                              : "System-Equalizer aktiv • Der Sound wird vom Handy gesteuert",
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: isEqActive
+                                ? const Color(0xFF00D2FF)
+                                : Colors.white70,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              const SizedBox(height: 16),
+
+              // Volume & Audio Reset Action Card (Fixes call/WhatsApp audio lock)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF0072FF).withOpacity(0.12),
+                      const Color(0xFF00D2FF).withOpacity(0.06),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFF00D2FF).withOpacity(0.25),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.volume_up_rounded,
+                      color: Color(0xFF00D2FF),
+                      size: 24,
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Audio zu leise nach Anruf?",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            "Stellt 100% Lautstärke & Medienfokus wieder her",
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.white60,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        backgroundColor: const Color(0xFF00D2FF).withOpacity(0.15),
+                        foregroundColor: const Color(0xFF00D2FF),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () async {
+                        await playerController.resetAudioEngine();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            snackbar(
+                              context,
+                              "✅ Audio-Engine repariert & 100% Lautstärke wiederhergestellt!",
+                              size: SanckBarSize.MEDIUM,
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text(
+                        "Reparieren",
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 18),
 
-              // Bass-Boost & Lautstärke-Verstärkung Card
+              // 1. Tiefbass (Punchy & Deep Bass Boost)
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.04),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: const Color(0xFF00D2FF).withOpacity(0.2),
+                    color: const Color(0xFFFF0055).withOpacity(0.2),
                     width: 1,
                   ),
                 ),
@@ -157,10 +305,224 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
-                            "Bass-Boost & Lautstärke-Verstärkung",
+                            "Tiefbass-Verstärkung (Clean & Punchy)",
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              fontSize: 14,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                        ),
+                        Obx(() {
+                          final currentBass = playerController.eqBands.isNotEmpty
+                              ? (playerController.eqBands[0]['gain'] as num).toDouble()
+                              : 0.0;
+                          final isZero = currentBass <= 0.05;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isZero
+                                  ? Colors.white10
+                                  : const Color(0xFFFF0055).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              isZero ? "0 dB" : "+${currentBass.toStringAsFixed(1)} dB",
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: isZero
+                                    ? Colors.white60
+                                    : const Color(0xFFFF0055),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Obx(() {
+                      final currentBass = playerController.eqBands.isNotEmpty
+                          ? ((playerController.eqBands[0]['gain'] as num).toDouble()).clamp(0.0, 8.0)
+                          : 0.0;
+                      return SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          activeTrackColor: const Color(0xFFFF0055),
+                          inactiveTrackColor: Colors.white12,
+                          thumbColor: const Color(0xFFFF0055),
+                          overlayColor: const Color(0xFFFF0055).withOpacity(0.2),
+                          trackHeight: 4,
+                        ),
+                        child: Slider(
+                          value: currentBass,
+                          min: 0.0,
+                          max: 8.0,
+                          divisions: 16,
+                          label: "+${currentBass.toStringAsFixed(1)} dB",
+                          onChanged: playerController.eqEnabled.value
+                              ? (val) => _applyQuickBass(val)
+                              : null,
+                        ),
+                      );
+                    }),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("Sanft (0 dB)",
+                            style: TextStyle(
+                                fontSize: 10.5,
+                                color: Colors.white.withOpacity(0.4))),
+                        Text("Druckvoll (+4 dB)",
+                            style: TextStyle(
+                                fontSize: 10.5,
+                                color: Colors.white.withOpacity(0.4))),
+                        Text("Maximal (+8 dB)",
+                            style: TextStyle(
+                                fontSize: 10.5,
+                                color: Colors.white.withOpacity(0.4))),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // 2. Klarheit & Stimmen (Treble / Vocal Clarity)
+              Container(
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFF00D2FF).withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: Color(0xFF00D2FF),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            "Klarheit & Stimmen (Treble & Vocals)",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                        ),
+                        Obx(() {
+                          final len = playerController.eqBands.length;
+                          final currentTreble = len >= 5
+                              ? (playerController.eqBands[len - 1]['gain'] as num).toDouble()
+                              : 0.0;
+                          final isZero = currentTreble <= 0.05;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isZero
+                                  ? Colors.white10
+                                  : const Color(0xFF00D2FF).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              isZero ? "0 dB" : "+${currentTreble.toStringAsFixed(1)} dB",
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: isZero
+                                    ? Colors.white60
+                                    : const Color(0xFF00D2FF),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Obx(() {
+                      final len = playerController.eqBands.length;
+                      final currentTreble = len >= 5
+                          ? ((playerController.eqBands[len - 1]['gain'] as num).toDouble()).clamp(0.0, 6.0)
+                          : 0.0;
+                      return SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          activeTrackColor: const Color(0xFF00D2FF),
+                          inactiveTrackColor: Colors.white12,
+                          thumbColor: const Color(0xFF00D2FF),
+                          overlayColor: const Color(0xFF00D2FF).withOpacity(0.2),
+                          trackHeight: 4,
+                        ),
+                        child: Slider(
+                          value: currentTreble,
+                          min: 0.0,
+                          max: 6.0,
+                          divisions: 12,
+                          label: "+${currentTreble.toStringAsFixed(1)} dB",
+                          onChanged: playerController.eqEnabled.value
+                              ? (val) => _applyQuickTreble(val)
+                              : null,
+                        ),
+                      );
+                    }),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("Neutral (0 dB)",
+                            style: TextStyle(
+                                fontSize: 10.5,
+                                color: Colors.white.withOpacity(0.4))),
+                        Text("Klar (+3 dB)",
+                            style: TextStyle(
+                                fontSize: 10.5,
+                                color: Colors.white.withOpacity(0.4))),
+                        Text("Brillant (+6 dB)",
+                            style: TextStyle(
+                                fontSize: 10.5,
+                                color: Colors.white.withOpacity(0.4))),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // 3. Lautstärke-Maximizer (Preamp Gain)
+              Container(
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 18),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFAB47BC).withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.speed_rounded,
+                          color: Color(0xFFAB47BC),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            "Lautstärke-Verstärker (Preamp Boost)",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13.5,
                             ),
                           ),
                         ),
@@ -173,71 +535,70 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                             decoration: BoxDecoration(
                               color: isZero
                                   ? Colors.white10
-                                  : const Color(0xFFFF0055).withOpacity(0.2),
+                                  : const Color(0xFFAB47BC).withOpacity(0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
                               isZero ? "0 dB" : "+${gain.toStringAsFixed(1)} dB",
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
                                 color: isZero
                                     ? Colors.white60
-                                    : const Color(0xFFFF0055),
+                                    : const Color(0xFFAB47BC),
                               ),
                             ),
                           );
                         }),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     Obx(() {
                       final gain = playerController.eqLoudnessGain.value;
                       return SliderTheme(
                         data: SliderTheme.of(context).copyWith(
-                          activeTrackColor: const Color(0xFFFF0055),
+                          activeTrackColor: const Color(0xFFAB47BC),
                           inactiveTrackColor: Colors.white12,
-                          thumbColor: const Color(0xFFFF0055),
-                          overlayColor: const Color(0xFFFF0055).withOpacity(0.2),
-                          trackHeight: 5,
+                          thumbColor: const Color(0xFFAB47BC),
+                          overlayColor: const Color(0xFFAB47BC).withOpacity(0.2),
+                          trackHeight: 4,
                         ),
                         child: Slider(
-                          value: gain.clamp(0.0, 12.0),
+                          value: gain.clamp(0.0, 6.0),
                           min: 0.0,
-                          max: 12.0,
-                          divisions: 24,
+                          max: 6.0,
+                          divisions: 12,
                           label: "+${gain.toStringAsFixed(1)} dB",
-                          onChanged: (val) {
-                            playerController.setEqLoudnessGain(val);
-                          },
+                          onChanged: playerController.eqEnabled.value
+                              ? (val) => playerController.setEqLoudnessGain(val)
+                              : null,
                         ),
                       );
                     }),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("0 dB (Normal)",
+                        Text("Standard (0 dB)",
                             style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 10.5,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("+6 dB (Stark)",
+                        Text("Verstärkt (+3 dB)",
                             style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 10.5,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("+12 dB (Extrem)",
+                        Text("Maximal (+6 dB)",
                             style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 10.5,
                                 color: Colors.white.withOpacity(0.4))),
                       ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
 
-              // Presets Selection
+              // Presets Selection (10 Sound Profiles)
               const Text(
-                "Sound-Profile",
+                "Sound-Profile (10 Presets)",
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -291,7 +652,7 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
 
               // 5-Band Equalizer Sliders
               const Text(
-                "Frequenz-Bänder",
+                "Manuelle Frequenz-Bänder",
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -307,7 +668,6 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                 final maxDb = playerController.eqMaxDecibels.value;
 
                 if (bands.isEmpty) {
-                  // Fallback 5 default bands if device list is loading
                   final defaultFreqs = [60.0, 230.0, 910.0, 3600.0, 14000.0];
                   return Container(
                     height: 180,
@@ -360,7 +720,7 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                   ),
                 );
               }),
-              const SizedBox(height: 20),
+              const SizedBox(height: 22),
 
               // External System Equalizer Button
               Center(
@@ -470,4 +830,3 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
     );
   }
 }
-

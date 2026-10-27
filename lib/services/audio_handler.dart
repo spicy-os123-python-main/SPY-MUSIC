@@ -103,7 +103,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 _equalizer!,
               ])
             : null,
-        handleInterruptions: false,
+        handleInterruptions: true,
+        androidApplyAudioAttributes: true,
+        handleAudioSessionActivation: true,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
       minBufferDuration: Duration(seconds: 50),
@@ -164,8 +166,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       await _equalizer!.setEnabled(eqEnabled);
       await _loudnessEnhancer!.setEnabled(loudnessEnabled);
-      if (loudnessGain > 0) {
-        await _loudnessEnhancer!.setTargetGain(loudnessGain);
+      if (loudnessGain > 0 && loudnessEnabled) {
+        // Correct mB scaling: 1 dB = 100 mB. just_audio multiplies targetGain by 1000 in Java.
+        final scaled = (loudnessGain / 10.0).clamp(0.0, 0.8);
+        await _loudnessEnhancer!.setTargetGain(scaled);
       }
 
       final savedBands = appPrefsBox.get("eq_band_gains");
@@ -187,6 +191,50 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
+
+      session.interruptionEventStream.listen((event) async {
+        if (event.begin) {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              // WhatsApp voice message or notifications: smoothly duck to 30%
+              await _player.setVolume(0.3);
+              break;
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              // Incoming phone call: pause playback
+              if (_player.playing) {
+                await _player.pause();
+              }
+              break;
+          }
+        } else {
+          // Interruption ended (call ended, WhatsApp voice message finished):
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              // Unduck: Restore full volume immediately!
+              await _player.setVolume(1.0);
+              break;
+            case AudioInterruptionType.pause:
+              // Reclaim full audio focus and resume with 100% volume
+              try {
+                await session.setActive(true);
+              } catch (_) {}
+              await _player.setVolume(1.0);
+              await _player.play();
+              break;
+            case AudioInterruptionType.unknown:
+              try {
+                await session.setActive(true);
+              } catch (_) {}
+              await _player.setVolume(1.0);
+              break;
+          }
+        }
+      });
+
+      session.becomingNoisyEventStream.listen((_) async {
+        await _player.pause();
+      });
     } catch (e) {
       printINFO("AudioSession config error: $e");
     }
@@ -211,7 +259,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _player.androidAudioSessionIdStream.listen((int? id) {
       if (id != null) {
         try {
-          EqualizerService.initAudioEffect(id);
+          final isAppEq = Hive.box("AppPrefs").get("eq_enabled", defaultValue: false) as bool;
+          if (!isAppEq) {
+            EqualizerService.initAudioEffect(id);
+          } else {
+            EqualizerService.endAudioEffect(id);
+          }
         } catch (e) {
           printERROR("initAudioEffect error: $e");
         }
@@ -522,6 +575,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   @override
   Future<void> play() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.setActive(true);
+    } catch (_) {}
+    if (!loudnessNormalizationEnabled && _player.volume < 1.0) {
+      await _player.setVolume(1.0);
+    }
     if (currentSongUrl == null ||
         (GetPlatform.isDesktop &&
             (_player.duration == null ||
@@ -529,17 +589,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       await customAction("playByIndex", {'index': currentIndex});
       return;
     }
-    // Workaround for network error pause in case of PlayingUsingLockCachingSource
-    // if (isPlayingUsingLockCachingSource && networkErrorPause) {
-    //   await _player.play();
-    //   Future.delayed(const Duration(seconds: 2)).then((value) {
-    //     if (_player.playing) {
-    //       networkErrorPause = false;
-    //     }
-    //   });
-    //   await _player.play();
-    //   return;
-    // }
     await _player.play();
   }
 
@@ -966,7 +1015,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               'gain': b.gain,
             }).toList(),
             'loudnessEnabled': _loudnessEnhancer?.enabled ?? false,
-            'loudnessGain': _loudnessEnhancer?.targetGain ?? 0.0,
+            'loudnessGain': ((_loudnessEnhancer?.targetGain ?? 0.0) * 10.0).clamp(0.0, 8.0),
             'preset': savedPreset,
           };
         } catch (e) {
@@ -979,6 +1028,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         if (_equalizer != null) {
           await _equalizer!.setEnabled(enable);
           await Hive.box("AppPrefs").put("eq_enabled", enable);
+
+          final sessionId = _player.androidAudioSessionId;
+          if (sessionId != null) {
+            if (enable) {
+              // Unhook system equalizer so it doesn't double-process or clash!
+              EqualizerService.endAudioEffect(sessionId);
+            } else {
+              // Re-enable system equalizer when app equalizer is turned off
+              EqualizerService.initAudioEffect(sessionId);
+            }
+          }
         }
         break;
 
@@ -1003,11 +1063,35 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         if (_loudnessEnhancer != null) {
           await _loudnessEnhancer!.setEnabled(enable);
           if (enable) {
-            await _loudnessEnhancer!.setTargetGain(gain);
+            // just_audio multiplies targetGain by 1000 in Java (mB).
+            // Passing (gain / 10.0) gives gain * 100 mB = gain in dB!
+            final scaled = (gain / 10.0).clamp(0.0, 0.8);
+            await _loudnessEnhancer!.setTargetGain(scaled);
           }
           final appPrefsBox = Hive.box("AppPrefs");
           await appPrefsBox.put("eq_loudness_enabled", enable);
           await appPrefsBox.put("eq_loudness_gain", gain);
+        }
+        break;
+
+      case 'resetAudioEngine':
+        try {
+          final session = await AudioSession.instance;
+          await session.configure(const AudioSessionConfiguration.music());
+          await session.setActive(true);
+          await _player.setVolume(1.0);
+          final sessionId = _player.androidAudioSessionId;
+          final isAppEq = Hive.box("AppPrefs").get("eq_enabled", defaultValue: false) as bool;
+          if (sessionId != null) {
+            if (isAppEq) {
+              EqualizerService.endAudioEffect(sessionId);
+            } else {
+              EqualizerService.initAudioEffect(sessionId);
+            }
+          }
+          printINFO("Audio engine reset successfully: volume 1.0, session active");
+        } catch (e) {
+          printERROR("resetAudioEngine error: $e");
         }
         break;
 
