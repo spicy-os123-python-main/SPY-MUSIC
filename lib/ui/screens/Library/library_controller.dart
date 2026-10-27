@@ -110,7 +110,7 @@ class LibrarySongsController extends GetxController {
     librarySongsList.remove(item);
     String filePath = "";
     if (isDownloaded) {
-      filePath = item.extras!['url'] ?? url;
+      filePath = item.extras?['url']?.toString() ?? (url ?? "");
     } else {
       final cacheDir = (await getTemporaryDirectory()).path;
       filePath = "$cacheDir/cachedSongs/${item.id}.mp3";

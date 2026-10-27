@@ -42,10 +42,12 @@ void sortSongsNVideos(
   switch (sortType) {
     case SortType.Date:
       compareFunction = (a, b) {
-        if (a.extras!['date'] == null || b.extras!['date'] == null) {
+        final aDate = a.extras?['date'];
+        final bDate = b.extras?['date'];
+        if (aDate == null || bDate == null) {
           return 0.compareTo(0);
         }
-        return a.extras!['date'].compareTo(b.extras!['date']);
+        return aDate.compareTo(bDate);
       };
       break;
     case SortType.Duration:
@@ -171,8 +173,10 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
     dynamic response;
     String latestTag = currentVer;
     String body = "";
-    String htmlUrl = "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest";
-    String downloadUrl = "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk";
+    String htmlUrl =
+        "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest";
+    String downloadUrl =
+        "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk";
 
     try {
       response = await dio.get(
@@ -251,8 +255,10 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
       'error': e.toString(),
       'latest': currentVer ?? "v1.0.0",
       'current': currentVer ?? "v1.0.0",
-      'downloadUrl': "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk",
-      'htmlUrl': "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest",
+      'downloadUrl':
+          "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk",
+      'htmlUrl':
+          "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest",
     };
   }
 }

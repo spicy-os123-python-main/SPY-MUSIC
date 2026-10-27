@@ -31,23 +31,33 @@ class ImageWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     String imageUrl = song != null
-        ? song!.artUri.toString()
+        ? (song?.artUri?.toString() ?? "")
         : playlist != null
-            ? playlist!.thumbnailUrl
+            ? (playlist?.thumbnailUrl ?? "")
             : album != null
-                ? album!.thumbnailUrl
+                ? (album?.thumbnailUrl ?? "")
                 : artist != null
-                    ? artist!.thumbnailUrl
+                    ? (artist?.thumbnailUrl ?? "")
                     : "";
-    // String cacheKey = song != null
-    //     ? "${song!.id}_song"
-    //     : playlist != null
-    //         ? "${playlist!.playlistId}_playlist"
-    //         : album != null
-    //             ? "${album!.browseId}_album"
-    //             : artist != null
-    //                 ? "${artist!.browseId}_artist"
-    //                 : "";
+
+    final uri = Uri.tryParse(imageUrl);
+    final bool hasValidNetworkUrl = imageUrl.isNotEmpty &&
+        imageUrl != "null" &&
+        uri != null &&
+        uri.hasScheme &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty;
+
+    final Widget placeholderWidget = Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.secondary,
+        shape: artist != null ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius: artist != null ? null : BorderRadius.circular(10),
+      ),
+      child: Image.asset(
+          "assets/icons/${song != null ? "song" : artist != null ? "artist" : "album"}.png"),
+    );
 
     /// only valid for offline songs
     final bool offlineAvailable =
@@ -59,7 +69,9 @@ class ImageWidget extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         shape: artist != null ? BoxShape.circle : BoxShape.rectangle,
-        borderRadius: artist != null ? null : BorderRadius.circular(isPlayerArtImage ? 18 : 10),
+        borderRadius: artist != null
+            ? null
+            : BorderRadius.circular(isPlayerArtImage ? 18 : 10),
         boxShadow: isPlayerArtImage
             ? [
                 BoxShadow(
@@ -81,43 +93,34 @@ class ImageWidget extends StatelessWidget {
               height: size,
               width: size,
               fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => placeholderWidget,
             )
-          : CachedNetworkImage(
-              height: size,
-              width: size,
-              memCacheHeight: (song != null && !isPlayerArtImage) ? 140 : null,
-              //memCacheWidth: (song != null && !isPlayerArtImage)? 140 : null,
-              //cacheKey: cacheKey,
-              imageUrl: imageUrl,
-              fit: BoxFit.cover,
-              errorWidget: (context, url, error) {
-                return Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondary,
-                      shape:
-                          artist != null ? BoxShape.circle : BoxShape.rectangle,
-                      borderRadius:
-                          artist != null ? null : BorderRadius.circular(10),
-                    ),
-                    child: Image.asset(
-                        "assets/icons/${song != null ? "song" : artist != null ? "artist" : "album"}.png"));
-              },
-              progressIndicatorBuilder: ((_, __, ___) => Shimmer.fromColors(
-                  baseColor: Colors.grey[500]!,
-                  highlightColor: Colors.grey[300]!,
-                  enabled: true,
-                  direction: ShimmerDirection.ltr,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape:
-                          artist != null ? BoxShape.circle : BoxShape.rectangle,
-                      borderRadius:
-                          artist != null ? null : BorderRadius.circular(10),
-                      color: Colors.white54,
-                    ),
-                  ))),
-            ),
+          : (hasValidNetworkUrl
+              ? CachedNetworkImage(
+                  height: size,
+                  width: size,
+                  memCacheHeight:
+                      (song != null && !isPlayerArtImage) ? 140 : null,
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                  errorWidget: (context, url, error) => placeholderWidget,
+                  progressIndicatorBuilder: ((_, __, ___) => Shimmer.fromColors(
+                      baseColor: Colors.grey[500]!,
+                      highlightColor: Colors.grey[300]!,
+                      enabled: true,
+                      direction: ShimmerDirection.ltr,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: artist != null
+                              ? BoxShape.circle
+                              : BoxShape.rectangle,
+                          borderRadius:
+                              artist != null ? null : BorderRadius.circular(10),
+                          color: Colors.white54,
+                        ),
+                      ))),
+                )
+              : placeholderWidget),
     );
   }
 }

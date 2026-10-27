@@ -846,10 +846,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           final songsCacheBox = Hive.box("SongsCache");
           if (!songsCacheBox.containsKey(song.id) &&
               await File("$_cacheDir/cachedSongs/${song.id}.mp3").exists()) {
-            song.extras!['url'] = currentSongUrl;
-            song.extras!['date'] = DateTime.now().millisecondsSinceEpoch;
+            final Map<String, dynamic> songExtras =
+                Map<String, dynamic>.from(song.extras ?? {});
+            songExtras['url'] = currentSongUrl;
+            songExtras['date'] = DateTime.now().millisecondsSinceEpoch;
+            final updatedSong = song.copyWith(extras: songExtras);
             final dbStreamData = Hive.box("SongsUrlCache").get(song.id);
-            final jsonData = MediaItemBuilder.toJson(song);
+            final jsonData = MediaItemBuilder.toJson(updatedSong);
             jsonData['duration'] = _player.duration!.inSeconds;
             // playbility status and info
             jsonData['streamInfo'] = dbStreamData != null
@@ -868,7 +871,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 Get.find<LibrarySongsController>();
             if (!librarySongsController.isClosed) {
               librarySongsController.librarySongsList.value =
-                  librarySongsController.librarySongsList.toList() + [song];
+                  librarySongsController.librarySongsList.toList() +
+                      [updatedSong];
             }
           }
         }

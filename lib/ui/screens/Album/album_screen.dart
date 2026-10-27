@@ -60,56 +60,59 @@ class AlbumScreen extends StatelessWidget {
                             albumController.scrollOffset.value /
                                 (size.width - 100);
                         return Opacity(
-                            opacity: opacityValue < 0 ||
-                                    albumController.isSearchingOn.isTrue
-                                ? 0
-                                : opacityValue,
-                            child: DecoratedBox(
-                                position: DecorationPosition.foreground,
-                                decoration: BoxDecoration(
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Theme.of(context).canvasColor,
-                                      spreadRadius: 200,
-                                      blurRadius: 100,
-                                      offset: Offset(-size.height, 0),
-                                    ),
-                                    BoxShadow(
-                                      color: Theme.of(context).canvasColor,
-                                      spreadRadius: 200,
-                                      blurRadius: 100,
-                                      offset: Offset(
-                                          0,
-                                          landscape
-                                              ? size.height
-                                              : size.width + 80),
-                                    )
-                                  ],
+                          opacity: opacityValue < 0 ||
+                                  albumController.isSearchingOn.isTrue
+                              ? 0
+                              : opacityValue,
+                          child: DecoratedBox(
+                            position: DecorationPosition.foreground,
+                            decoration: BoxDecoration(
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Theme.of(context).canvasColor,
+                                  spreadRadius: 200,
+                                  blurRadius: 100,
+                                  offset: Offset(-size.height, 0),
                                 ),
-                                child: CachedNetworkImage(
-                                  imageUrl: Thumbnail(albumController
-                                          .album.value.thumbnailUrl)
-                                      .extraHigh,
-                                  fit: landscape
-                                      ? BoxFit.fitHeight
-                                      : BoxFit.fitWidth,
-                                  width: landscape ? null : size.width,
-                                  height: landscape ? size.height : null,
-                                  // placeholder: (context, n) => Align(
-                                  //   alignment:landscape?Alignment.centerLeft: Alignment.topCenter,
-                                  //   child: SizedBox(
-                                  //     width: landscape ? size.height : size.width,
-                                  //     height: landscape ? size.height : size.width,
-                                  //     child: Center(
-                                  //       child: Icon(Icons.album,
-                                  //           size: 150,
-                                  //           color: Theme.of(context)
-                                  //               .textTheme.titleSmall!.color
-                                  //         ),
-                                  //     ),
-                                  //   ),
-                                  // ),
-                                )));
+                                BoxShadow(
+                                  color: Theme.of(context).canvasColor,
+                                  spreadRadius: 200,
+                                  blurRadius: 100,
+                                  offset: Offset(
+                                      0,
+                                      landscape
+                                          ? size.height
+                                          : size.width + 80),
+                                )
+                              ],
+                            ),
+                            child: Builder(builder: (context) {
+                              final thumbUrl = Thumbnail(
+                                      albumController.album.value.thumbnailUrl)
+                                  .extraHigh;
+                              final uri = Uri.tryParse(thumbUrl);
+                              final bool isValid = thumbUrl.isNotEmpty &&
+                                  uri != null &&
+                                  uri.hasScheme &&
+                                  (uri.scheme == 'http' ||
+                                      uri.scheme == 'https') &&
+                                  uri.host.isNotEmpty;
+                              if (!isValid) {
+                                return const SizedBox.shrink();
+                              }
+                              return CachedNetworkImage(
+                                imageUrl: thumbUrl,
+                                fit: landscape
+                                    ? BoxFit.fitHeight
+                                    : BoxFit.fitWidth,
+                                width: landscape ? null : size.width,
+                                height: landscape ? size.height : null,
+                                errorWidget: (_, __, ___) =>
+                                    const SizedBox.shrink(),
+                              );
+                            }),
+                          ),
+                        );
                       }))
                   : SizedBox(
                       height: size.width,
@@ -190,7 +193,7 @@ class AlbumScreen extends StatelessWidget {
                                         children: [
                                           // Bookmark button
                                           Obx(() => IconButton(
-                                            tooltip: albumController
+                                              tooltip: albumController
                                                       .isAddedToLibrary.isFalse
                                                   ? "addToLibrary".tr
                                                   : "removeFromLibrary".tr,
@@ -227,7 +230,7 @@ class AlbumScreen extends StatelessWidget {
                                                   : Icons.bookmark_added))),
                                           // Play button
                                           IconButton(
-                                            tooltip: "play".tr,
+                                              tooltip: "play".tr,
                                               onPressed: () {
                                                 playerController
                                                     .playPlayListSong(
@@ -254,7 +257,7 @@ class AlbumScreen extends StatelessWidget {
                                               )),
                                           // Enqueue button
                                           IconButton(
-                                            tooltip: "enqueueAlbumSongs".tr,
+                                              tooltip: "enqueueAlbumSongs".tr,
                                               onPressed: () {
                                                 Get.find<PlayerController>()
                                                     .enqueueSongList(
@@ -363,7 +366,7 @@ class AlbumScreen extends StatelessWidget {
                                           //           Icons.cloud_sync)),
 
                                           IconButton(
-                                            tooltip: "shareAlbum".tr,
+                                              tooltip: "shareAlbum".tr,
                                               visualDensity:
                                                   const VisualDensity(
                                                       vertical: -3),

@@ -120,7 +120,12 @@ class SongInfoBottomSheet extends StatelessWidget {
               subtitle: Text(
                 "In-App Equalizer & Lautstärke / Bass anpassen",
                 style: TextStyle(
-                  color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6) ?? Colors.white60,
+                  color: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.color
+                          ?.withOpacity(0.6) ??
+                      Colors.white60,
                   fontSize: 12,
                 ),
               ),
@@ -130,7 +135,8 @@ class SongInfoBottomSheet extends StatelessWidget {
                 showModalBottomSheet(
                   constraints: const BoxConstraints(maxWidth: 550),
                   shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(24.0)),
                   ),
                   isScrollControlled: true,
                   context: context,
@@ -190,7 +196,7 @@ class SongInfoBottomSheet extends StatelessWidget {
                       Navigator.of(context).pop();
                     },
                   ),
-            song.extras!['album'] != null
+            song.extras?['album'] != null
                 ? ListTile(
                     visualDensity: const VisualDensity(vertical: -1),
                     leading: const Icon(Icons.album),
@@ -205,7 +211,7 @@ class SongInfoBottomSheet extends StatelessWidget {
                       }
                       Get.toNamed(ScreenNavigationSetup.albumScreen,
                           id: ScreenNavigationSetup.id,
-                          arguments: (null, song.extras!['album']['id']));
+                          arguments: (null, song.extras?['album']?['id']));
                     },
                   )
                 : const SizedBox.shrink(),
@@ -352,7 +358,7 @@ class SongInfoBottomSheet extends StatelessWidget {
 
   List<Widget> artistWidgetList(MediaItem song, BuildContext context) {
     final artistList = [];
-    final artists = song.extras!['artists'];
+    final artists = song.extras?['artists'];
     if (artists != null) {
       for (dynamic each in artists) {
         if (each.containsKey("id") && each['id'] != null) artistList.add(each);
@@ -400,7 +406,7 @@ class SongInfoController extends GetxController
     isDownloaded.value = Hive.box("SongDownloads").containsKey(song.id);
     isCurrentSongFav.value =
         (await Hive.openBox("LIBFAV")).containsKey(song.id);
-    final artists = song.extras!['artists'];
+    final artists = song.extras?['artists'];
     if (artists != null) {
       for (dynamic each in artists) {
         if (each.containsKey("id") && each['id'] != null) artistList.add(each);

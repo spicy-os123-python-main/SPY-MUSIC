@@ -21,7 +21,8 @@ class BackgroudImage extends StatelessWidget {
         child: playerController.currentSong.value != null
 
             /// if song is local then return image from local file
-            ? (playerController.currentSong.value?.extras?['url']?.toString() ?? '')
+            ? (playerController.currentSong.value?.extras?['url']?.toString() ??
+                        '')
                     .contains('file')
                 ? Builder(builder: (context) {
                     final imgFile = File(
@@ -32,7 +33,6 @@ class BackgroudImage extends StatelessWidget {
                         if (snapshot.connectionState == ConnectionState.done &&
                             snapshot.hasData &&
                             snapshot.data == true) {
-
                           /// if theme mode is dynamic then set the theme with image
                           if (Get.find<SettingsScreenController>()
                                   .themeModetype
@@ -54,29 +54,47 @@ class BackgroudImage extends StatelessWidget {
                     );
                   })
 
-                /// else return image from network
-                : CachedNetworkImage(
-                    memCacheHeight: cacheHeight,
-                    imageBuilder: (context, imageProvider) {
-                      Get.find<SettingsScreenController>()
-                                  .themeModetype
-                                  .value ==
-                              ThemeType.dynamic
-                          ? Future.delayed(
-                              const Duration(milliseconds: 50),
-                              () => Get.find<ThemeController>().setTheme(
-                                  imageProvider,
-                                  playerController.currentSong.value!.id))
-                          : null;
-                      return Image(
-                        image: imageProvider,
-                        fit: BoxFit.cover,
-                      );
-                    },
-                    imageUrl:
-                        playerController.currentSong.value!.artUri.toString(),
-                    cacheKey: "${playerController.currentSong.value!.id}_song",
-                  )
+                /// else return image from network if valid
+                : Builder(builder: (context) {
+                    final artUriStr = playerController.currentSong.value?.artUri
+                            ?.toString() ??
+                        '';
+                    final uri = Uri.tryParse(artUriStr);
+                    final bool isValidHttp = artUriStr.isNotEmpty &&
+                        artUriStr != 'null' &&
+                        uri != null &&
+                        uri.hasScheme &&
+                        (uri.scheme == 'http' || uri.scheme == 'https') &&
+                        uri.host.isNotEmpty;
+
+                    if (!isValidHttp) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return CachedNetworkImage(
+                      memCacheHeight: cacheHeight,
+                      imageBuilder: (context, imageProvider) {
+                        Get.find<SettingsScreenController>()
+                                    .themeModetype
+                                    .value ==
+                                ThemeType.dynamic
+                            ? Future.delayed(
+                                const Duration(milliseconds: 50),
+                                () => Get.find<ThemeController>().setTheme(
+                                    imageProvider,
+                                    playerController.currentSong.value!.id))
+                            : null;
+                        return Image(
+                          image: imageProvider,
+                          fit: BoxFit.cover,
+                        );
+                      },
+                      imageUrl: artUriStr,
+                      cacheKey:
+                          "${playerController.currentSong.value!.id}_song",
+                      errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                    );
+                  })
             : Container(),
       ),
     );

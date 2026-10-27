@@ -162,8 +162,8 @@ class _SongListTileState extends State<SongListTile>
                             BorderRadius.vertical(top: Radius.circular(10.0)),
                       ),
                       isScrollControlled: true,
-                      context:
-                          playerController.homeScaffoldkey.currentState!.context,
+                      context: playerController
+                          .homeScaffoldkey.currentState!.context,
                       barrierColor: Colors.transparent.withAlpha(100),
                       builder: (context) => SongInfoBottomSheet(
                         widget.song,
@@ -247,7 +247,7 @@ class _SongListTileState extends State<SongListTile>
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            "${widget.song.extras!['platform']}",
+                            "${widget.song.extras?['platform'] ?? ''}",
                             style: const TextStyle(
                                 fontSize: 9,
                                 color: Colors.white70,
@@ -260,9 +260,10 @@ class _SongListTileState extends State<SongListTile>
                           "${widget.song.artist}",
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                color: Colors.white60,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    color: Colors.white60,
+                                  ),
                         ),
                       ),
                     ],
@@ -275,7 +276,7 @@ class _SongListTileState extends State<SongListTile>
                       children: [
                         if (widget.song.extras?['length'] != null)
                           Text(
-                            widget.song.extras!['length'],
+                            widget.song.extras?['length']?.toString() ?? '',
                             style: Theme.of(context)
                                 .textTheme
                                 .titleSmall
@@ -302,8 +303,7 @@ class _SongListTileState extends State<SongListTile>
                                 isScrollControlled: true,
                                 context: playerController
                                     .homeScaffoldkey.currentState!.context,
-                                barrierColor:
-                                    Colors.transparent.withAlpha(100),
+                                barrierColor: Colors.transparent.withAlpha(100),
                                 builder: (context) => SongInfoBottomSheet(
                                   widget.song,
                                   playlist: widget.playlist,
