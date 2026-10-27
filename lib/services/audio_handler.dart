@@ -73,6 +73,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   int _songErrorRetryCount = 0;
   String? _lastFailedSongId;
   static final Set<String> _failedYouTubeSongs = {};
+  bool _pausedByDeviceDisconnect = false;
+  bool _wasPlayingBeforeInterruption = false;
 
   // list of shuffled queue songs ids
   List<String> shuffledQueue = [];
@@ -103,9 +105,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 _equalizer!,
               ])
             : null,
-        handleInterruptions: true,
+        handleInterruptions: false,
         androidApplyAudioAttributes: true,
-        handleAudioSessionActivation: true,
+        handleAudioSessionActivation: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
           minBufferDuration: Duration(seconds: 50),
@@ -217,7 +219,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               break;
             case AudioInterruptionType.pause:
             case AudioInterruptionType.unknown:
-              // Incoming phone call: pause playback
+              // Interruption started (e.g. phone call):
+              _wasPlayingBeforeInterruption = _player.playing;
               if (_player.playing) {
                 await _player.pause();
               }
@@ -231,25 +234,62 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               await _player.setVolume(1.0);
               break;
             case AudioInterruptionType.pause:
-              // Reclaim full audio focus and resume with 100% volume
-              try {
-                await session.setActive(true);
-              } catch (_) {}
-              await _player.setVolume(1.0);
-              await _player.play();
+              // Only resume if it was playing before AND not disconnected by Bluetooth/headphones!
+              if (_wasPlayingBeforeInterruption && !_pausedByDeviceDisconnect) {
+                try {
+                  await session.setActive(true);
+                } catch (_) {}
+                await _player.setVolume(1.0);
+                await _player.play();
+              }
+              _wasPlayingBeforeInterruption = false;
               break;
             case AudioInterruptionType.unknown:
-              try {
-                await session.setActive(true);
-              } catch (_) {}
-              await _player.setVolume(1.0);
+              if (_wasPlayingBeforeInterruption && !_pausedByDeviceDisconnect) {
+                try {
+                  await session.setActive(true);
+                } catch (_) {}
+                await _player.setVolume(1.0);
+                await _player.play();
+              }
+              _wasPlayingBeforeInterruption = false;
               break;
           }
         }
       });
 
+      // Becoming Noisy: Triggered immediately when Bluetooth device or headphones disconnect!
       session.becomingNoisyEventStream.listen((_) async {
-        await _player.pause();
+        printINFO(
+            "Audio becoming noisy (Bluetooth / headphones disconnected). Pausing playback!");
+        _pausedByDeviceDisconnect = true;
+        _wasPlayingBeforeInterruption = false;
+        if (_player.playing) {
+          await _player.pause();
+        }
+      });
+
+      // Audio Device Disconnection (Bluetooth / Headset removed)
+      session.devicesChangedEventStream.listen((event) async {
+        final hadDeviceRemoved = event.devicesRemoved.any((d) =>
+            d.type == AudioDeviceType.bluetoothA2dp ||
+            d.type == AudioDeviceType.bluetoothSco ||
+            d.type == AudioDeviceType.bluetoothLe ||
+            d.type == AudioDeviceType.wiredHeadset ||
+            d.type == AudioDeviceType.wiredHeadphones ||
+            d.type == AudioDeviceType.usbAudio ||
+            d.type == AudioDeviceType.hearingAid ||
+            d.type == AudioDeviceType.lineAnalog ||
+            d.type == AudioDeviceType.lineDigital);
+        if (hadDeviceRemoved) {
+          printINFO(
+              "Audio device removed (${event.devicesRemoved}). Pausing playback!");
+          _pausedByDeviceDisconnect = true;
+          _wasPlayingBeforeInterruption = false;
+          if (_player.playing) {
+            await _player.pause();
+          }
+        }
       });
     } catch (e) {
       printINFO("AudioSession config error: $e");
@@ -605,6 +645,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   @override
   Future<void> play() async {
+    _pausedByDeviceDisconnect = false;
+    _wasPlayingBeforeInterruption = false;
     try {
       final session = await AudioSession.instance;
       await session.setActive(true);
@@ -623,7 +665,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() {
+    _wasPlayingBeforeInterruption = false;
+    return _player.pause();
+  }
 
   @override
   Future<void> seek(Duration position) {
@@ -1297,6 +1342,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   @override
   Future<void> stop() async {
+    _pausedByDeviceDisconnect = false;
+    _wasPlayingBeforeInterruption = false;
     DiscordService().clearPresence();
     await _player.stop();
     return super.stop();
