@@ -211,18 +211,31 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       await session.configure(const AudioSessionConfiguration.music());
 
       session.interruptionEventStream.listen((event) async {
+        final playDuringCalls = Hive.box("AppPrefs")
+            .get("playDuringCalls", defaultValue: true) as bool;
         if (event.begin) {
           switch (event.type) {
             case AudioInterruptionType.duck:
-              // WhatsApp voice message or notifications: smoothly duck to 30%
-              await _player.setVolume(0.3);
+              if (!playDuringCalls) {
+                await _player.setVolume(0.3);
+              } else {
+                await _player.setVolume(1.0);
+              }
               break;
             case AudioInterruptionType.pause:
             case AudioInterruptionType.unknown:
-              // Interruption started (e.g. phone call):
-              _wasPlayingBeforeInterruption = _player.playing;
-              if (_player.playing) {
-                await _player.pause();
+              if (!playDuringCalls) {
+                _wasPlayingBeforeInterruption = _player.playing;
+                if (_player.playing) {
+                  await _player.pause();
+                }
+              } else {
+                try {
+                  await session.setActive(true);
+                } catch (_) {}
+                if (!loudnessNormalizationEnabled && _player.volume < 1.0) {
+                  await _player.setVolume(1.0);
+                }
               }
               break;
           }
@@ -234,23 +247,22 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               await _player.setVolume(1.0);
               break;
             case AudioInterruptionType.pause:
-              // Only resume if it was playing before AND not disconnected by Bluetooth/headphones!
-              if (_wasPlayingBeforeInterruption && !_pausedByDeviceDisconnect) {
-                try {
-                  await session.setActive(true);
-                } catch (_) {}
-                await _player.setVolume(1.0);
-                await _player.play();
-              }
-              _wasPlayingBeforeInterruption = false;
-              break;
             case AudioInterruptionType.unknown:
-              if (_wasPlayingBeforeInterruption && !_pausedByDeviceDisconnect) {
+              if (!playDuringCalls &&
+                  _wasPlayingBeforeInterruption &&
+                  !_pausedByDeviceDisconnect) {
                 try {
                   await session.setActive(true);
                 } catch (_) {}
                 await _player.setVolume(1.0);
                 await _player.play();
+              } else if (playDuringCalls && _player.playing) {
+                try {
+                  await session.setActive(true);
+                } catch (_) {}
+                if (!loudnessNormalizationEnabled && _player.volume < 1.0) {
+                  await _player.setVolume(1.0);
+                }
               }
               _wasPlayingBeforeInterruption = false;
               break;
@@ -1229,6 +1241,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       case 'setVolume':
         _player.setVolume(extras!['value'] / 100);
+        break;
+
+      case 'setPlayDuringCalls':
+        final enabled = extras!['enabled'] as bool;
+        await Hive.box("AppPrefs").put("playDuringCalls", enabled);
         break;
 
       case 'shuffleCmd':

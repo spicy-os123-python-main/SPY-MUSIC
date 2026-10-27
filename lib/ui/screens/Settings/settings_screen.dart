@@ -550,6 +550,18 @@ class SettingsScreen extends StatelessWidget {
                                 .toggleStopPlyabackOnSwipeAway),
                       ),
                     ),
+                  if (!isDesktop)
+                    ListTile(
+                      contentPadding: const EdgeInsets.only(left: 5, right: 10),
+                      title: Text("playDuringCallsTitle".tr),
+                      subtitle: Text("playDuringCallsDes".tr,
+                          style: Theme.of(context).textTheme.bodyMedium),
+                      trailing: Obx(
+                        () => CustSwitch(
+                            value: settingsController.playDuringCalls.value,
+                            onChanged: settingsController.togglePlayDuringCalls),
+                      ),
+                    ),
                   GetPlatform.isAndroid
                       ? Obx(
                           () => ListTile(

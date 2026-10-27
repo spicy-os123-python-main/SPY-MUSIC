@@ -1,9 +1,11 @@
+import 'package:get/get.dart';
 import 'package:spymusic/native_bindings/andrid_utils.dart';
 import 'package:jni/jni.dart';
 import '../utils/helper.dart';
 
 class EqualizerService {
   static bool openEqualizer(int sessionId) {
+    if (!GetPlatform.isAndroid) return false;
     try {
       JObject activity = JObject.fromReference(Jni.getCurrentActivity());
       JObject context = JObject.fromReference(Jni.getCachedApplicationContext());
@@ -18,6 +20,7 @@ class EqualizerService {
   }
 
   static void initAudioEffect(int sessionId) {
+    if (!GetPlatform.isAndroid) return;
     try {
       JObject context = JObject.fromReference(Jni.getCachedApplicationContext());
       Equalizer().initAudioEffect(sessionId, context);
@@ -28,6 +31,7 @@ class EqualizerService {
   }
 
   static void endAudioEffect(int sessionId) {
+    if (!GetPlatform.isAndroid) return;
     try {
       JObject context = JObject.fromReference(Jni.getCachedApplicationContext());
       Equalizer().endAudioEffect(sessionId, context);

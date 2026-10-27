@@ -1,0 +1,65 @@
+name: Build SPY MUSIC iOS (.ipa)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'GitHub Release Tag to attach .ipa to'
+        required: false
+        default: 'v1.0.0'
+
+jobs:
+  build-ipa:
+    name: Build iOS IPA for AltStore
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+          cache: true
+
+      - name: Get Flutter Packages
+        run: flutter pub get
+
+      - name: Install CocoaPods Dependencies
+        run: |
+          cd ios
+          pod install --repo-update
+          cd ..
+
+      - name: Build iOS Application (Release, No CodeSign)
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Package into IPA for AltStore / Sideloading
+        run: |
+          mkdir -p output/Payload
+          cp -r build/ios/iphoneos/Runner.app output/Payload/
+          cd output
+          zip -r -y SPY-MUSIC.ipa Payload
+          rm -rf Payload
+          ls -lh SPY-MUSIC.ipa
+          cd ..
+
+      - name: Upload IPA as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spymusic-ipa
+          path: output/SPY-MUSIC.ipa
+          retention-days: 30
+
+      - name: Attach IPA to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.release_tag || 'v1.0.0' }}
+          files: output/SPY-MUSIC.ipa
+          name: "SPY MUSIC v1.0.0"
+          make_latest: true

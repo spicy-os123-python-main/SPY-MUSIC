@@ -48,6 +48,7 @@ class SettingsScreenController extends GetxController {
   final isLinkedWithPiped = false.obs;
   final discordRpcEnabled = true.obs;
   final stopPlyabackOnSwipeAway = false.obs;
+  final playDuringCalls = true.obs;
   final currentAppLanguageCode = "en".obs;
   final downloadLocationPath = "".obs;
   final exportLocationPath = "".obs;
@@ -157,6 +158,7 @@ class SettingsScreenController extends GetxController {
     streamingQuality.value = AudioQuality.values[savedQuality];
     playerUi.value = isDesktop ? 0 : (setBox.get('playerUi') ?? 0);
     backgroundPlayEnabled.value = setBox.get("backgroundPlayEnabled") ?? true;
+    playDuringCalls.value = setBox.get("playDuringCalls") ?? true;
     keepScreenAwake.value =
         setBox.get("keepScreenAwake") ?? GetPlatform.isDesktop ? true : false;
     final downloadPath =
@@ -478,6 +480,13 @@ class SettingsScreenController extends GetxController {
   void toggleStopPlyabackOnSwipeAway(bool val) {
     setBox.put('stopPlyabackOnSwipeAway', val);
     stopPlyabackOnSwipeAway.value = val;
+  }
+
+  void togglePlayDuringCalls(bool val) {
+    setBox.put('playDuringCalls', val);
+    playDuringCalls.value = val;
+    final audioHandler = Get.find<AudioHandler>();
+    audioHandler.customAction('setPlayDuringCalls', {'enabled': val});
   }
 
   Future<void> closeAllDatabases() async {
