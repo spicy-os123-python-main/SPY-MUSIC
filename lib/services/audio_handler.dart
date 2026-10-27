@@ -5,7 +5,6 @@ import 'dart:math';
 
 import 'package:flutter/services.dart';
 
-
 import 'package:hive/hive.dart';
 import 'package:get/get.dart';
 import 'package:just_audio/just_audio.dart';
@@ -108,11 +107,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         handleAudioSessionActivation: true,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
-      minBufferDuration: Duration(seconds: 50),
-      maxBufferDuration: Duration(seconds: 120),
-      bufferForPlaybackDuration: Duration(milliseconds: 50),
-      bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
-    )));
+          minBufferDuration: Duration(seconds: 50),
+          maxBufferDuration: Duration(seconds: 120),
+          bufferForPlaybackDuration: Duration(milliseconds: 50),
+          bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
+        )));
     if (GetPlatform.isAndroid || GetPlatform.isIOS) {
       _initAudioSession();
     }
@@ -123,7 +122,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     });
     _player.playerStateStream.listen((playerState) {
       if (mediaItem.value != null) {
-        DiscordService().updatePresence(mediaItem.value, isPlaying: playerState.playing);
+        DiscordService()
+            .updatePresence(mediaItem.value, isPlaying: playerState.playing);
       }
     });
     _createCacheDir();
@@ -155,14 +155,20 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   Future<void> _initEqualizerFromPrefs() async {
-    if (!GetPlatform.isAndroid || _equalizer == null || _loudnessEnhancer == null) {
+    if (!GetPlatform.isAndroid ||
+        _equalizer == null ||
+        _loudnessEnhancer == null) {
       return;
     }
     try {
       final appPrefsBox = Hive.box("AppPrefs");
-      final eqEnabled = appPrefsBox.get("eq_enabled", defaultValue: false) as bool;
-      final loudnessEnabled = appPrefsBox.get("eq_loudness_enabled", defaultValue: false) as bool;
-      final loudnessGain = (appPrefsBox.get("eq_loudness_gain", defaultValue: 0.0) as num).toDouble();
+      final eqEnabled =
+          appPrefsBox.get("eq_enabled", defaultValue: false) as bool;
+      final loudnessEnabled =
+          appPrefsBox.get("eq_loudness_enabled", defaultValue: false) as bool;
+      final loudnessGain =
+          (appPrefsBox.get("eq_loudness_gain", defaultValue: 0.0) as num)
+              .toDouble();
 
       await _equalizer!.setEnabled(eqEnabled);
       await _loudnessEnhancer!.setEnabled(loudnessEnabled);
@@ -259,7 +265,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _player.androidAudioSessionIdStream.listen((int? id) {
       if (id != null) {
         try {
-          final isAppEq = Hive.box("AppPrefs").get("eq_enabled", defaultValue: false) as bool;
+          final isAppEq = Hive.box("AppPrefs")
+              .get("eq_enabled", defaultValue: false) as bool;
           if (!isAppEq) {
             EqualizerService.initAudioEffect(id);
           } else {
@@ -334,7 +341,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       if (_songErrorRetryCount < 2) {
         _songErrorRetryCount++;
-        printINFO("Retrying playback for $currentId (attempt $_songErrorRetryCount of 2)...");
+        printINFO(
+            "Retrying playback for $currentId (attempt $_songErrorRetryCount of 2)...");
         if (isPlayingUsingLockCachingSource &&
             e.toString().contains("Connection closed while receiving data")) {
           Duration curPos = _player.position;
@@ -342,9 +350,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           await _player.play();
           return;
         }
-        customAction("playByIndex", {'index': currentIndex ?? 0, 'newUrl': true});
+        customAction(
+            "playByIndex", {'index': currentIndex ?? 0, 'newUrl': true});
       } else {
-        printERROR("Playback failed after $_songErrorRetryCount retries for $currentId: $e");
+        printERROR(
+            "Playback failed after $_songErrorRetryCount retries for $currentId: $e");
         _songErrorRetryCount = 0;
         isSongLoading = false;
         await _player.stop();
@@ -460,7 +470,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       url = (songJson['url'] ?? '') as String;
     }
 
-    final isLocalFile = !url.startsWith('http://') && !url.startsWith('https://');
+    final isLocalFile =
+        !url.startsWith('http://') && !url.startsWith('https://');
     if (isLocalFile && url.isNotEmpty) {
       final cleanPath = url.replaceFirst('file://', '');
       final file = File(cleanPath);
@@ -483,7 +494,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         url.contains('sndcdn') ||
         mediaItem.id.startsWith("sc_") ||
         (mediaItem.extras?['isSoundCloud'] == true)) {
-      printINFO("Playing direct stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
+      printINFO(
+          "Playing direct stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
       isPlayingUsingLockCachingSource = false;
       return AudioSource.uri(
         Uri.parse(url),
@@ -502,7 +514,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       final size = (mediaItem.extras?['size'] as int?) ?? 0;
       final codec = (mediaItem.extras?['codec'] as String?) ?? 'mp4a';
       final contentType = codec == 'opus' ? 'audio/webm' : 'audio/mp4';
-      printINFO("Playing YouTube stream via ChunkedStreamAudioSource ($contentType, size: $size bytes)");
+      printINFO(
+          "Playing YouTube stream via ChunkedStreamAudioSource ($contentType, size: $size bytes)");
       isPlayingUsingLockCachingSource = false;
       return ChunkedStreamAudioSource(
         url: url,
@@ -526,6 +539,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         (Get.find<SettingsScreenController>().cacheSongs.isTrue &&
             url.contains("http") &&
             !url.contains('googlevideo.com'))) {
+      final cacheDir = Directory("$_cacheDir/cachedSongs");
+      if (!cacheDir.existsSync()) {
+        try {
+          cacheDir.createSync(recursive: true);
+        } catch (_) {}
+      }
       final cacheFile = File("$_cacheDir/cachedSongs/${mediaItem.id}.mp3");
       if (cacheFile.existsSync() && cacheFile.lengthSync() < 1024) {
         try {
@@ -543,7 +562,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
     printINFO("Playing Using AudioSource.uri: $url");
     isPlayingUsingLockCachingSource = false;
-    final uri = isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
+    final uri =
+        isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
     return AudioSource.uri(
       uri,
       tag: mediaItem,
@@ -695,9 +715,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   @override
-  Future<dynamic> customAction(String name, [Map<String, dynamic>? extras]) async {
+  Future<dynamic> customAction(String name,
+      [Map<String, dynamic>? extras]) async {
     switch (name) {
-
       case 'dispose':
         await _player.dispose();
         super.stop();
@@ -713,6 +733,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         try {
           await _player.stop();
         } catch (_) {}
+        await _createCacheDir();
         playbackState.add(playbackState.value.copyWith(
           processingState: AudioProcessingState.idle,
           playing: false,
@@ -750,7 +771,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             currentSongUrl = null;
             isSongLoading = false;
             try {
-              Get.find<PlayerController>().notifyPlayError(streamInfo.statusMSG);
+              Get.find<PlayerController>()
+                  .notifyPlayError(streamInfo.statusMSG);
             } catch (_) {}
             playbackState.add(playbackState.value.copyWith(
                 processingState: AudioProcessingState.error,
@@ -760,7 +782,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
           final streamAudioUrl = streamInfo.audio?.url ?? '';
           currentSongUrl = streamAudioUrl;
-          final updatedExtras = Map<String, dynamic>.from(currentSong.extras ?? {});
+          final updatedExtras =
+              Map<String, dynamic>.from(currentSong.extras ?? {});
           updatedExtras['url'] = streamAudioUrl;
           updatedExtras['size'] = streamInfo.audio?.size ?? 0;
           updatedExtras['codec'] = streamInfo.audio?.audioCodec.name ?? 'mp4a';
@@ -775,7 +798,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           await _playList.add(_createAudioSource(playableSong)).timeout(
             const Duration(seconds: 15),
             onTimeout: () {
-              throw TimeoutException("Playback loading timed out after 15 seconds");
+              throw TimeoutException(
+                  "Playback loading timed out after 15 seconds");
             },
           );
 
@@ -869,7 +893,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             currentSongUrl = null;
             isSongLoading = false;
             try {
-              Get.find<PlayerController>().notifyPlayError(streamInfo.statusMSG);
+              Get.find<PlayerController>()
+                  .notifyPlayError(streamInfo.statusMSG);
             } catch (_) {}
             playbackState.add(playbackState.value
                 .copyWith(processingState: AudioProcessingState.error));
@@ -889,7 +914,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           await _playList.add(_createAudioSource(playableSong)).timeout(
             const Duration(seconds: 15),
             onTimeout: () {
-              throw TimeoutException("Playback loading timed out after 15 seconds");
+              throw TimeoutException(
+                  "Playback loading timed out after 15 seconds");
             },
           );
           isSongLoading = false;
@@ -1003,19 +1029,23 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         try {
           final params = await _equalizer!.parameters;
           final appPrefsBox = Hive.box("AppPrefs");
-          final savedPreset = appPrefsBox.get("eq_preset", defaultValue: "Normal");
+          final savedPreset =
+              appPrefsBox.get("eq_preset", defaultValue: "Normal");
           return {
             'supported': true,
             'enabled': _equalizer!.enabled,
             'minDecibels': params.minDecibels,
             'maxDecibels': params.maxDecibels,
-            'bands': params.bands.map((b) => {
-              'index': b.index,
-              'centerFrequency': b.centerFrequency,
-              'gain': b.gain,
-            }).toList(),
+            'bands': params.bands
+                .map((b) => {
+                      'index': b.index,
+                      'centerFrequency': b.centerFrequency,
+                      'gain': b.gain,
+                    })
+                .toList(),
             'loudnessEnabled': _loudnessEnhancer?.enabled ?? false,
-            'loudnessGain': ((_loudnessEnhancer?.targetGain ?? 0.0) * 10.0).clamp(0.0, 8.0),
+            'loudnessGain':
+                ((_loudnessEnhancer?.targetGain ?? 0.0) * 10.0).clamp(0.0, 8.0),
             'preset': savedPreset,
           };
         } catch (e) {
@@ -1050,7 +1080,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           if (index >= 0 && index < params.bands.length) {
             await params.bands[index].setGain(gain);
             final appPrefsBox = Hive.box("AppPrefs");
-            Map savedBands = Map.from(appPrefsBox.get("eq_band_gains", defaultValue: {}) ?? {});
+            Map savedBands = Map.from(
+                appPrefsBox.get("eq_band_gains", defaultValue: {}) ?? {});
             savedBands[index] = gain;
             await appPrefsBox.put("eq_band_gains", savedBands);
           }
@@ -1080,8 +1111,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           await session.configure(const AudioSessionConfiguration.music());
           await session.setActive(true);
           await _player.setVolume(1.0);
+          await _createCacheDir();
           final sessionId = _player.androidAudioSessionId;
-          final isAppEq = Hive.box("AppPrefs").get("eq_enabled", defaultValue: false) as bool;
+          final isAppEq = Hive.box("AppPrefs")
+              .get("eq_enabled", defaultValue: false) as bool;
           if (sessionId != null) {
             if (isAppEq) {
               EqualizerService.endAudioEffect(sessionId);
@@ -1089,7 +1122,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               EqualizerService.initAudioEffect(sessionId);
             }
           }
-          printINFO("Audio engine reset successfully: volume 1.0, session active");
+          printINFO(
+              "Audio engine reset successfully: volume 1.0, session active, cacheDir verified");
         } catch (e) {
           printERROR("resetAudioEngine error: $e");
         }
@@ -1097,7 +1131,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       case 'applyEqualizerPreset':
         final presetName = extras!['preset'] as String;
-        final gains = List<double>.from((extras['gains'] as List).map((e) => (e as num).toDouble()));
+        final gains = List<double>.from(
+            (extras['gains'] as List).map((e) => (e as num).toDouble()));
         if (_equalizer != null) {
           final params = await _equalizer!.parameters;
           final appPrefsBox = Hive.box("AppPrefs");
@@ -1234,12 +1269,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     return super.stop();
   }
 
-
   void _applyMatchedDuration(MediaItem? song, MediaItem matched) {
     if (song == null) return;
     final missing = song.duration == null || song.duration!.inSeconds == 0;
     final matchedDuration = matched.duration;
-    if (!missing || matchedDuration == null || matchedDuration <= Duration.zero) {
+    if (!missing ||
+        matchedDuration == null ||
+        matchedDuration <= Duration.zero) {
       return;
     }
     final updated = song.copyWith(duration: matchedDuration);
@@ -1334,8 +1370,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       final transcodingUrl = targetSong?.extras?['transcodingUrl'] as String?;
       final trackAuth = targetSong?.extras?['track_authorization'] as String?;
       final scStreamUrl = await SoundCloudService.resolveStreamUrl(songId,
-          transcodingUrl: transcodingUrl,
-          trackAuthorization: trackAuth);
+          transcodingUrl: transcodingUrl, trackAuthorization: trackAuth);
 
       if (scStreamUrl != null && scStreamUrl.isNotEmpty) {
         int durationMs = targetSong?.duration?.inMilliseconds ?? 0;
@@ -1347,8 +1382,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             (targetSong?.duration == null ||
                 targetSong?.duration == Duration.zero ||
                 targetSong?.duration!.inSeconds == 0)) {
-          final updatedSong =
-              targetSong!.copyWith(duration: Duration(milliseconds: durationMs));
+          final updatedSong = targetSong!
+              .copyWith(duration: Duration(milliseconds: durationMs));
           if (currentIndex != null &&
               currentIndex! < queue.value.length &&
               queue.value[currentIndex!].id == targetSong.id) {
@@ -1376,19 +1411,24 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       // Fallback: If SoundCloud stream is unavailable (e.g. DRM encrypted official release), fall back to YouTube
       if (allowFallback) {
-        printINFO("SoundCloud track $songId stream not available, trying YouTube fallback...");
-        final query = '${targetSong?.title ?? ''} ${targetSong?.artist ?? ''}'.trim();
+        printINFO(
+            "SoundCloud track $songId stream not available, trying YouTube fallback...");
+        final query =
+            '${targetSong?.title ?? ''} ${targetSong?.artist ?? ''}'.trim();
         final ytMatch = await PlatformSearchService.resolveMatchedTrack(
-            songId, query, originalTrack: targetSong, skipSoundCloud: true);
+            songId, query,
+            originalTrack: targetSong, skipSoundCloud: true);
         if (ytMatch != null) {
-          return checkNGetUrl(ytMatch.id, targetMediaItem: targetSong, allowFallback: false);
+          return checkNGetUrl(ytMatch.id,
+              targetMediaItem: targetSong, allowFallback: false);
         }
       }
 
       SoundCloudService.invalidateStreamCache(songId);
       return HMStreamingData(
         playable: false,
-        statusMSG: "SoundCloud-Stream für '${targetSong?.title ?? songId}' konnte nicht geladen werden.",
+        statusMSG:
+            "SoundCloud-Stream für '${targetSong?.title ?? songId}' konnte nicht geladen werden.",
       );
     }
 
@@ -1459,142 +1499,157 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       PlatformSearchService.invalidateMatch(songId);
       return HMStreamingData(
         playable: false,
-        statusMSG: "Kein passender Stream für '${targetSong?.title ?? songId}' auf SoundCloud/YouTube gefunden.",
+        statusMSG:
+            "Kein passender Stream für '${targetSong?.title ?? songId}' auf SoundCloud/YouTube gefunden.",
       );
     }
 
     final songDownloadsBox = Hive.box("SongDownloads");
-    if (!offlineReplacementUrl &&
-        (await Hive.openBox("SongsCache")).containsKey(songId)) {
-      printINFO("Got Song from cachedbox ($songId)");
-      // if contains stream Info
-      final streamInfo = Hive.box("SongsCache").get(songId)["streamInfo"];
-      Audio? cacheAudioPlaceholder;
-      if (streamInfo != null && streamInfo.isNotEmpty) {
-        streamInfo[1]['url'] = "file://$_cacheDir/cachedSongs/$songId.mp3";
-        cacheAudioPlaceholder = Audio.fromJson(streamInfo[1]);
-      } else {
-        cacheAudioPlaceholder = Audio(
-            audioCodec: Codec.mp4a,
-            bitrate: 0,
-            loudnessDb: 0,
-            duration: 0,
-            size: 0,
-            url: "file://$_cacheDir/cachedSongs/$songId.mp3",
-            itag: 0);
-      }
+    final songsCacheBox = await Hive.openBox("SongsCache");
+    final cachedFilePath = "$_cacheDir/cachedSongs/$songId.mp3";
+    final cachedFile = File(cachedFilePath);
 
-      return HMStreamingData(
-          playable: true,
-          statusMSG: "OK",
-          lowQualityAudio: cacheAudioPlaceholder,
-          highQualityAudio: cacheAudioPlaceholder);
-    } else if (!offlineReplacementUrl && songDownloadsBox.containsKey(songId)) {
+    if (!offlineReplacementUrl && songsCacheBox.containsKey(songId)) {
+      if (cachedFile.existsSync() && cachedFile.lengthSync() > 1024) {
+        printINFO("Got Song from cachedbox ($songId) with verified file");
+        final streamInfo = songsCacheBox.get(songId)["streamInfo"];
+        Audio? cacheAudioPlaceholder;
+        if (streamInfo != null && streamInfo.isNotEmpty) {
+          streamInfo[1]['url'] = "file://$cachedFilePath";
+          cacheAudioPlaceholder = Audio.fromJson(streamInfo[1]);
+        } else {
+          cacheAudioPlaceholder = Audio(
+              audioCodec: Codec.mp4a,
+              bitrate: 0,
+              loudnessDb: 0,
+              duration: 0,
+              size: 0,
+              url: "file://$cachedFilePath",
+              itag: 0);
+        }
+
+        return HMStreamingData(
+            playable: true,
+            statusMSG: "OK",
+            lowQualityAudio: cacheAudioPlaceholder,
+            highQualityAudio: cacheAudioPlaceholder);
+      } else {
+        // Cache file was deleted (e.g. clear cache) or is empty -> Evict stale DB entry so fresh stream is fetched
+        printINFO(
+            "Cached song file missing on disk for ($songId). Evicting from SongsCache and fetching fresh stream.");
+        await songsCacheBox.delete(songId);
+      }
+    }
+
+    if (!offlineReplacementUrl && songDownloadsBox.containsKey(songId)) {
       final song = songDownloadsBox.get(songId);
       final streamInfoJson = song["streamInfo"];
       Audio? audio;
-      final path = song['url'];
-      if (streamInfoJson != null && streamInfoJson.isNotEmpty) {
-        audio = Audio.fromJson(streamInfoJson[1]);
+      final rawPath = song['url']?.toString() ?? '';
+      final filePath = rawPath.replaceFirst("file://", "");
+      final dlFile = File(filePath);
+
+      if (dlFile.existsSync() && dlFile.lengthSync() > 1024) {
+        if (streamInfoJson != null && streamInfoJson.isNotEmpty) {
+          audio = Audio.fromJson(streamInfoJson[1]);
+        } else {
+          audio = Audio(
+              itag: 140,
+              audioCodec: Codec.mp4a,
+              bitrate: 0,
+              duration: 0,
+              loudnessDb: 0,
+              url: rawPath,
+              size: 0);
+        }
+
+        final streamInfo = HMStreamingData(
+            playable: true,
+            statusMSG: "OK",
+            highQualityAudio: audio,
+            lowQualityAudio: audio);
+        return streamInfo;
       } else {
-        audio = Audio(
-            itag: 140,
-            audioCodec: Codec.mp4a,
-            bitrate: 0,
-            duration: 0,
-            loudnessDb: 0,
-            url: path,
-            size: 0);
+        printINFO(
+            "Downloaded song file missing for ($songId), fetching fresh network stream instead");
       }
+    }
+    //check if song stream url is cached and allocate url accordingly
+    final songsUrlCacheBox = Hive.box("SongsUrlCache");
+    final qualityIndex =
+        (Hive.box('AppPrefs').get('streamingQuality', defaultValue: 0) as int)
+            .clamp(0, 2);
+    HMStreamingData? streamInfo;
 
-      final streamInfo = HMStreamingData(
-          playable: true,
-          statusMSG: "OK",
-          highQualityAudio: audio,
-          lowQualityAudio: audio);
-
-      if (path != null && path.toString().isNotEmpty) {
-        final filePath = path.toString().replaceFirst("file://", "");
-        if (File(filePath).existsSync()) {
-          return streamInfo;
-        }
+    bool isAllInOne = false;
+    try {
+      if (Get.isRegistered<PlatformSelectorController>()) {
+        isAllInOne =
+            Get.find<PlatformSelectorController>().selectedSource.value ==
+                MusicSource.all;
       }
-      // In case file is not found in storage, song will be played online seamlessly
-      printINFO("Downloaded file not found at $path, playing $songId online");
-      return checkNGetUrl(songId, offlineReplacementUrl: true);
-    } else {
-      //check if song stream url is cached and allocate url accordingly
-      final songsUrlCacheBox = Hive.box("SongsUrlCache");
-      final qualityIndex =
-          (Hive.box('AppPrefs').get('streamingQuality', defaultValue: 0) as int)
-              .clamp(0, 2);
-      HMStreamingData? streamInfo;
+    } catch (_) {}
 
-      bool isAllInOne = false;
+    // Fallback to SoundCloud is ONLY allowed in All-In-One mode or when matching Spotify/Amazon tracks.
+    // For YouTube tracks in YouTube mode, YouTube = YouTube, errors must be reported directly!
+    final bool shouldFallbackToSoundCloud = allowFallback && isAllInOne;
+
+    // If YouTube failed previously for this song, attempt SoundCloud fallback immediately (only in All-In-One mode)
+    if (_failedYouTubeSongs.contains(songId) && shouldFallbackToSoundCloud) {
+      printINFO(
+          "Song $songId previously failed on YouTube, attempting direct SoundCloud fallback (All-In-One mode)...");
+      final fallback = await _trySoundCloudFallback(songId, targetSong);
+      if (fallback != null && fallback.playable) {
+        fallback.setQualityIndex(qualityIndex);
+        return fallback;
+      }
+    }
+
+    if (songsUrlCacheBox.containsKey(songId) &&
+        !generateNewUrl &&
+        !_failedYouTubeSongs.contains(songId)) {
+      final streamInfoJson = songsUrlCacheBox.get(songId);
+      if (streamInfoJson.runtimeType.toString().contains("Map") &&
+          !isExpired(url: (streamInfoJson['lowQualityAudio']['url']))) {
+        printINFO("Got cached Url ($songId)");
+        streamInfo = HMStreamingData.fromJson(streamInfoJson);
+      }
+    }
+
+    if (streamInfo == null || !streamInfo.playable) {
+      final token = RootIsolateToken.instance;
+      Map<String, dynamic> streamInfoJson;
       try {
-        if (Get.isRegistered<PlatformSelectorController>()) {
-          isAllInOne = Get.find<PlatformSelectorController>().selectedSource.value == MusicSource.all;
-        }
-      } catch (_) {}
-
-      // Fallback to SoundCloud is ONLY allowed in All-In-One mode or when matching Spotify/Amazon tracks.
-      // For YouTube tracks in YouTube mode, YouTube = YouTube, errors must be reported directly!
-      final bool shouldFallbackToSoundCloud = allowFallback && isAllInOne;
-
-      // If YouTube failed previously for this song, attempt SoundCloud fallback immediately (only in All-In-One mode)
-      if (_failedYouTubeSongs.contains(songId) && shouldFallbackToSoundCloud) {
-        printINFO("Song $songId previously failed on YouTube, attempting direct SoundCloud fallback (All-In-One mode)...");
+        streamInfoJson = await Isolate.run(
+          () => getStreamInfo(songId, token),
+        ).timeout(const Duration(seconds: 18));
+      } catch (e) {
+        printERROR("YouTube stream lookup failed for $songId: $e");
+        streamInfoJson = {"playable": false, "statusMSG": e.toString()};
+      }
+      streamInfo = HMStreamingData.fromJson(streamInfoJson);
+      if (streamInfo.playable) {
+        songsUrlCacheBox.put(songId, streamInfoJson);
+      } else if (!shouldFallbackToSoundCloud) {
+        printERROR("YouTube failed for $songId: ${streamInfo.statusMSG}");
+      } else {
+        printINFO(
+            "YouTube failed for $songId (${streamInfo.statusMSG}), trying SoundCloud fallback (All-In-One mode)");
         final fallback = await _trySoundCloudFallback(songId, targetSong);
         if (fallback != null && fallback.playable) {
-          fallback.setQualityIndex(qualityIndex);
-          return fallback;
+          streamInfo = fallback;
         }
       }
-
-      if (songsUrlCacheBox.containsKey(songId) && !generateNewUrl && !_failedYouTubeSongs.contains(songId)) {
-        final streamInfoJson = songsUrlCacheBox.get(songId);
-        if (streamInfoJson.runtimeType.toString().contains("Map") &&
-            !isExpired(url: (streamInfoJson['lowQualityAudio']['url']))) {
-          printINFO("Got cached Url ($songId)");
-          streamInfo = HMStreamingData.fromJson(streamInfoJson);
-        }
-      }
-
-      if (streamInfo == null || !streamInfo.playable) {
-        final token = RootIsolateToken.instance;
-        Map<String, dynamic> streamInfoJson;
-        try {
-          streamInfoJson = await Isolate.run(
-            () => getStreamInfo(songId, token),
-          ).timeout(const Duration(seconds: 18));
-        } catch (e) {
-          printERROR("YouTube stream lookup failed for $songId: $e");
-          streamInfoJson = {"playable": false, "statusMSG": e.toString()};
-        }
-        streamInfo = HMStreamingData.fromJson(streamInfoJson);
-        if (streamInfo.playable) {
-          songsUrlCacheBox.put(songId, streamInfoJson);
-        } else if (!shouldFallbackToSoundCloud) {
-          printERROR("YouTube failed for $songId: ${streamInfo.statusMSG}");
-        } else {
-          printINFO("YouTube failed for $songId (${streamInfo.statusMSG}), trying SoundCloud fallback (All-In-One mode)");
-          final fallback = await _trySoundCloudFallback(songId, targetSong);
-          if (fallback != null && fallback.playable) {
-            streamInfo = fallback;
-          }
-        }
-      }
-
-      streamInfo.setQualityIndex(qualityIndex);
-      return streamInfo;
     }
+
+    streamInfo.setQualityIndex(qualityIndex);
+    return streamInfo;
   }
 }
 
 class UrlError extends Error {
   String message() => 'Unable to fetch url';
 }
-
 
 // for Android Auto
 class MediaLibrary {

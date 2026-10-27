@@ -133,8 +133,7 @@ class SettingsScreenController extends GetxController {
         : appLang == "zh_Hans"
             ? "zh-CN"
             : appLang;
-    isBottomNavBarEnabled.value =
-        setBox.get("isBottomNavBarEnabled") ?? true;
+    isBottomNavBarEnabled.value = setBox.get("isBottomNavBarEnabled") ?? true;
     noOfHomeScreenContent.value = setBox.get("noOfHomeScreenContent") ?? 3;
     isTransitionAnimationDisabled.value =
         setBox.get("isTransitionAnimationDisabled") ?? false;
@@ -153,7 +152,8 @@ class SettingsScreenController extends GetxController {
     final savedDataSaver = setBox.get('dataSaverMode') ?? 0;
     dataSaverMode.value =
         DataSaverMode.values[(savedDataSaver as int).clamp(0, 2)];
-    final savedQuality = (setBox.get('streamingQuality', defaultValue: 0) as int).clamp(0, 2);
+    final savedQuality =
+        (setBox.get('streamingQuality', defaultValue: 0) as int).clamp(0, 2);
     streamingQuality.value = AudioQuality.values[savedQuality];
     playerUi.value = isDesktop ? 0 : (setBox.get('playerUi') ?? 0);
     backgroundPlayEnabled.value = setBox.get("backgroundPlayEnabled") ?? true;
@@ -320,6 +320,7 @@ class SettingsScreenController extends GetxController {
       final justAudioCache = Directory("${tempDir.path}/just_audio_cache");
       if (await justAudioCache.exists()) {
         await justAudioCache.delete(recursive: true);
+        await justAudioCache.create(recursive: true);
       }
       final entries = tempDir.listSync(followLinks: false);
       for (final entry in entries) {
@@ -336,17 +337,15 @@ class SettingsScreenController extends GetxController {
       printINFO("Error clearing audio temp cache: $e");
     }
 
-    // 3. Clear Hive URL and cache boxes so stale stream URLs are evicted
+    // 3. Clear Hive URL and cache boxes cleanly so stale stream URLs and local paths are evicted
     try {
-      if (Hive.isBoxOpen("SongsUrlCache")) {
-        await Hive.box("SongsUrlCache").clear();
-      }
+      final urlBox = await Hive.openBox("SongsUrlCache");
+      await urlBox.clear();
     } catch (_) {}
 
     try {
-      if (Hive.isBoxOpen("SongsCache")) {
-        await Hive.box("SongsCache").clear();
-      }
+      final songsCacheBox = await Hive.openBox("SongsCache");
+      await songsCacheBox.clear();
     } catch (_) {}
 
     // 4. Invalidate search match caches
@@ -354,10 +353,11 @@ class SettingsScreenController extends GetxController {
       PlatformSearchService.clearAllCache();
     } catch (_) {}
 
-    // 5. Reset audio player / loading state if stuck
+    // 5. Reset audio player / loading state & ensure cache directory is recreated in AudioHandler
     try {
       final audioHandler = Get.find<AudioHandler>();
       await audioHandler.customAction("resetLoadingState");
+      await audioHandler.customAction("resetAudioEngine");
     } catch (_) {}
   }
 
@@ -435,16 +435,15 @@ class SettingsScreenController extends GetxController {
     setBox.put('keepScreenAwake', val);
     keepScreenAwake.value = val;
     try {
-        if (val) {
-          // enable wakelock immediately if music is playing
-          if (Get.find<PlayerController>().buttonState.value ==
-              PlayButtonState.playing) {
-            WakelockPlus.enable();
-          }
-        } else {
-          WakelockPlus.disable();
+      if (val) {
+        // enable wakelock immediately if music is playing
+        if (Get.find<PlayerController>().buttonState.value ==
+            PlayButtonState.playing) {
+          WakelockPlus.enable();
         }
-     
+      } else {
+        WakelockPlus.disable();
+      }
     } catch (e) {
       // ignore if player/controller not available
     }
