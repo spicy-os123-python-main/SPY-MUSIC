@@ -113,12 +113,12 @@ class SongInfoBottomSheet extends StatelessWidget {
                   size: 20,
                 ),
               ),
-              title: const Text(
-                "Equalizer & Bass-Boost",
-                style: TextStyle(fontWeight: FontWeight.bold),
+              title: Text(
+                "equalizerSheetTitle".tr,
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               subtitle: Text(
-                "In-App Equalizer & Lautstärke / Bass anpassen",
+                "equalizerSheetSub".tr,
                 style: TextStyle(
                   color: Theme.of(context)
                           .textTheme

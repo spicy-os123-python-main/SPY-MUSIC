@@ -19,21 +19,58 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
     playerController.fetchEqualizerData();
   }
 
-  static const Map<String, List<double>> _presets = {
-    "Normal": [0.0, 0.0, 0.0, 0.0, 0.0],
-    "🔥 Fetter Bass Boost": [10.5, 6.0, -1.0, 1.5, 2.5],
-    "🌊 Deep Subwoofer": [11.5, 3.5, -1.5, 0.5, 1.0],
-    "⚡ Punchy Kick": [4.0, 7.5, 0.0, 2.0, 3.0],
-    "Tiefbass": [7.0, 4.0, -0.5, 0.5, 1.0],
-    "Bass & Höhen": [6.5, 3.5, -1.0, 2.5, 4.5],
-    "Hip-Hop & Trap": [8.5, 4.5, 0.0, 2.0, 3.0],
-    "Elektronisch / EDM": [7.0, 4.0, -1.0, 3.0, 4.5],
-    "Rock & Metal": [4.5, 2.5, -0.5, 2.5, 4.0],
-    "Pop": [2.5, 3.5, 2.5, 2.0, 1.5],
-    "Klar & Stimmen": [-1.0, 0.5, 3.5, 3.0, 2.0],
-    "Akustik & Sanft": [2.0, 1.0, 1.5, 2.5, 2.0],
-    "Maximaler Druck": [6.0, 4.0, 1.0, 2.5, 3.5],
-  };
+  static const List<Map<String, dynamic>> _presets = [
+    {
+      "id": "Normal",
+      "nameKey": "eqPresetNormal",
+      "gains": [0.0, 0.0, 0.0, 0.0, 0.0],
+    },
+    {
+      "id": "Bass Boost",
+      "nameKey": "eqPresetBassBoost",
+      "gains": [7.0, 4.0, -0.5, 0.5, 1.0],
+    },
+    {
+      "id": "Bass & Treble",
+      "nameKey": "eqPresetBassTreble",
+      "gains": [6.5, 3.5, -1.0, 2.5, 4.5],
+    },
+    {
+      "id": "Hip-Hop & Trap",
+      "nameKey": "eqPresetHipHop",
+      "gains": [8.5, 4.5, 0.0, 2.0, 3.0],
+    },
+    {
+      "id": "Electronic / EDM",
+      "nameKey": "eqPresetElectronic",
+      "gains": [7.0, 4.0, -1.0, 3.0, 4.5],
+    },
+    {
+      "id": "Rock & Metal",
+      "nameKey": "eqPresetRock",
+      "gains": [4.5, 2.5, -0.5, 2.5, 4.0],
+    },
+    {
+      "id": "Pop",
+      "nameKey": "eqPresetPop",
+      "gains": [2.5, 3.5, 2.5, 2.0, 1.5],
+    },
+    {
+      "id": "Vocal & Clarity",
+      "nameKey": "eqPresetVocal",
+      "gains": [-1.0, 0.5, 3.5, 3.0, 2.0],
+    },
+    {
+      "id": "Acoustic & Soft",
+      "nameKey": "eqPresetAcoustic",
+      "gains": [2.0, 1.0, 1.5, 2.5, 2.0],
+    },
+    {
+      "id": "Maximum Impact",
+      "nameKey": "eqPresetMaxImpact",
+      "gains": [6.0, 4.0, 1.0, 2.5, 3.5],
+    },
+  ];
 
   String _formatFreq(double freq) {
     if (freq >= 1000) {
@@ -62,42 +99,6 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
   void _setPunchyBass(double val) {
     if (playerController.eqBands.length >= 2) {
       playerController.setEqBandGain(1, val);
-    }
-  }
-
-  void _applyBassPresetMode(String mode) {
-    if (playerController.eqBands.isEmpty) return;
-    switch (mode) {
-      case "linear":
-        playerController.setEqBandGain(0, 0.0);
-        if (playerController.eqBands.length >= 2) {
-          playerController.setEqBandGain(1, 0.0);
-        }
-        break;
-      case "punchy":
-        playerController.setEqBandGain(0, 3.5);
-        if (playerController.eqBands.length >= 2) {
-          playerController.setEqBandGain(1, 7.5);
-        }
-        break;
-      case "deep":
-        playerController.setEqBandGain(0, 10.0);
-        if (playerController.eqBands.length >= 2) {
-          playerController.setEqBandGain(1, 3.5);
-        }
-        if (playerController.eqBands.length >= 3) {
-          playerController.setEqBandGain(2, -1.0);
-        }
-        break;
-      case "ultra":
-        playerController.setEqBandGain(0, 12.0);
-        if (playerController.eqBands.length >= 2) {
-          playerController.setEqBandGain(1, 6.5);
-        }
-        if (playerController.eqBands.length >= 3) {
-          playerController.setEqBandGain(2, -1.5);
-        }
-        break;
     }
   }
 
@@ -174,16 +175,16 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "SPY Equalizer & Sound",
-                          style: TextStyle(
+                        Text(
+                          "spyEqualizerTitle".tr,
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.3,
                           ),
                         ),
                         Text(
-                          "In-App Sound & Frequenzen",
+                          "inAppSoundFreq".tr,
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.white.withOpacity(0.55),
@@ -238,8 +239,8 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                       Expanded(
                         child: Text(
                           isEqActive
-                              ? "SPY Equalizer aktiv • System-Equalizer ist entkoppelt (keine Verzerrung)"
-                              : "System-Equalizer aktiv • Der Sound wird vom Handy gesteuert",
+                              ? "eqActiveBadge".tr
+                              : "systemEqActiveBadge".tr,
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w500,
@@ -281,20 +282,20 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                       size: 24,
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "Audio zu leise nach Anruf?",
-                            style: TextStyle(
+                            "audioTooQuietTitle".tr,
+                            style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           Text(
-                            "Stellt 100% Lautstärke & Medienfokus wieder her",
-                            style: TextStyle(
+                            "audioTooQuietSub".tr,
+                            style: const TextStyle(
                               fontSize: 11,
                               color: Colors.white60,
                             ),
@@ -319,16 +320,16 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             snackbar(
                               context,
-                              "✅ Audio-Engine repariert & 100% Lautstärke wiederhergestellt!",
+                              "audioRepairedSnack".tr,
                               size: SanckBarSize.MEDIUM,
                             ),
                           );
                         }
                       },
                       icon: const Icon(Icons.refresh_rounded, size: 16),
-                      label: const Text(
-                        "Reparieren",
-                        style: TextStyle(
+                      label: Text(
+                        "repair".tr,
+                        style: const TextStyle(
                             fontWeight: FontWeight.w700, fontSize: 12),
                       ),
                     ),
@@ -374,21 +375,21 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Bass-Engine: Deep Sub & Punchy Kick",
-                                style: TextStyle(
+                                "bassEngineTitle".tr,
+                                style: const TextStyle(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 14,
                                   letterSpacing: 0.2,
                                 ),
                               ),
                               Text(
-                                "Separate Regler für Tiefbass-Vibration & Kick-Attack",
-                                style: TextStyle(
+                                "bassEngineSub".tr,
+                                style: const TextStyle(
                                   fontSize: 11,
                                   color: Colors.white60,
                                 ),
@@ -397,44 +398,6 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Quick Bass Mode Buttons
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _buildBassModeButton(
-                            title: "Neutral",
-                            icon: Icons.horizontal_rule_rounded,
-                            color: Colors.white70,
-                            onTap: () => _applyBassPresetMode("linear"),
-                          ),
-                          const SizedBox(width: 8),
-                          _buildBassModeButton(
-                            title: "⚡ Punchy Kick",
-                            icon: Icons.flash_on_rounded,
-                            color: const Color(0xFFFFA000),
-                            onTap: () => _applyBassPresetMode("punchy"),
-                          ),
-                          const SizedBox(width: 8),
-                          _buildBassModeButton(
-                            title: "🌊 Deep Sub",
-                            icon: Icons.waves_rounded,
-                            color: const Color(0xFF00D2FF),
-                            onTap: () => _applyBassPresetMode("deep"),
-                          ),
-                          const SizedBox(width: 8),
-                          _buildBassModeButton(
-                            title: "🔥 Fetter Bass",
-                            icon: Icons.whatshot_rounded,
-                            color: const Color(0xFFFF0055),
-                            isHighlighted: true,
-                            onTap: () => _applyBassPresetMode("ultra"),
-                          ),
-                        ],
-                      ),
                     ),
                     const SizedBox(height: 16),
 
@@ -447,20 +410,20 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                           size: 18,
                         ),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Deep Sub-Bass (Tiefbass ~60 Hz)",
-                                style: TextStyle(
+                                "deepSubTitle".tr,
+                                style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 12.5,
                                 ),
                               ),
                               Text(
-                                "Subwoofer-Vibration & rollender Druck",
-                                style: TextStyle(
+                                "deepSubSub".tr,
+                                style: const TextStyle(
                                   fontSize: 10,
                                   color: Colors.white54,
                                 ),
@@ -531,15 +494,15 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Aus (0 dB)",
+                        Text("offDb".tr,
                             style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("Subwoofer (+6 dB)",
+                        Text("subwooferDb".tr,
                             style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("Extrem (+12 dB)",
+                        Text("extremeDb".tr,
                             style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
@@ -558,20 +521,20 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                           size: 18,
                         ),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Punchy Kick-Bass (Mid-Bass ~230 Hz)",
-                                style: TextStyle(
+                                "punchyKickTitle".tr,
+                                style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 12.5,
                                 ),
                               ),
                               Text(
-                                "Knackiger Beat-Impact & Schlagzeug-Druck",
-                                style: TextStyle(
+                                "punchyKickSub".tr,
+                                style: const TextStyle(
                                   fontSize: 10,
                                   color: Colors.white54,
                                 ),
@@ -642,15 +605,15 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Neutral (0 dB)",
+                        Text("neutralDb".tr,
                             style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("Knackig (+5 dB)",
+                        Text("punchyDb".tr,
                             style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("Maximal (+10 dB)",
+                        Text("maxDb".tr,
                             style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
@@ -685,10 +648,10 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                           size: 20,
                         ),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            "Klarheit & Stimmen (Treble & Vocals)",
-                            style: TextStyle(
+                            "trebleVocalTitle".tr,
+                            style: const TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 13.5,
                             ),
@@ -759,15 +722,15 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Neutral (0 dB)",
+                        Text("neutralDb".tr,
                             style: TextStyle(
                                 fontSize: 10.5,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("Klar (+3 dB)",
+                        Text("clearDb".tr,
                             style: TextStyle(
                                 fontSize: 10.5,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("Brillant (+6 dB)",
+                        Text("brilliantDb".tr,
                             style: TextStyle(
                                 fontSize: 10.5,
                                 color: Colors.white.withOpacity(0.4))),
@@ -800,10 +763,10 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                           size: 20,
                         ),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            "Lautstärke-Verstärker (Preamp Boost)",
-                            style: TextStyle(
+                            "preampTitle".tr,
+                            style: const TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 13.5,
                             ),
@@ -864,15 +827,15 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Standard (0 dB)",
+                        Text("standardDb".tr,
                             style: TextStyle(
                                 fontSize: 10.5,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("Verstärkt (+3 dB)",
+                        Text("boostedDb".tr,
                             style: TextStyle(
                                 fontSize: 10.5,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("Maximal (+6 dB)",
+                        Text("maxPreampDb".tr,
                             style: TextStyle(
                                 fontSize: 10.5,
                                 color: Colors.white.withOpacity(0.4))),
@@ -883,9 +846,9 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
               ),
 
               // Presets Selection (10 Sound Profiles)
-              const Text(
-                "Sound-Profile (10 Presets)",
-                style: TextStyle(
+              Text(
+                "soundProfiles".tr,
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.2,
@@ -896,19 +859,22 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                 height: 38,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  children: _presets.keys.map((presetName) {
+                  children: _presets.map((preset) {
+                    final id = preset['id'] as String;
+                    final nameKey = preset['nameKey'] as String;
+                    final gains = preset['gains'] as List<double>;
                     return Obx(() {
+                      final currentPreset = playerController.eqPreset.value;
                       final isSelected =
-                          playerController.eqPreset.value == presetName;
+                          currentPreset == id || currentPreset == nameKey.tr;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
-                          label: Text(presetName),
+                          label: Text(nameKey.tr),
                           selected: isSelected,
                           onSelected: (selected) {
                             if (selected) {
-                              playerController.applyEqPreset(
-                                  presetName, _presets[presetName]!);
+                              playerController.applyEqPreset(id, gains);
                             }
                           },
                           labelStyle: TextStyle(
@@ -936,9 +902,9 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
               const SizedBox(height: 22),
 
               // 5-Band Equalizer Sliders
-              const Text(
-                "Manuelle Frequenz-Bänder",
-                style: TextStyle(
+              Text(
+                "manualBands".tr,
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.2,
@@ -1019,9 +985,9 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                     color: Color(0xFF00D2FF),
                     size: 18,
                   ),
-                  label: const Text(
-                    "System-Equalizer des Handys öffnen",
-                    style: TextStyle(
+                  label: Text(
+                    "openSystemEq".tr,
+                    style: const TextStyle(
                       color: Color(0xFF00D2FF),
                       fontWeight: FontWeight.w600,
                     ),
@@ -1110,47 +1076,6 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildBassModeButton({
-    required String title,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-    bool isHighlighted = false,
-  }) {
-    return InkWell(
-      onTap: playerController.eqEnabled.value ? onTap : null,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isHighlighted
-              ? color.withOpacity(0.22)
-              : Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isHighlighted ? color : Colors.white12,
-            width: isHighlighted ? 1.2 : 0.8,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 5),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w600,
-                color: isHighlighted ? Colors.white : Colors.white70,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -520,8 +520,8 @@ class SettingsScreen extends StatelessWidget {
                     ListTile(
                       contentPadding:
                           const EdgeInsets.only(left: 5, right: 10, top: 0),
-                      title: const Text("Equalizer & Sound-Effekte"),
-                      subtitle: const Text("In-App Equalizer, Bass-Boost & System-Equalizer"),
+                      title: Text("equalizerSettingsTitle".tr),
+                      subtitle: Text("equalizerSettingsSub".tr),
                       trailing: const Icon(Icons.equalizer_rounded, color: Color(0xFF00D2FF)),
                       onTap: () {
                         showModalBottomSheet(
