@@ -21,15 +21,18 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
 
   static const Map<String, List<double>> _presets = {
     "Normal": [0.0, 0.0, 0.0, 0.0, 0.0],
-    "Tiefbass": [5.5, 3.0, -0.5, 0.5, 1.0],
-    "Bass & Höhen": [5.0, 2.5, -1.0, 2.5, 4.5],
-    "Hip-Hop & Trap": [6.0, 3.5, 0.0, 2.0, 3.0],
-    "Elektronisch / EDM": [5.0, 3.0, -1.0, 3.0, 4.5],
+    "🔥 Fetter Bass Boost": [10.5, 6.0, -1.0, 1.5, 2.5],
+    "🌊 Deep Subwoofer": [11.5, 3.5, -1.5, 0.5, 1.0],
+    "⚡ Punchy Kick": [4.0, 7.5, 0.0, 2.0, 3.0],
+    "Tiefbass": [7.0, 4.0, -0.5, 0.5, 1.0],
+    "Bass & Höhen": [6.5, 3.5, -1.0, 2.5, 4.5],
+    "Hip-Hop & Trap": [8.5, 4.5, 0.0, 2.0, 3.0],
+    "Elektronisch / EDM": [7.0, 4.0, -1.0, 3.0, 4.5],
     "Rock & Metal": [4.5, 2.5, -0.5, 2.5, 4.0],
-    "Pop": [2.0, 3.0, 2.5, 2.0, 1.5],
+    "Pop": [2.5, 3.5, 2.5, 2.0, 1.5],
     "Klar & Stimmen": [-1.0, 0.5, 3.5, 3.0, 2.0],
     "Akustik & Sanft": [2.0, 1.0, 1.5, 2.5, 2.0],
-    "Maximaler Druck": [3.5, 2.0, 1.0, 2.5, 3.5],
+    "Maximaler Druck": [6.0, 4.0, 1.0, 2.5, 3.5],
   };
 
   String _formatFreq(double freq) {
@@ -42,10 +45,59 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
     return "${freq.toInt()} Hz";
   }
 
-  void _applyQuickBass(double val) {
-    if (playerController.eqBands.length >= 2) {
+  void _setDeepBass(double val) {
+    if (playerController.eqBands.isNotEmpty) {
       playerController.setEqBandGain(0, val);
-      playerController.setEqBandGain(1, (val * 0.65).clamp(-10.0, 10.0));
+      // Clean Headroom-Protection: Mitten leicht abdämpfen bei extremem Bass für verzerrungsfreien Klang
+      if (val > 8.0 && playerController.eqBands.length >= 3) {
+        final currentMid =
+            (playerController.eqBands[2]['gain'] as num).toDouble();
+        if (currentMid > -1.0) {
+          playerController.setEqBandGain(2, -1.0);
+        }
+      }
+    }
+  }
+
+  void _setPunchyBass(double val) {
+    if (playerController.eqBands.length >= 2) {
+      playerController.setEqBandGain(1, val);
+    }
+  }
+
+  void _applyBassPresetMode(String mode) {
+    if (playerController.eqBands.isEmpty) return;
+    switch (mode) {
+      case "linear":
+        playerController.setEqBandGain(0, 0.0);
+        if (playerController.eqBands.length >= 2) {
+          playerController.setEqBandGain(1, 0.0);
+        }
+        break;
+      case "punchy":
+        playerController.setEqBandGain(0, 3.5);
+        if (playerController.eqBands.length >= 2) {
+          playerController.setEqBandGain(1, 7.5);
+        }
+        break;
+      case "deep":
+        playerController.setEqBandGain(0, 10.0);
+        if (playerController.eqBands.length >= 2) {
+          playerController.setEqBandGain(1, 3.5);
+        }
+        if (playerController.eqBands.length >= 3) {
+          playerController.setEqBandGain(2, -1.0);
+        }
+        break;
+      case "ultra":
+        playerController.setEqBandGain(0, 12.0);
+        if (playerController.eqBands.length >= 2) {
+          playerController.setEqBandGain(1, 6.5);
+        }
+        if (playerController.eqBands.length >= 3) {
+          playerController.setEqBandGain(2, -1.5);
+        }
+        break;
     }
   }
 
@@ -144,7 +196,8 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                     return Switch(
                       value: playerController.eqEnabled.value,
                       activeColor: const Color(0xFF00D2FF),
-                      activeTrackColor: const Color(0xFF0072FF).withOpacity(0.4),
+                      activeTrackColor:
+                          const Color(0xFF0072FF).withOpacity(0.4),
                       onChanged: (val) => playerController.setEqEnabled(val),
                     );
                   }),
@@ -157,7 +210,8 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                 final isEqActive = playerController.eqEnabled.value;
                 return Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: isEqActive
                         ? const Color(0xFF00D2FF).withOpacity(0.08)
@@ -250,9 +304,11 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                     ),
                     TextButton.icon(
                       style: TextButton.styleFrom(
-                        backgroundColor: const Color(0xFF00D2FF).withOpacity(0.15),
+                        backgroundColor:
+                            const Color(0xFF00D2FF).withOpacity(0.15),
                         foregroundColor: const Color(0xFF00D2FF),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -272,7 +328,8 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                       icon: const Icon(Icons.refresh_rounded, size: 16),
                       label: const Text(
                         "Reparieren",
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 12),
                       ),
                     ),
                   ],
@@ -280,16 +337,23 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
               ),
               const SizedBox(height: 18),
 
-              // 1. Tiefbass (Punchy & Deep Bass Boost)
+              // 1. Bass-Engine (Deep Sub & Punchy Kick Boost)
               Container(
                 padding: const EdgeInsets.all(14),
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFFFF0055).withOpacity(0.08),
+                      const Color(0xFF00D2FF).withOpacity(0.04),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: const Color(0xFFFF0055).withOpacity(0.2),
-                    width: 1,
+                    color: const Color(0xFFFF0055).withOpacity(0.3),
+                    width: 1.2,
                   ),
                 ),
                 child: Column(
@@ -297,39 +361,246 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                   children: [
                     Row(
                       children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF0055).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.local_fire_department_rounded,
+                            color: Color(0xFFFF0055),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Bass-Engine: Deep Sub & Punchy Kick",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                              Text(
+                                "Separate Regler für Tiefbass-Vibration & Kick-Attack",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white60,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Quick Bass Mode Buttons
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildBassModeButton(
+                            title: "Neutral",
+                            icon: Icons.horizontal_rule_rounded,
+                            color: Colors.white70,
+                            onTap: () => _applyBassPresetMode("linear"),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildBassModeButton(
+                            title: "⚡ Punchy Kick",
+                            icon: Icons.flash_on_rounded,
+                            color: const Color(0xFFFFA000),
+                            onTap: () => _applyBassPresetMode("punchy"),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildBassModeButton(
+                            title: "🌊 Deep Sub",
+                            icon: Icons.waves_rounded,
+                            color: const Color(0xFF00D2FF),
+                            onTap: () => _applyBassPresetMode("deep"),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildBassModeButton(
+                            title: "🔥 Fetter Bass",
+                            icon: Icons.whatshot_rounded,
+                            color: const Color(0xFFFF0055),
+                            isHighlighted: true,
+                            onTap: () => _applyBassPresetMode("ultra"),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Slider 1: Deep Sub-Bass (~60 Hz)
+                    Row(
+                      children: [
                         const Icon(
-                          Icons.local_fire_department_rounded,
-                          color: Color(0xFFFF0055),
-                          size: 20,
+                          Icons.waves_rounded,
+                          color: Color(0xFF00D2FF),
+                          size: 18,
                         ),
                         const SizedBox(width: 8),
                         const Expanded(
-                          child: Text(
-                            "Tiefbass-Verstärkung (Clean & Punchy)",
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13.5,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Deep Sub-Bass (Tiefbass ~60 Hz)",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                              Text(
+                                "Subwoofer-Vibration & rollender Druck",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.white54,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         Obx(() {
-                          final currentBass = playerController.eqBands.isNotEmpty
-                              ? (playerController.eqBands[0]['gain'] as num).toDouble()
-                              : 0.0;
-                          final isZero = currentBass <= 0.05;
+                          final currentDeep =
+                              playerController.eqBands.isNotEmpty
+                                  ? (playerController.eqBands[0]['gain'] as num)
+                                      .toDouble()
+                                  : 0.0;
+                          final isZero = currentDeep <= 0.05;
                           return Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 3),
+                                horizontal: 9, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isZero
+                                  ? Colors.white10
+                                  : const Color(0xFF00D2FF).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              isZero
+                                  ? "0 dB"
+                                  : "+${currentDeep.toStringAsFixed(1)} dB",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isZero
+                                    ? Colors.white60
+                                    : const Color(0xFF00D2FF),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Obx(() {
+                      final currentDeep = playerController.eqBands.isNotEmpty
+                          ? ((playerController.eqBands[0]['gain'] as num)
+                                  .toDouble())
+                              .clamp(0.0, 12.0)
+                          : 0.0;
+                      return SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          activeTrackColor: const Color(0xFF00D2FF),
+                          inactiveTrackColor: Colors.white12,
+                          thumbColor: const Color(0xFF00D2FF),
+                          overlayColor:
+                              const Color(0xFF00D2FF).withOpacity(0.2),
+                          trackHeight: 4,
+                        ),
+                        child: Slider(
+                          value: currentDeep,
+                          min: 0.0,
+                          max: 12.0,
+                          divisions: 24,
+                          label: "+${currentDeep.toStringAsFixed(1)} dB",
+                          onChanged: playerController.eqEnabled.value
+                              ? (val) => _setDeepBass(val)
+                              : null,
+                        ),
+                      );
+                    }),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("Aus (0 dB)",
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.white.withOpacity(0.4))),
+                        Text("Subwoofer (+6 dB)",
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.white.withOpacity(0.4))),
+                        Text("Extrem (+12 dB)",
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color:
+                                    const Color(0xFF00D2FF).withOpacity(0.7))),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Slider 2: Punchy Kick-Bass (~230 Hz)
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.flash_on_rounded,
+                          color: Color(0xFFFF0055),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Punchy Kick-Bass (Mid-Bass ~230 Hz)",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                              Text(
+                                "Knackiger Beat-Impact & Schlagzeug-Druck",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.white54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Obx(() {
+                          final currentPunch =
+                              playerController.eqBands.length >= 2
+                                  ? (playerController.eqBands[1]['gain'] as num)
+                                      .toDouble()
+                                  : 0.0;
+                          final isZero = currentPunch <= 0.05;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 9, vertical: 3),
                             decoration: BoxDecoration(
                               color: isZero
                                   ? Colors.white10
                                   : const Color(0xFFFF0055).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
-                              isZero ? "0 dB" : "+${currentBass.toStringAsFixed(1)} dB",
+                              isZero
+                                  ? "0 dB"
+                                  : "+${currentPunch.toStringAsFixed(1)} dB",
                               style: TextStyle(
-                                fontSize: 11.5,
+                                fontSize: 11,
                                 fontWeight: FontWeight.bold,
                                 color: isZero
                                     ? Colors.white60
@@ -340,27 +611,30 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                         }),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     Obx(() {
-                      final currentBass = playerController.eqBands.isNotEmpty
-                          ? ((playerController.eqBands[0]['gain'] as num).toDouble()).clamp(0.0, 8.0)
+                      final currentPunch = playerController.eqBands.length >= 2
+                          ? ((playerController.eqBands[1]['gain'] as num)
+                                  .toDouble())
+                              .clamp(0.0, 10.0)
                           : 0.0;
                       return SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           activeTrackColor: const Color(0xFFFF0055),
                           inactiveTrackColor: Colors.white12,
                           thumbColor: const Color(0xFFFF0055),
-                          overlayColor: const Color(0xFFFF0055).withOpacity(0.2),
+                          overlayColor:
+                              const Color(0xFFFF0055).withOpacity(0.2),
                           trackHeight: 4,
                         ),
                         child: Slider(
-                          value: currentBass,
+                          value: currentPunch,
                           min: 0.0,
-                          max: 8.0,
-                          divisions: 16,
-                          label: "+${currentBass.toStringAsFixed(1)} dB",
+                          max: 10.0,
+                          divisions: 20,
+                          label: "+${currentPunch.toStringAsFixed(1)} dB",
                           onChanged: playerController.eqEnabled.value
-                              ? (val) => _applyQuickBass(val)
+                              ? (val) => _setPunchyBass(val)
                               : null,
                         ),
                       );
@@ -368,18 +642,20 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Sanft (0 dB)",
+                        Text("Neutral (0 dB)",
                             style: TextStyle(
-                                fontSize: 10.5,
+                                fontSize: 10,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("Druckvoll (+4 dB)",
+                        Text("Knackig (+5 dB)",
                             style: TextStyle(
-                                fontSize: 10.5,
+                                fontSize: 10,
                                 color: Colors.white.withOpacity(0.4))),
-                        Text("Maximal (+8 dB)",
+                        Text("Maximal (+10 dB)",
                             style: TextStyle(
-                                fontSize: 10.5,
-                                color: Colors.white.withOpacity(0.4))),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color:
+                                    const Color(0xFFFF0055).withOpacity(0.7))),
                       ],
                     ),
                   ],
@@ -421,7 +697,9 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                         Obx(() {
                           final len = playerController.eqBands.length;
                           final currentTreble = len >= 5
-                              ? (playerController.eqBands[len - 1]['gain'] as num).toDouble()
+                              ? (playerController.eqBands[len - 1]['gain']
+                                      as num)
+                                  .toDouble()
                               : 0.0;
                           final isZero = currentTreble <= 0.05;
                           return Container(
@@ -434,7 +712,9 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              isZero ? "0 dB" : "+${currentTreble.toStringAsFixed(1)} dB",
+                              isZero
+                                  ? "0 dB"
+                                  : "+${currentTreble.toStringAsFixed(1)} dB",
                               style: TextStyle(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
@@ -451,14 +731,17 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                     Obx(() {
                       final len = playerController.eqBands.length;
                       final currentTreble = len >= 5
-                          ? ((playerController.eqBands[len - 1]['gain'] as num).toDouble()).clamp(0.0, 6.0)
+                          ? ((playerController.eqBands[len - 1]['gain'] as num)
+                                  .toDouble())
+                              .clamp(0.0, 6.0)
                           : 0.0;
                       return SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           activeTrackColor: const Color(0xFF00D2FF),
                           inactiveTrackColor: Colors.white12,
                           thumbColor: const Color(0xFF00D2FF),
-                          overlayColor: const Color(0xFF00D2FF).withOpacity(0.2),
+                          overlayColor:
+                              const Color(0xFF00D2FF).withOpacity(0.2),
                           trackHeight: 4,
                         ),
                         child: Slider(
@@ -539,7 +822,9 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              isZero ? "0 dB" : "+${gain.toStringAsFixed(1)} dB",
+                              isZero
+                                  ? "0 dB"
+                                  : "+${gain.toStringAsFixed(1)} dB",
                               style: TextStyle(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
@@ -560,7 +845,8 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                           activeTrackColor: const Color(0xFFAB47BC),
                           inactiveTrackColor: Colors.white12,
                           thumbColor: const Color(0xFFAB47BC),
-                          overlayColor: const Color(0xFFAB47BC).withOpacity(0.2),
+                          overlayColor:
+                              const Color(0xFFAB47BC).withOpacity(0.2),
                           trackHeight: 4,
                         ),
                         child: Slider(
@@ -627,9 +913,8 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                           },
                           labelStyle: TextStyle(
                             fontSize: 12.5,
-                            fontWeight: isSelected
-                                ? FontWeight.w800
-                                : FontWeight.w500,
+                            fontWeight:
+                                isSelected ? FontWeight.w800 : FontWeight.w500,
                             color: isSelected ? Colors.black : Colors.white,
                           ),
                           selectedColor: const Color(0xFF00D2FF),
@@ -795,10 +1080,8 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                 activeTrackColor:
                     enabled ? const Color(0xFF00D2FF) : Colors.white24,
                 inactiveTrackColor: Colors.white12,
-                thumbColor:
-                    enabled ? const Color(0xFF00D2FF) : Colors.white38,
-                thumbShape:
-                    const RoundSliderThumbShape(enabledThumbRadius: 6),
+                thumbColor: enabled ? const Color(0xFF00D2FF) : Colors.white38,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                 trackHeight: 4,
               ),
               child: Slider(
@@ -827,6 +1110,47 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBassModeButton({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+    bool isHighlighted = false,
+  }) {
+    return InkWell(
+      onTap: playerController.eqEnabled.value ? onTap : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isHighlighted
+              ? color.withOpacity(0.22)
+              : Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isHighlighted ? color : Colors.white12,
+            width: isHighlighted ? 1.2 : 0.8,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 5),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w600,
+                color: isHighlighted ? Colors.white : Colors.white70,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
