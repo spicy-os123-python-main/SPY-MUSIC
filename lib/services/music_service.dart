@@ -27,9 +27,9 @@ class MusicServices extends getx.GetxService {
     'accept': '*/*',
     'accept-encoding': 'gzip, deflate',
     'content-type': 'application/json',
-    'content-encoding': 'gzip',
     'origin': domain,
     'cookie': 'CONSENT=YES+1',
+    'X-YouTube-Client-Name': '67',
   };
 
   final Map<String, dynamic> _context = {
@@ -50,7 +50,7 @@ class MusicServices extends getx.GetxService {
 
   final dio = Dio();
 
-  Future<void> init() async {
+  Future<void> init({bool forceRefresh = false}) async {
     //check visitor id in data base, if not generate one , set lang code
     final date = DateTime.now();
     _context['context']['client']['clientVersion'] =
@@ -62,7 +62,11 @@ class MusicServices extends getx.GetxService {
 
     final appPrefsBox = Hive.box('AppPrefs');
     hlCode = appPrefsBox.get('contentLanguage') ?? "en";
-    if (appPrefsBox.containsKey('visitorId')) {
+
+    if (forceRefresh) {
+      await appPrefsBox.delete('visitorId');
+      _headers.remove('X-Goog-Visitor-Id');
+    } else if (appPrefsBox.containsKey('visitorId')) {
       final visitorData = appPrefsBox.get("visitorId");
       if (visitorData != null && !isExpired(epoch: visitorData['exp'])) {
         _headers['X-Goog-Visitor-Id'] = visitorData['id'];
@@ -70,7 +74,7 @@ class MusicServices extends getx.GetxService {
           'id': visitorData['id'],
           'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 2590200
         });
-        printINFO("Got Visitor id ($visitorData['id']) from Box");
+        printINFO("Got Visitor id (${visitorData['id']}) from Box");
         return;
       }
     }
@@ -85,9 +89,8 @@ class MusicServices extends getx.GetxService {
       });
       return;
     }
-    // not able to generate in that case
-    _headers['X-Goog-Visitor-Id'] =
-        visitorId ?? "CgttN24wcmd5UzNSWSi2lvq2BjIKCgJKUBIEGgAgYQ%3D%3D";
+    // If generation fails or returns null, remove the header so Innertube treats it as anonymous
+    _headers.remove('X-Goog-Visitor-Id');
   }
 
   set hlCode(String code) {
@@ -139,8 +142,8 @@ class MusicServices extends getx.GetxService {
       final errBody = e.response?.data?.toString() ?? '';
       final trunc = errBody.length > 150 ? '${errBody.substring(0, 150)}...' : errBody;
       printERROR("YTMusic API [$action] error [HTTP $sCode]: ${e.message}, body: $trunc");
-      if ((sCode == 401 || sCode == 403) && retryCount < 1) {
-        await init();
+      if ((sCode == 401 || sCode == 403) && retryCount < 2) {
+        await init(forceRefresh: true);
         return _sendRequest(action, data,
             additionalParams: additionalParams, retryCount: retryCount + 1);
       }

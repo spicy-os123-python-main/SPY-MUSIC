@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
@@ -12,6 +14,7 @@ class SearchScreenController extends GetxController with ProcessLink {
   final historyQuerylist = [].obs;
   late Box<dynamic> queryBox;
   final urlPasted = false.obs;
+  Timer? _debounceTimer;
 
   // Desktop search bar related
   final focusNode = FocusNode();
@@ -34,12 +37,21 @@ class SearchScreenController extends GetxController with ProcessLink {
   }
 
   Future<void> onChanged(String text) async {
-    if(text.contains("https://")){
-      urlPasted.value = true; 
+    if (text.contains("https://")) {
+      urlPasted.value = true;
       return;
     }
     urlPasted.value = false;
-    suggestionList.value = await musicServices.getSearchSuggestion(text);
+
+    _debounceTimer?.cancel();
+    if (text.trim().isEmpty) {
+      suggestionList.clear();
+      return;
+    }
+
+    _debounceTimer = Timer(const Duration(milliseconds: 250), () async {
+      suggestionList.value = await musicServices.getSearchSuggestion(text);
+    });
   }
 
   Future<void> suggestionInput(String txt) async {
@@ -65,6 +77,7 @@ class SearchScreenController extends GetxController with ProcessLink {
   }
 
   void reset() {
+    _debounceTimer?.cancel();
     urlPasted.value = false;
     textInputController.text = "";
     suggestionList.clear();
@@ -78,6 +91,7 @@ class SearchScreenController extends GetxController with ProcessLink {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     focusNode.dispose();
     textInputController.dispose();
     queryBox.close();

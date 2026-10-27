@@ -11,7 +11,9 @@ class PlatformSearchService {
     receiveTimeout: const Duration(seconds: 8),
     headers: {
       'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9,de;q=0.8',
     },
   ));
 
@@ -70,6 +72,56 @@ class PlatformSearchService {
     );
   }
 
+  static MediaItem _mapItunesTrack(Map item, String prefix, String platform) {
+    final id = item['trackId']?.toString() ?? '';
+    final title = item['trackName']?.toString() ?? 'Unbekannt';
+    final artist = item['artistName']?.toString() ?? '$platform Artist';
+    final album = item['collectionName']?.toString() ?? '$platform Track';
+    final cover100 = item['artworkUrl100']?.toString();
+    final cover = cover100?.replaceAll('100x100bb', '600x600bb') ?? cover100;
+    final durationMs = item['trackTimeMillis'] as int? ?? 180000;
+    final durationSec = durationMs > 0 ? (durationMs / 1000).round() : 180;
+
+    return MediaItem(
+      id: '${prefix}_$id',
+      title: title,
+      artist: artist,
+      album: album,
+      duration: Duration(seconds: durationSec),
+      artUri: cover != null ? Uri.tryParse(cover) : null,
+      extras: {
+        'platform': platform,
+        'is$platform': true,
+        'searchQuery': '$title $artist',
+        'originalId': id,
+        'duration': durationSec,
+        'length':
+            "${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}",
+      },
+    );
+  }
+
+  static Future<List<MediaItem>> _searchItunes(
+      String query, String prefix, String platform,
+      {int limit = 25}) async {
+    try {
+      final url =
+          'https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=$limit';
+      final response = await _dio.get(url);
+      if (response.statusCode == 200 && response.data != null) {
+        final rawData = response.data;
+        final list = rawData is Map
+            ? (rawData['results'] as List? ?? [])
+            : [];
+        return list
+            .whereType<Map>()
+            .map((item) => _mapItunesTrack(item, prefix, platform))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
   /// Search specifically for Spotify tracks
   static Future<List<MediaItem>> searchSpotify(String query,
       {int limit = 25}) async {
@@ -79,16 +131,19 @@ class PlatformSearchService {
       final response = await _dio.get(url);
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data['data'] as List? ?? [];
-        return data
-            .whereType<Map>()
-            .map((item) => _mapDeezerTrack(item, 'sp', 'Spotify'))
-            .toList();
+        if (data.isNotEmpty) {
+          return data
+              .whereType<Map>()
+              .map((item) => _mapDeezerTrack(item, 'sp', 'Spotify'))
+              .toList();
+        }
       }
     } catch (e) {
-      printERROR("Spotify platform search error: $e");
+      printINFO("Deezer search unavailable, using iTunes fallback: $e");
     }
 
-    return [];
+    // High-reliability fallback (iTunes Search API, no 403 blocks)
+    return await _searchItunes(query, 'sp', 'Spotify', limit: limit);
   }
 
   /// Search specifically for Amazon Music tracks
@@ -100,16 +155,19 @@ class PlatformSearchService {
       final response = await _dio.get(url);
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data['data'] as List? ?? [];
-        return data
-            .whereType<Map>()
-            .map((item) => _mapDeezerTrack(item, 'az', 'Amazon'))
-            .toList();
+        if (data.isNotEmpty) {
+          return data
+              .whereType<Map>()
+              .map((item) => _mapDeezerTrack(item, 'az', 'Amazon'))
+              .toList();
+        }
       }
     } catch (e) {
-      printERROR("Amazon platform search error: $e");
+      printINFO("Deezer search unavailable, using iTunes fallback: $e");
     }
 
-    return [];
+    // High-reliability fallback (iTunes Search API, no 403 blocks)
+    return await _searchItunes(query, 'az', 'Amazon', limit: limit);
   }
 
   /// Get current Spotify Top Hits for Home Screen
@@ -125,9 +183,7 @@ class PlatformSearchService {
             .toList();
         if (items.isNotEmpty) return items;
       }
-    } catch (e) {
-      printERROR("getSpotifyTopHits error: $e");
-    }
+    } catch (_) {}
     return await searchSpotify('Top Hits', limit: limit);
   }
 
