@@ -19,6 +19,8 @@ class StreamProvider {
       'androidSdkless': YoutubeApiClient.androidSdkless,
       'android': YoutubeApiClient.android,
       'ios': YoutubeApiClient.ios,
+      'tv': YoutubeApiClient.tv,
+      'androidVr': YoutubeApiClient.androidVr,
     };
     final watch = Stopwatch()..start();
     Object? lastError;

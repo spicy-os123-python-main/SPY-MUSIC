@@ -12,6 +12,7 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart' hide Playlist;
 // ignore: depend_on_referenced_packages
 import 'package:rxdart/rxdart.dart';
 
@@ -190,8 +191,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         final params = await _equalizer!.parameters;
         for (var band in params.bands) {
           if (savedBands.containsKey(band.index)) {
-            final gain = (savedBands[band.index] as num).toDouble();
-            await band.setGain(gain);
+            final rawGain = (savedBands[band.index] as num).toDouble();
+            final justAudioGain = (rawGain.abs() > 1.5 ? (rawGain / 10.0) : rawGain)
+                .clamp(params.minDecibels, params.maxDecibels);
+            await band.setGain(justAudioGain);
           }
         }
       }
@@ -1054,13 +1057,14 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           return {
             'supported': true,
             'enabled': _equalizer!.enabled,
-            'minDecibels': params.minDecibels,
-            'maxDecibels': params.maxDecibels,
+            'minDecibels': params.minDecibels * 10.0,
+            'maxDecibels': params.maxDecibels * 10.0,
             'bands': params.bands
                 .map((b) => {
                       'index': b.index,
                       'centerFrequency': b.centerFrequency,
-                      'gain': b.gain,
+                      'gain': (b.gain * 10.0)
+                          .clamp(params.minDecibels * 10.0, params.maxDecibels * 10.0),
                     })
                 .toList(),
             'loudnessEnabled': _loudnessEnhancer?.enabled ?? false,
@@ -1081,12 +1085,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
           final sessionId = _player.androidAudioSessionId;
           if (sessionId != null) {
-            if (enable) {
-              // Unhook system equalizer so it doesn't double-process or clash!
-              EqualizerService.endAudioEffect(sessionId);
-            } else {
-              // Re-enable system equalizer when app equalizer is turned off
-              EqualizerService.initAudioEffect(sessionId);
+            try {
+              if (enable) {
+                // Unhook system equalizer so it doesn't double-process or clash!
+                EqualizerService.endAudioEffect(sessionId);
+              } else {
+                // Re-enable system equalizer when app equalizer is turned off
+                EqualizerService.initAudioEffect(sessionId);
+              }
+            } catch (e) {
+              printERROR("Error toggling audio effect control session: $e");
             }
           }
         }
@@ -1094,15 +1102,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       case 'setEqualizerBandGain':
         final index = extras!['index'] as int;
-        final gain = (extras['gain'] as num).toDouble();
+        final gainDb = (extras['gain'] as num).toDouble();
         if (_equalizer != null) {
           final params = await _equalizer!.parameters;
           if (index >= 0 && index < params.bands.length) {
-            await params.bands[index].setGain(gain);
+            final justAudioGain =
+                (gainDb / 10.0).clamp(params.minDecibels, params.maxDecibels);
+            await params.bands[index].setGain(justAudioGain);
             final appPrefsBox = Hive.box("AppPrefs");
             Map savedBands = Map.from(
                 appPrefsBox.get("eq_band_gains", defaultValue: {}) ?? {});
-            savedBands[index] = gain;
+            savedBands[index] = gainDb;
             await appPrefsBox.put("eq_band_gains", savedBands);
           }
         }
@@ -1158,7 +1168,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           final appPrefsBox = Hive.box("AppPrefs");
           Map savedBands = {};
           for (int i = 0; i < params.bands.length && i < gains.length; i++) {
-            await params.bands[i].setGain(gains[i]);
+            final justAudioGain =
+                (gains[i] / 10.0).clamp(params.minDecibels, params.maxDecibels);
+            await params.bands[i].setGain(justAudioGain);
             savedBands[i] = gains[i];
           }
           await appPrefsBox.put("eq_band_gains", savedBands);
@@ -1651,20 +1663,87 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       streamInfo = HMStreamingData.fromJson(streamInfoJson);
       if (streamInfo.playable) {
         songsUrlCacheBox.put(songId, streamInfoJson);
-      } else if (!shouldFallbackToSoundCloud) {
-        printERROR("YouTube failed for $songId: ${streamInfo.statusMSG}");
       } else {
         printINFO(
-            "YouTube failed for $songId (${streamInfo.statusMSG}), trying SoundCloud fallback (All-In-One mode)");
-        final fallback = await _trySoundCloudFallback(songId, targetSong);
-        if (fallback != null && fallback.playable) {
-          streamInfo = fallback;
+            "Primary YouTube stream unavailable for $songId (${streamInfo.statusMSG}). Attempting smart auto-recovery...");
+        final String rawTitle = targetSong?.title ?? '';
+        final String rawArtist = targetSong?.artist ?? '';
+
+        // 1. First recovery attempt: Search YouTube for an unblocked alternative upload of the exact same track
+        if (rawTitle.isNotEmpty) {
+          final query = '$rawTitle $rawArtist'.trim();
+          printINFO("Searching YouTube for alternative unblocked stream: $query");
+          final yt = YoutubeExplode();
+          try {
+            final searchResults =
+                await yt.search.search(query).timeout(const Duration(seconds: 7));
+            for (final candidate in searchResults.take(6)) {
+              final candidateId = candidate.id.value;
+              if (candidateId == songId) continue;
+
+              final origDur = targetSong?.duration?.inSeconds ?? 0;
+              final candDur = candidate.duration?.inSeconds ?? 0;
+              if (origDur > 0 && candDur > 0 && (origDur - candDur).abs() > 35) {
+                continue;
+              }
+
+              printINFO(
+                  "Testing alternative YouTube upload: $candidateId (${candidate.title})");
+              try {
+                final candStream = await StreamProvider.fetch(candidateId);
+                if (candStream.playable &&
+                    candStream.highestQualityAudio != null) {
+                  printINFO(
+                      "Successfully recovered age-restricted song via alternative YouTube upload: $candidateId!");
+                  songsUrlCacheBox.put(songId, candStream.hmStreamingData);
+                  streamInfo =
+                      HMStreamingData.fromJson(candStream.hmStreamingData);
+                  break;
+                }
+              } catch (_) {}
+            }
+          } catch (e) {
+            printERROR("YouTube alternative search error: $e");
+          } finally {
+            yt.close();
+          }
+        }
+
+        streamInfo ??= HMStreamingData(
+          playable: false,
+          statusMSG: "Kein abspielbarer Stream für diesen Track gefunden.",
+        );
+
+        // 2. Second recovery attempt: Try SoundCloud fallback
+        if (!streamInfo.playable && allowFallback) {
+          final fallback = await _trySoundCloudFallback(songId, targetSong);
+          if (fallback != null && fallback.playable) {
+            printINFO("Successfully recovered song via SoundCloud fallback!");
+            streamInfo = fallback;
+          }
+        }
+
+        if (!streamInfo.playable) {
+          final isAgeGated = streamInfo.statusMSG
+                  .toLowerCase()
+                  .contains("inappropriate") ||
+              streamInfo.statusMSG.toLowerCase().contains("age") ||
+              streamInfo.statusMSG.toLowerCase().contains("unplayable");
+          if (isAgeGated) {
+            streamInfo = HMStreamingData(
+              playable: false,
+              statusMSG:
+                  "Dieser Track ist auf YouTube altersbeschränkt (ab 18). YouTube sperrt anonyme Streams hierfür.",
+            );
+          }
         }
       }
     }
 
-    streamInfo.setQualityIndex(qualityIndex);
-    return streamInfo;
+    final finalStream = streamInfo;
+
+    finalStream.setQualityIndex(qualityIndex);
+    return finalStream;
   }
 }
 
