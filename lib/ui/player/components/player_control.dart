@@ -152,17 +152,62 @@ class PlayerControlWidget extends StatelessWidget {
               ),
               _nextButton(playerController, context),
               Obx(() {
+                final isSongLoop = playerController.isLoopModeEnabled.value;
+                final isPlaylistLoop = playerController.isQueueLoopModeEnabled.value;
+                const activeColor = Color(0xFF00D2FF);
+                final inactiveColor = (Theme.of(context).textTheme.titleLarge?.color ??
+                        Colors.white)
+                    .withOpacity(0.2);
+
                 return IconButton(
-                    onPressed: playerController.toggleLoopMode,
-                    icon: Icon(
-                      Icons.all_inclusive,
-                      color: playerController.isLoopModeEnabled.value
-                          ? (Theme.of(context).textTheme.titleLarge?.color ??
-                              Colors.white)
-                          : (Theme.of(context).textTheme.titleLarge?.color ??
-                                  Colors.white)
-                              .withOpacity(0.2),
-                    ));
+                  onPressed: playerController.cycleLoopMode,
+                  tooltip: isSongLoop
+                      ? "Song unendlich wiederholen"
+                      : (isPlaylistLoop
+                          ? "Playlist unendlich wiederholen"
+                          : "Wiederholen aus"),
+                  icon: isSongLoop
+                      ? Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.none,
+                          children: [
+                            const Icon(
+                              Icons.all_inclusive,
+                              color: activeColor,
+                              size: 26,
+                            ),
+                            Positioned(
+                              right: -4,
+                              top: -2,
+                              child: Container(
+                                padding: const EdgeInsets.all(1.5),
+                                decoration: const BoxDecoration(
+                                  color: activeColor,
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(
+                                    minWidth: 12, minHeight: 12),
+                                child: const Center(
+                                  child: Text(
+                                    '1',
+                                    style: TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 8.5,
+                                      fontWeight: FontWeight.w900,
+                                      height: 1.0,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Icon(
+                          Icons.all_inclusive,
+                          color: isPlaylistLoop ? activeColor : inactiveColor,
+                          size: 26,
+                        ),
+                );
               }),
             ],
           ),

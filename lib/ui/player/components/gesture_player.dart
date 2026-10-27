@@ -402,19 +402,57 @@ class GesturePlayer extends StatelessWidget {
                               onPressed: playerController.next,
                             ),
 
-                            /// Loop
-                            IconButton(
-                              iconSize: 20,
-                              onPressed: playerController.toggleLoopMode,
-                              icon: Obx(
-                                () => Icon(
-                                  Icons.all_inclusive,
-                                  color: playerController.isLoopModeEnabled.value
-                                      ? const Color(0xFF00D2FF)
-                                      : Colors.white30,
-                                ),
-                              ),
-                            ),
+                            /// Loop (3-State)
+                            Obx(() {
+                              final isSongLoop = playerController.isLoopModeEnabled.value;
+                              final isPlaylistLoop = playerController.isQueueLoopModeEnabled.value;
+                              const activeColor = Color(0xFF00D2FF);
+
+                              return IconButton(
+                                iconSize: 20,
+                                onPressed: playerController.cycleLoopMode,
+                                icon: isSongLoop
+                                    ? Stack(
+                                        alignment: Alignment.center,
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          const Icon(Icons.all_inclusive,
+                                              color: activeColor, size: 20),
+                                          Positioned(
+                                            right: -4,
+                                            top: -2,
+                                            child: Container(
+                                              padding: const EdgeInsets.all(1.5),
+                                              decoration: const BoxDecoration(
+                                                color: activeColor,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              constraints: const BoxConstraints(
+                                                  minWidth: 11, minHeight: 11),
+                                              child: const Center(
+                                                child: Text(
+                                                  '1',
+                                                  style: TextStyle(
+                                                    color: Colors.black,
+                                                    fontSize: 8,
+                                                    fontWeight: FontWeight.w900,
+                                                    height: 1.0,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : Icon(
+                                        Icons.all_inclusive,
+                                        color: isPlaylistLoop
+                                            ? activeColor
+                                            : Colors.white30,
+                                        size: 20,
+                                      ),
+                              );
+                            }),
                           ],
                         ),
                       ],

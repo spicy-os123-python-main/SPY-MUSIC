@@ -3,12 +3,10 @@ import 'package:get/get.dart';
 
 import '/ui/widgets/modification_list.dart';
 import '../../../models/playlist.dart';
-import '../../widgets/piped_sync_widget.dart';
 import 'library_controller.dart';
 import '../../widgets/content_list_widget_item.dart';
 import '../../widgets/list_widget.dart';
 import '../../widgets/sort_widget.dart';
-import '../Settings/settings_screen_controller.dart';
 
 class SongsLibraryWidget extends StatelessWidget {
   const SongsLibraryWidget({super.key, this.isBottomNavActive = false});
@@ -104,8 +102,6 @@ class PlaylistNAlbumLibraryWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final libralbumCntrller = Get.find<LibraryAlbumsController>();
     final librplstCntrller = Get.find<LibraryPlaylistsController>();
-    final settingscrnController = Get.find<SettingsScreenController>();
-    final size = MediaQuery.of(context).size;
     final topPadding = context.isLandscape ? 50.0 : 90.0;
 
     return Padding(
@@ -130,13 +126,7 @@ class PlaylistNAlbumLibraryWidget extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                       ),
-                (settingscrnController.isBottomNavBarEnabled.isTrue ||
-                        isAlbumContent ||
-                        settingscrnController.isLinkedWithPiped.isFalse)
-                    ? const SizedBox.shrink()
-                    : PipedSyncWidget(
-                        padding: EdgeInsets.only(right: size.width * .05),
-                      )
+                const SizedBox.shrink()
               ],
             ),
           ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:spymusic/utils/helper.dart';
 import 'package:spymusic/utils/lang_mapping.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -9,14 +8,12 @@ import '../../widgets/cust_switch.dart';
 import '../../widgets/export_file_dialog.dart';
 import '../../widgets/backup_dialog.dart';
 import '../../widgets/restore_dialog.dart';
-import '../Library/library_controller.dart';
 import '../../widgets/snackbar.dart';
-import '/ui/widgets/link_piped.dart';
+import '/ui/widgets/inapp_equalizer_sheet.dart';
 import '/services/music_service.dart';
 import '/services/discord_service.dart';
 import '/services/playlist_repair_service.dart';
 import '../../widgets/discord_login_dialog.dart';
-import '/ui/player/player_controller.dart';
 import '/ui/utils/theme_controller.dart';
 import 'components/custom_expansion_tile.dart';
 import 'settings_screen_controller.dart';
@@ -376,59 +373,6 @@ class SettingsScreen extends StatelessWidget {
                                   settingsController.toggleCacheHomeScreenData),
                         )),
                     ListTile(
-                      contentPadding:
-                          const EdgeInsets.only(left: 5, right: 10, top: 0),
-                      title: Text("Piped".tr),
-                      subtitle: Text("linkPipedDes".tr,
-                          style: Theme.of(context).textTheme.bodyMedium),
-                      trailing: TextButton(
-                          child: Obx(() => Text(
-                                settingsController.isLinkedWithPiped.value
-                                    ? "unLink".tr
-                                    : "link".tr,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium!
-                                    .copyWith(fontSize: 15),
-                              )),
-                          onPressed: () {
-                            if (settingsController.isLinkedWithPiped.isFalse) {
-                              showDialog(
-                                context: context,
-                                builder: (context) => const LinkPiped(),
-                              ).whenComplete(
-                                  () => Get.delete<PipedLinkedController>());
-                            } else {
-                              settingsController.unlinkPiped();
-                            }
-                          }),
-                    ),
-                    Obx(() => (settingsController.isLinkedWithPiped.isTrue)
-                        ? ListTile(
-                            contentPadding: const EdgeInsets.only(
-                                left: 5, right: 10, top: 0),
-                            title: Text("resetblacklistedplaylist".tr),
-                            subtitle: Text("resetblacklistedplaylistDes".tr,
-                                style: Theme.of(context).textTheme.bodyMedium),
-                            trailing: TextButton(
-                                child: Text(
-                                  "reset".tr,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium!
-                                      .copyWith(fontSize: 15),
-                                ),
-                                onPressed: () async {
-                                  await Get.find<LibraryPlaylistsController>()
-                                      .resetBlacklistedPlaylist();
-                                  ScaffoldMessenger.of(Get.context!)
-                                      .showSnackBar(snackbar(Get.context!,
-                                          "blacklistPlstResetAlert".tr,
-                                          size: SanckBarSize.MEDIUM));
-                                }),
-                          )
-                        : const SizedBox.shrink()),
-                    ListTile(
                       contentPadding: const EdgeInsets.only(left: 5, right: 10),
                       title: Text("clearImgCache".tr),
                       subtitle: Text(
@@ -578,15 +522,20 @@ class SettingsScreen extends StatelessWidget {
                     ListTile(
                       contentPadding:
                           const EdgeInsets.only(left: 5, right: 10, top: 0),
-                      title: Text("equalizer".tr),
-                      subtitle: Text("equalizerDes".tr,
-                          style: Theme.of(context).textTheme.bodyMedium),
-                      onTap: () async {
-                        try {
-                          await Get.find<PlayerController>().openEqualizer();
-                        } catch (e) {
-                          printERROR(e);
-                        }
+                      title: const Text("Equalizer & Sound-Effekte"),
+                      subtitle: const Text("In-App Equalizer, Bass-Boost & System-Equalizer"),
+                      trailing: const Icon(Icons.equalizer_rounded, color: Color(0xFF00D2FF)),
+                      onTap: () {
+                        showModalBottomSheet(
+                          constraints: const BoxConstraints(maxWidth: 550),
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
+                          ),
+                          isScrollControlled: true,
+                          context: context,
+                          barrierColor: Colors.black.withOpacity(0.6),
+                          builder: (context) => const InAppEqualizerSheet(),
+                        );
                       },
                     ),
                   if (!isDesktop)

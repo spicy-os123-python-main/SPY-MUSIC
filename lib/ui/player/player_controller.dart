@@ -64,6 +64,15 @@ class PlayerController extends GetxController
   final isCurrentSongFav = false.obs;
   final playinfrom = PlaylingFrom(type: PlaylingFromType.SELECTION).obs;
 
+  // In-App Equalizer & Sound Enhancer State
+  final eqSupported = false.obs;
+  final eqEnabled = false.obs;
+  final eqLoudnessGain = 0.0.obs;
+  final eqMinDecibels = (-10.0).obs;
+  final eqMaxDecibels = 10.0.obs;
+  final eqBands = <Map<String, dynamic>>[].obs;
+  final eqPreset = "Normal".obs;
+
   // Video Mode State
   final isVideoMode = false.obs;
   final isVideoLoading = false.obs;
@@ -862,13 +871,89 @@ class PlayerController extends GetxController
         .customAction("toggleLoudnessNormalization", {"enable": enable});
   }
 
+  Future<void> cycleLoopMode() async {
+    if (!isLoopModeEnabled.value && !isQueueLoopModeEnabled.value) {
+      // Off (grau) -> Playlist Loop (blau)
+      isQueueLoopModeEnabled.value = true;
+      isLoopModeEnabled.value = false;
+      await _audioHandler.customAction("toggleQueueLoopMode", {"enable": true});
+      await _audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
+    } else if (!isLoopModeEnabled.value && isQueueLoopModeEnabled.value) {
+      // Playlist Loop (blau) -> Song Loop (blau mit '1')
+      isQueueLoopModeEnabled.value = false;
+      isLoopModeEnabled.value = true;
+      await _audioHandler.customAction("toggleQueueLoopMode", {"enable": false});
+      await _audioHandler.setRepeatMode(AudioServiceRepeatMode.one);
+    } else {
+      // Song Loop (blau mit '1') -> Off (grau)
+      isQueueLoopModeEnabled.value = false;
+      isLoopModeEnabled.value = false;
+      await _audioHandler.customAction("toggleQueueLoopMode", {"enable": false});
+      await _audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
+    }
+    await Hive.box("AppPrefs").put("isLoopModeEnabled", isLoopModeEnabled.value);
+    await Hive.box("AppPrefs").put("queueLoopModeEnabled", isQueueLoopModeEnabled.value);
+  }
+
   Future<void> toggleLoopMode() async {
-    isLoopModeEnabled.isFalse
-        ? _audioHandler.setRepeatMode(AudioServiceRepeatMode.one)
-        : _audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
-    isLoopModeEnabled.value = !isLoopModeEnabled.value;
-    await Hive.box("AppPrefs")
-        .put("isLoopModeEnabled", isLoopModeEnabled.value);
+    await cycleLoopMode();
+  }
+
+  Future<void> fetchEqualizerData() async {
+    try {
+      final res = await _audioHandler.customAction("getEqualizerData");
+      if (res is Map && res['supported'] == true) {
+        eqSupported.value = true;
+        eqEnabled.value = res['enabled'] == true;
+        eqMinDecibels.value = (res['minDecibels'] as num?)?.toDouble() ?? -10.0;
+        eqMaxDecibels.value = (res['maxDecibels'] as num?)?.toDouble() ?? 10.0;
+        eqLoudnessGain.value = (res['loudnessGain'] as num?)?.toDouble() ?? 0.0;
+        eqPreset.value = res['preset'] ?? "Normal";
+
+        final bandsList = (res['bands'] as List?) ?? [];
+        eqBands.value = bandsList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } else {
+        eqSupported.value = false;
+      }
+    } catch (e) {
+      printERROR("fetchEqualizerData error: $e");
+    }
+  }
+
+  Future<void> setEqEnabled(bool enable) async {
+    eqEnabled.value = enable;
+    await _audioHandler.customAction("setEqualizerEnabled", {"enabled": enable});
+  }
+
+  Future<void> setEqBandGain(int index, double gain) async {
+    if (index >= 0 && index < eqBands.length) {
+      final updated = Map<String, dynamic>.from(eqBands[index]);
+      updated['gain'] = gain;
+      eqBands[index] = updated;
+      eqPreset.value = "Benutzerdefiniert";
+      await _audioHandler.customAction("setEqualizerBandGain", {"index": index, "gain": gain});
+    }
+  }
+
+  Future<void> setEqLoudnessGain(double gain) async {
+    eqLoudnessGain.value = gain;
+    await _audioHandler.customAction("setLoudnessEnhancer", {
+      "enabled": gain > 0,
+      "gain": gain,
+    });
+  }
+
+  Future<void> applyEqPreset(String name, List<double> gains) async {
+    eqPreset.value = name;
+    for (int i = 0; i < eqBands.length && i < gains.length; i++) {
+      final updated = Map<String, dynamic>.from(eqBands[i]);
+      updated['gain'] = gains[i];
+      eqBands[i] = updated;
+    }
+    await _audioHandler.customAction("applyEqualizerPreset", {
+      "preset": name,
+      "gains": gains,
+    });
   }
 
   Future<void> toggleQueueLoopMode({bool showMessage = true}) async {

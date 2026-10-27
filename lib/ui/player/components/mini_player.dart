@@ -13,7 +13,6 @@ import '../../widgets/sleep_timer_bottom_sheet.dart';
 import '../../widgets/song_download_btn.dart';
 import '../../widgets/image_widget.dart';
 import '../../widgets/mini_player_progress_bar.dart';
-import '../../widgets/mini_equalizer.dart';
 import 'animated_play_button.dart';
 
 class MiniPlayer extends StatelessWidget {
@@ -182,13 +181,6 @@ class MiniPlayer extends StatelessWidget {
                                             ),
                                       ),
                                     ),
-                                    const SizedBox(width: 6),
-                                    Obx(() => MiniEqualizer(
-                                          isPlaying: playerController
-                                                  .buttonState.value ==
-                                              PlayButtonState.playing,
-                                          height: 11,
-                                        )),
                                   ],
                                 ),
                                 const SizedBox(height: 2),
@@ -216,7 +208,7 @@ class MiniPlayer extends StatelessWidget {
                         ),
                         //player control
                         SizedBox(
-                          width: isWideScreen && !bottomNavEnabled ? 450 : 90,
+                          width: isWideScreen && !bottomNavEnabled ? 450 : 135,
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
@@ -261,28 +253,20 @@ class MiniPlayer extends StatelessWidget {
                                             ))),
                                   ],
                                 ),
-                              if (isWideScreen && !bottomNavEnabled)
-                                SizedBox(
-                                    width: 40,
-                                    child: InkWell(
-                                      onTap: (playerController
-                                                  .currentQueue.isEmpty ||
-                                              (playerController
-                                                      .currentQueue.first.id ==
-                                                  playerController
-                                                      .currentSong.value?.id))
-                                          ? null
-                                          : playerController.prev,
-                                      child: Icon(
-                                        Icons.skip_previous,
-                                        color: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.color ??
-                                            Colors.white,
-                                        size: 35,
-                                      ),
-                                    )),
+                              SizedBox(
+                                  width: isWideScreen && !bottomNavEnabled ? 40 : 38,
+                                  child: InkWell(
+                                    onTap: playerController.prev,
+                                    child: Icon(
+                                      Icons.skip_previous,
+                                      color: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.color ??
+                                          Colors.white,
+                                      size: isWideScreen && !bottomNavEnabled ? 35 : 28,
+                                    ),
+                                  )),
                               isWideScreen && !bottomNavEnabled
                                   ? Container(
                                       decoration: BoxDecoration(
@@ -293,18 +277,18 @@ class MiniPlayer extends StatelessWidget {
                                               BorderRadius.circular(10)),
                                       width: 58,
                                       height: 58,
-                                      child: Center(
+                                      child: const Center(
                                           child: AnimatedPlayButton(
-                                        iconSize: isWideScreen ? 43 : 35,
+                                        iconSize: 43,
                                       )))
-                                  : SizedBox.square(
-                                      dimension: 50,
+                                  : const SizedBox.square(
+                                      dimension: 46,
                                       child: Center(
                                           child: AnimatedPlayButton(
-                                        iconSize: isWideScreen ? 43 : 35,
+                                        iconSize: 32,
                                       ))),
                               SizedBox(
-                                  width: 40,
+                                  width: isWideScreen && !bottomNavEnabled ? 40 : 38,
                                   child: Obx(() {
                                     final isLastSong =
                                         playerController.currentQueue.isEmpty ||
@@ -337,33 +321,65 @@ class MiniPlayer extends StatelessWidget {
                                         color: isLastSong
                                             ? titleLargeColor.withOpacity(0.2)
                                             : titleMediumColor,
-                                        size: 35,
+                                        size: isWideScreen && !bottomNavEnabled ? 35 : 28,
                                       ),
                                     );
                                   })),
                               if (isWideScreen && !bottomNavEnabled)
                                 Row(
                                   children: [
-                                    IconButton(
+                                    Obx(() {
+                                      final isSongLoop = playerController.isLoopModeEnabled.value;
+                                      final isPlaylistLoop = playerController.isQueueLoopModeEnabled.value;
+                                      const activeColor = Color(0xFF00D2FF);
+                                      final inactiveColor = (Theme.of(context).textTheme.titleLarge?.color ??
+                                              Colors.white)
+                                          .withOpacity(0.2);
+
+                                      return IconButton(
                                         iconSize: 20,
-                                        onPressed:
-                                            playerController.toggleLoopMode,
-                                        icon: Icon(
-                                          Icons.all_inclusive,
-                                          color: playerController
-                                                  .isLoopModeEnabled.value
-                                              ? (Theme.of(context)
-                                                      .textTheme
-                                                      .titleLarge
-                                                      ?.color ??
-                                                  Colors.white)
-                                              : (Theme.of(context)
-                                                          .textTheme
-                                                          .titleLarge
-                                                          ?.color ??
-                                                      Colors.white)
-                                                  .withOpacity(0.2),
-                                        )),
+                                        onPressed: playerController.cycleLoopMode,
+                                        icon: isSongLoop
+                                            ? Stack(
+                                                alignment: Alignment.center,
+                                                clipBehavior: Clip.none,
+                                                children: [
+                                                  const Icon(Icons.all_inclusive,
+                                                      color: activeColor, size: 20),
+                                                  Positioned(
+                                                    right: -4,
+                                                    top: -2,
+                                                    child: Container(
+                                                      padding: const EdgeInsets.all(1.5),
+                                                      decoration: const BoxDecoration(
+                                                        color: activeColor,
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      constraints: const BoxConstraints(
+                                                          minWidth: 11, minHeight: 11),
+                                                      child: const Center(
+                                                        child: Text(
+                                                          '1',
+                                                          style: TextStyle(
+                                                            color: Colors.black,
+                                                            fontSize: 8,
+                                                            fontWeight: FontWeight.w900,
+                                                            height: 1.0,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              )
+                                            : Icon(
+                                                Icons.all_inclusive,
+                                                color: isPlaylistLoop
+                                                    ? activeColor
+                                                    : inactiveColor,
+                                              ),
+                                      );
+                                    }),
                                     IconButton(
                                         iconSize: 20,
                                         onPressed: () {

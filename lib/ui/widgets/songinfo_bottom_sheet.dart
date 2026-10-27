@@ -22,6 +22,7 @@ import '../navigator.dart';
 import 'song_download_btn.dart';
 import 'image_widget.dart';
 import 'song_info_dialog.dart';
+import 'inapp_equalizer_sheet.dart';
 
 class SongInfoBottomSheet extends StatelessWidget {
   const SongInfoBottomSheet(this.song,
@@ -98,6 +99,46 @@ class SongInfoBottomSheet extends StatelessWidget {
               ),
             ),
             const Divider(),
+            ListTile(
+              visualDensity: const VisualDensity(vertical: -1),
+              leading: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00D2FF).withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.equalizer_rounded,
+                  color: Color(0xFF00D2FF),
+                  size: 20,
+                ),
+              ),
+              title: const Text(
+                "Equalizer & Bass-Boost",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                "In-App Equalizer & Lautstärke / Bass anpassen",
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6) ?? Colors.white60,
+                  fontSize: 12,
+                ),
+              ),
+              trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+              onTap: () {
+                Navigator.of(context).pop();
+                showModalBottomSheet(
+                  constraints: const BoxConstraints(maxWidth: 550),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
+                  ),
+                  isScrollControlled: true,
+                  context: context,
+                  barrierColor: Colors.black.withOpacity(0.6),
+                  builder: (context) => const InAppEqualizerSheet(),
+                );
+              },
+            ),
             ListTile(
               visualDensity: const VisualDensity(vertical: -1),
               leading: const Icon(Icons.sensors),

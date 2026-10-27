@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:widget_marquee/widget_marquee.dart';
 
-import '/services/piped_service.dart';
 import '../screens/Library/library_controller.dart';
 import '/ui/widgets/snackbar.dart';
 import '../../models/playlist.dart';
@@ -27,10 +26,9 @@ class CreateNRenamePlaylistPopup extends StatelessWidget {
     final librPlstCntrller = Get.find<LibraryPlaylistsController>();
     librPlstCntrller.changeCreationMode("local");
     librPlstCntrller.textInputController.text = "";
-    final isPipedLinked = Get.find<PipedServices>().isLoggedIn;
     return CommonDialog(
       child: Container(
-        height: (isPipedLinked && !renamePlaylist) ? 245 : 200,
+        height: 200,
         padding:
             const EdgeInsets.only(top: 30, left: 30, right: 30, bottom: 10),
         child: Stack(
@@ -52,37 +50,6 @@ class CreateNRenamePlaylistPopup extends StatelessWidget {
                   ),
                 ),
               ),
-              if (isPipedLinked && !renamePlaylist)
-                Obx(
-                  () => Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Radio(
-                              value: "piped",
-                              groupValue:
-                                  librPlstCntrller.playlistCreationMode.value,
-                              onChanged: librPlstCntrller.changeCreationMode),
-                          Text("Piped".tr),
-                        ],
-                      ),
-                      const SizedBox(
-                        width: 15,
-                      ),
-                      Row(
-                        children: [
-                          Radio(
-                              value: "local",
-                              groupValue:
-                                  librPlstCntrller.playlistCreationMode.value,
-                              onChanged: librPlstCntrller.changeCreationMode),
-                          Text("local".tr),
-                        ],
-                      )
-                    ],
-                  ),
-                ),
               ModifiedTextField(
                 textCapitalization: TextCapitalization.sentences,
                 autofocus: true,
@@ -168,7 +135,7 @@ class CreateNRenamePlaylistPopup extends StatelessWidget {
               )
             ]),
             Obx(() =>
-                (librPlstCntrller.creationInProgress.isTrue && isPipedLinked)
+                (librPlstCntrller.creationInProgress.isTrue)
                     ? const Positioned(
                         top: 5,
                         right: 8,

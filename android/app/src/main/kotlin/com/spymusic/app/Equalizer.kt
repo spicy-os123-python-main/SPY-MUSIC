@@ -49,6 +49,7 @@ class Equalizer {
             putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
             putExtra(AudioEffect.EXTRA_AUDIO_SESSION, sessionId)
             putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
+            addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
         }
         context.sendBroadcast(intent)
     }

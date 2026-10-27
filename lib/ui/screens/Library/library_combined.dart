@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '/ui/screens/Settings/settings_screen_controller.dart';
-import '/ui/widgets/piped_sync_widget.dart';
 import '../../widgets/create_playlist_dialog.dart';
 import '../../widgets/import_playlist_dialog.dart';
 import '../Watchtime/watchtime_screen.dart';
@@ -14,7 +12,6 @@ class CombinedLibrary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tabCon = Get.put(CombinedLibraryController());
-    final settingscrnController = Get.find<SettingsScreenController>();
 
     return Scaffold(
       appBar: AppBar(
@@ -22,10 +19,6 @@ class CombinedLibrary extends StatelessWidget {
         backgroundColor: Theme.of(context).canvasColor,
         elevation: 0,
         actions: [
-          Obx(() => (settingscrnController.isLinkedWithPiped.isTrue)
-              ? const PipedSyncWidget(
-                  padding: EdgeInsets.only(right: 10, top: 50))
-              : const SizedBox.shrink()),
           Padding(
             padding: const EdgeInsets.only(top: 50.0, right: 10),
             child: SizedBox(

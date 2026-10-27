@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:widget_marquee/widget_marquee.dart';
 
-import '../../services/piped_service.dart';
 import '/models/media_Item_builder.dart';
 import '/ui/widgets/create_playlist_dialog.dart';
 import '../../models/playlist.dart';
@@ -18,10 +17,9 @@ class AddToPlaylist extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final addToPlaylistController = Get.put(AddToPlaylistController());
-    final isPipedLinked = Get.find<PipedServices>().isLoggedIn;
     return CommonDialog(
       child: Container(
-        height: isPipedLinked ? 400 : 350,
+        height: 350,
         padding:
             const EdgeInsets.only(top: 20, bottom: 30, left: 20, right: 20),
         child: Stack(
@@ -60,39 +58,6 @@ class AddToPlaylist extends StatelessWidget {
                   ],
                 ),
               ),
-              if (isPipedLinked)
-                Obx(
-                  () => Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Radio(
-                              value: "piped",
-                              groupValue:
-                                  addToPlaylistController.playlistType.value,
-                              onChanged:
-                                  addToPlaylistController.changePlaylistType),
-                          Text("Piped".tr),
-                        ],
-                      ),
-                      const SizedBox(
-                        width: 15,
-                      ),
-                      Row(
-                        children: [
-                          Radio(
-                              value: "local",
-                              groupValue:
-                                  addToPlaylistController.playlistType.value,
-                              onChanged:
-                                  addToPlaylistController.changePlaylistType),
-                          Text("local".tr),
-                        ],
-                      )
-                    ],
-                  ),
-                ),
               Container(
                 decoration: BoxDecoration(
                     color: Theme.of(context).primaryColorLight,
@@ -139,8 +104,7 @@ class AddToPlaylist extends StatelessWidget {
                 ),
               )
             ]),
-            Obx(() => (addToPlaylistController.additionInProgress.isTrue &&
-                    isPipedLinked)
+            Obx(() => (addToPlaylistController.additionInProgress.isTrue)
                 ? const Positioned(
                     top: 60,
                     right: 8,
@@ -164,8 +128,6 @@ class AddToPlaylistController extends GetxController {
   final RxList<Playlist> playlists = RxList();
   final playlistType = "local".obs;
   final additionInProgress = false.obs;
-  List<Playlist> localPlaylists = [];
-  List<Playlist> pipedPlaylists = [];
   AddToPlaylistController() {
     _getAllPlaylist();
   }
@@ -178,48 +140,21 @@ class AddToPlaylistController extends GetxController {
         })
         .whereType<Playlist>()
         .toList();
-    localPlaylists = playlists.toList();
-    final res = await Get.find<PipedServices>().getAllPlaylists();
-    if (res.code == 1) {
-      pipedPlaylists = res.response
-          .map((item) => Playlist(
-                title: item['name'],
-                playlistId: item['id'],
-                description: "Piped Playlist",
-                thumbnailUrl: item['thumbnail'],
-                isPipedPlaylist: true,
-              ))
-          .whereType<Playlist>()
-          .toList();
-    }
-  }
-
-  void changePlaylistType(val) {
-    playlistType.value = val;
-    playlists.value = val == "piped" ? pipedPlaylists : localPlaylists;
   }
 
   Future<bool> addSongsToPlaylist(
       List<MediaItem> songs, String playlistId, BuildContext context) async {
     additionInProgress.value = true;
-    if (playlistType.value == "local") {
-      final plstBox = await Hive.openBox(playlistId);
-      final playlistSongIds = plstBox.values.map((item) => item['videoId']);
-      for (MediaItem element in songs) {
-        if (!playlistSongIds.contains(element.id)) {
-          await plstBox.add(MediaItemBuilder.toJson(element));
-        }
+    final plstBox = await Hive.openBox(playlistId);
+    final playlistSongIds = plstBox.values.map((item) => item['videoId']);
+    for (MediaItem element in songs) {
+      if (!playlistSongIds.contains(element.id)) {
+        await plstBox.add(MediaItemBuilder.toJson(element));
       }
-      await plstBox.close();
-      additionInProgress.value = false;
-      return true;
-    } else {
-      final videosId = songs.map((e) => e.id).toList();
-      final res =
-          await Get.find<PipedServices>().addToPlaylist(playlistId, videosId);
-      additionInProgress.value = false;
-      return (res.code == 1);
     }
+    await plstBox.close();
+    additionInProgress.value = false;
+    return true;
   }
 
   // Future<bool> addSongToPlaylist(

@@ -56,6 +56,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   // ignore: prefer_typing_uninitialized_variables
   late final _cacheDir;
   late AudioPlayer _player;
+  AndroidEqualizer? _equalizer;
+  AndroidLoudnessEnhancer? _loudnessEnhancer;
   late MediaLibrary _mediaLibrary;
   // ignore: prefer_typing_uninitialized_variables
   dynamic currentIndex;
@@ -83,8 +85,24 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       JustAudioMediaKit.title = 'SPY MUSIC';
       JustAudioMediaKit.protocolWhitelist = const ['http', 'https', 'file'];
     }
+    if (GetPlatform.isAndroid) {
+      try {
+        _loudnessEnhancer = AndroidLoudnessEnhancer();
+        _equalizer = AndroidEqualizer();
+      } catch (e) {
+        printERROR("AudioEffect init error: $e");
+      }
+    }
     _mediaLibrary = MediaLibrary();
     _player = AudioPlayer(
+        audioPipeline: (GetPlatform.isAndroid &&
+                _equalizer != null &&
+                _loudnessEnhancer != null)
+            ? AudioPipeline(androidAudioEffects: [
+                _loudnessEnhancer!,
+                _equalizer!,
+              ])
+            : null,
         handleInterruptions: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
@@ -123,6 +141,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _listenForDurationChanges();
     if (GetPlatform.isAndroid) {
       _listenSessionIdStream();
+      _initEqualizerFromPrefs();
     }
     Timer.periodic(const Duration(seconds: 5), (timer) {
       if (_player.playing &&
@@ -133,23 +152,41 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     });
   }
 
+  Future<void> _initEqualizerFromPrefs() async {
+    if (!GetPlatform.isAndroid || _equalizer == null || _loudnessEnhancer == null) {
+      return;
+    }
+    try {
+      final appPrefsBox = Hive.box("AppPrefs");
+      final eqEnabled = appPrefsBox.get("eq_enabled", defaultValue: false) as bool;
+      final loudnessEnabled = appPrefsBox.get("eq_loudness_enabled", defaultValue: false) as bool;
+      final loudnessGain = (appPrefsBox.get("eq_loudness_gain", defaultValue: 0.0) as num).toDouble();
+
+      await _equalizer!.setEnabled(eqEnabled);
+      await _loudnessEnhancer!.setEnabled(loudnessEnabled);
+      if (loudnessGain > 0) {
+        await _loudnessEnhancer!.setTargetGain(loudnessGain);
+      }
+
+      final savedBands = appPrefsBox.get("eq_band_gains");
+      if (savedBands is Map) {
+        final params = await _equalizer!.parameters;
+        for (var band in params.bands) {
+          if (savedBands.containsKey(band.index)) {
+            final gain = (savedBands[band.index] as num).toDouble();
+            await band.setGain(gain);
+          }
+        }
+      }
+    } catch (e) {
+      printERROR("Error initializing equalizer from prefs: $e");
+    }
+  }
+
   Future<void> _initAudioSession() async {
     try {
       final session = await AudioSession.instance;
-      await session.configure(const AudioSessionConfiguration(
-        avAudioSessionCategory: AVAudioSessionCategory.playback,
-        avAudioSessionCategoryOptions:
-            AVAudioSessionCategoryOptions.mixWithOthers,
-        avAudioSessionMode: AVAudioSessionMode.defaultMode,
-        androidAudioAttributes: AndroidAudioAttributes(
-          contentType: AndroidAudioContentType.music,
-          flags: AndroidAudioFlags.none,
-          usage: AndroidAudioUsage.media,
-        ),
-        androidAudioFocusGainType:
-            AndroidAudioFocusGainType.gainTransientMayDuck,
-        androidWillPauseWhenDucked: false,
-      ));
+      await session.configure(const AudioSessionConfiguration.music());
     } catch (e) {
       printINFO("AudioSession config error: $e");
     }
@@ -389,7 +426,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     if (url.contains('ratebypass=yes') ||
         url.contains('itag=18') ||
         url.contains('.m3u8') ||
-        url.contains('piped') ||
         url.contains('soundcloud') ||
         url.contains('sndcdn') ||
         mediaItem.id.startsWith("sc_") ||
@@ -588,8 +624,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
     if (repeatMode == AudioServiceRepeatMode.none) {
       loopModeEnabled = false;
-    } else {
+      await _player.setLoopMode(LoopMode.off);
+    } else if (repeatMode == AudioServiceRepeatMode.one) {
       loopModeEnabled = true;
+      await _player.setLoopMode(LoopMode.one);
+    } else {
+      loopModeEnabled = false;
+      await _player.setLoopMode(LoopMode.all);
     }
   }
 
@@ -605,7 +646,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   @override
-  Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
+  Future<dynamic> customAction(String name, [Map<String, dynamic>? extras]) async {
     switch (name) {
 
       case 'dispose':
@@ -904,6 +945,86 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       case 'openEqualizer':
         EqualizerService.openEqualizer(_player.androidAudioSessionId!);
+        break;
+
+      case 'getEqualizerData':
+        if (!GetPlatform.isAndroid || _equalizer == null) {
+          return {'supported': false};
+        }
+        try {
+          final params = await _equalizer!.parameters;
+          final appPrefsBox = Hive.box("AppPrefs");
+          final savedPreset = appPrefsBox.get("eq_preset", defaultValue: "Normal");
+          return {
+            'supported': true,
+            'enabled': _equalizer!.enabled,
+            'minDecibels': params.minDecibels,
+            'maxDecibels': params.maxDecibels,
+            'bands': params.bands.map((b) => {
+              'index': b.index,
+              'centerFrequency': b.centerFrequency,
+              'gain': b.gain,
+            }).toList(),
+            'loudnessEnabled': _loudnessEnhancer?.enabled ?? false,
+            'loudnessGain': _loudnessEnhancer?.targetGain ?? 0.0,
+            'preset': savedPreset,
+          };
+        } catch (e) {
+          printERROR("getEqualizerData error: $e");
+          return {'supported': false, 'error': e.toString()};
+        }
+
+      case 'setEqualizerEnabled':
+        final enable = extras!['enabled'] as bool;
+        if (_equalizer != null) {
+          await _equalizer!.setEnabled(enable);
+          await Hive.box("AppPrefs").put("eq_enabled", enable);
+        }
+        break;
+
+      case 'setEqualizerBandGain':
+        final index = extras!['index'] as int;
+        final gain = (extras['gain'] as num).toDouble();
+        if (_equalizer != null) {
+          final params = await _equalizer!.parameters;
+          if (index >= 0 && index < params.bands.length) {
+            await params.bands[index].setGain(gain);
+            final appPrefsBox = Hive.box("AppPrefs");
+            Map savedBands = Map.from(appPrefsBox.get("eq_band_gains", defaultValue: {}) ?? {});
+            savedBands[index] = gain;
+            await appPrefsBox.put("eq_band_gains", savedBands);
+          }
+        }
+        break;
+
+      case 'setLoudnessEnhancer':
+        final enable = extras!['enabled'] as bool;
+        final gain = (extras['gain'] as num).toDouble();
+        if (_loudnessEnhancer != null) {
+          await _loudnessEnhancer!.setEnabled(enable);
+          if (enable) {
+            await _loudnessEnhancer!.setTargetGain(gain);
+          }
+          final appPrefsBox = Hive.box("AppPrefs");
+          await appPrefsBox.put("eq_loudness_enabled", enable);
+          await appPrefsBox.put("eq_loudness_gain", gain);
+        }
+        break;
+
+      case 'applyEqualizerPreset':
+        final presetName = extras!['preset'] as String;
+        final gains = List<double>.from((extras['gains'] as List).map((e) => (e as num).toDouble()));
+        if (_equalizer != null) {
+          final params = await _equalizer!.parameters;
+          final appPrefsBox = Hive.box("AppPrefs");
+          Map savedBands = {};
+          for (int i = 0; i < params.bands.length && i < gains.length; i++) {
+            await params.bands[i].setGain(gains[i]);
+            savedBands[i] = gains[i];
+          }
+          await appPrefsBox.put("eq_band_gains", savedBands);
+          await appPrefsBox.put("eq_preset", presetName);
+        }
         break;
 
       case 'saveSession':
@@ -1357,18 +1478,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       if (streamInfo == null || !streamInfo.playable) {
         final token = RootIsolateToken.instance;
-        List<String>? pipedList;
-        try {
-          final customList = Hive.box('AppPrefs').get('piped_instances');
-          if (customList is List && customList.isNotEmpty) {
-            pipedList = customList.map((e) => e.toString()).toList();
-          }
-        } catch (_) {}
-
         Map<String, dynamic> streamInfoJson;
         try {
           streamInfoJson = await Isolate.run(
-            () => getStreamInfo(songId, token, pipedInstances: pipedList),
+            () => getStreamInfo(songId, token),
           ).timeout(const Duration(seconds: 18));
         } catch (e) {
           printERROR("YouTube stream lookup failed for $songId: $e");
