@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../models/playlist.dart';
 import '../navigator.dart';
 import 'image_widget.dart';
+import 'playlist_options_bottom_sheet.dart';
 
 class ContentListItem extends StatefulWidget {
   const ContentListItem(
@@ -41,6 +43,26 @@ class _ContentListItemState extends State<ContentListItem> {
         Get.toNamed(ScreenNavigationSetup.playlistScreen,
             id: ScreenNavigationSetup.id,
             arguments: [widget.content, widget.content.playlistId]);
+      },
+      onLongPress: () {
+        if (!isAlbum) {
+          Playlist? p;
+          if (widget.content is Playlist) {
+            p = widget.content as Playlist;
+          } else if (widget.content != null) {
+            try {
+              p = Playlist.fromJson(widget.content);
+            } catch (_) {}
+          }
+          if (p != null) {
+            showModalBottomSheet(
+              backgroundColor: Colors.transparent,
+              isScrollControlled: true,
+              context: context,
+              builder: (ctx) => PlaylistOptionsBottomSheet(playlist: p!),
+            );
+          }
+        }
       },
       child: AnimatedScale(
         scale: _isPressed ? 0.94 : 1.0,

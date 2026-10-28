@@ -9,6 +9,7 @@ import '../../models/playlist.dart';
 import '../navigator.dart';
 import '../player/player_controller.dart';
 import 'image_widget.dart';
+import 'playlist_options_bottom_sheet.dart';
 import 'song_list_tile.dart';
 import 'songinfo_bottom_sheet.dart';
 
@@ -237,6 +238,26 @@ class ListWidget extends StatelessWidget with RemoveSongFromPlaylistMixin {
           Get.toNamed(ScreenNavigationSetup.playlistScreen,
               id: ScreenNavigationSetup.id,
               arguments: [playlist, playlist.playlistId]);
+        }
+      },
+      onLongPress: () {
+        if (playlist != null) {
+          Playlist? p;
+          if (playlist is Playlist) {
+            p = playlist;
+          } else {
+            try {
+              p = Playlist.fromJson(playlist);
+            } catch (_) {}
+          }
+          if (p != null) {
+            showModalBottomSheet(
+              backgroundColor: Colors.transparent,
+              isScrollControlled: true,
+              context: context,
+              builder: (ctx) => PlaylistOptionsBottomSheet(playlist: p!),
+            );
+          }
         }
       },
       child: SizedBox(

@@ -12,9 +12,9 @@ import '../../../services/downloader.dart';
 import '../../../services/playlist_repair_service.dart';
 import '../../navigator.dart';
 import '../../player/player_controller.dart';
-import '../../widgets/create_playlist_dialog.dart';
 import '../../widgets/loader.dart';
 import '../../widgets/playlist_export_dialog.dart';
+import '../../widgets/playlist_options_bottom_sheet.dart';
 import '../../widgets/snackbar.dart';
 import '../../widgets/song_list_tile.dart';
 import '../../widgets/songinfo_bottom_sheet.dart';
@@ -171,69 +171,21 @@ class PlaylistScreen extends StatelessWidget {
                                   showModalBottomSheet(
                                     constraints:
                                         const BoxConstraints(maxWidth: 500),
-                                    shape: const RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.vertical(
-                                          top: Radius.circular(10.0)),
-                                    ),
+                                    backgroundColor: Colors.transparent,
+                                    isScrollControlled: true,
                                     context: Get.find<PlayerController>()
                                         .homeScaffoldkey
                                         .currentState!
                                         .context,
-                                    barrierColor:
-                                        Colors.transparent.withAlpha(100),
-                                    builder: (context) => SizedBox(
-                                      height: 140,
-                                      child: Column(
-                                        children: [
-                                          ListTile(
-                                            leading: const Icon(Icons.edit),
-                                            title: Text("renamePlaylist".tr),
-                                            onTap: () {
-                                              Navigator.of(context).pop();
-                                              showDialog(
-                                                context: context,
-                                                builder: (context) =>
-                                                    CreateNRenamePlaylistPopup(
-                                                        renamePlaylist: true,
-                                                        playlist:
-                                                            playlistController
-                                                                .playlist
-                                                                .value),
-                                              );
-                                            },
-                                          ),
-                                          ListTile(
-                                            leading: const Icon(Icons.delete),
-                                            title: Text("removePlaylist".tr),
-                                            onTap: () {
-                                              Navigator.of(context).pop();
-                                              playlistController
-                                                  .addNremoveFromLibrary(
-                                                      playlistController
-                                                          .playlist.value,
-                                                      add: false)
-                                                  .then((value) {
-                                                Get.nestedKey(
-                                                        ScreenNavigationSetup
-                                                            .id)!
-                                                    .currentState!
-                                                    .pop();
-                                                ScaffoldMessenger.of(
-                                                        Get.context!)
-                                                    .showSnackBar(snackbar(
-                                                        Get.context!,
-                                                        value
-                                                            ? "playlistRemovedAlert"
-                                                                .tr
-                                                            : "operationFailed"
-                                                                .tr,
-                                                        size: SanckBarSize
-                                                            .MEDIUM));
-                                              });
-                                            },
-                                          ),
-                                        ],
-                                      ),
+                                    builder: (context) =>
+                                        PlaylistOptionsBottomSheet(
+                                      playlist:
+                                          playlistController.playlist.value,
+                                      onDeleted: () {
+                                        Get.nestedKey(ScreenNavigationSetup.id)
+                                            ?.currentState
+                                            ?.pop();
+                                      },
                                     ),
                                   );
                                 },

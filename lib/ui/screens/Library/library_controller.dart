@@ -353,6 +353,39 @@ class LibraryPlaylistsController extends GetxController
     return false;
   }
 
+  Future<bool> deletePlaylist(Playlist playlist) async {
+    final id = playlist.playlistId;
+    if (id == "SongDownloads" ||
+        id == "SongsCache" ||
+        id == "LIBRP" ||
+        id == "LIBFAV") {
+      return false;
+    }
+
+    try {
+      if (playlist.isPipedPlaylist) {
+        await Get.find<PipedServices>().deletePlaylist(id);
+        await blacklistPipedPlaylist(playlist);
+      } else {
+        final box = await Hive.openBox("LibraryPlaylists");
+        await box.delete(id);
+        await box.close();
+
+        if (await Hive.boxExists(id)) {
+          final songsBox = await Hive.openBox(id);
+          await songsBox.deleteFromDisk();
+        }
+      }
+
+      libraryPlaylists.removeWhere((p) => p.playlistId == id);
+      refreshLib();
+      return true;
+    } catch (e) {
+      printERROR("deletePlaylist error: $e");
+      return false;
+    }
+  }
+
   void changeCreationMode(String? val) {
     playlistCreationMode.value = val!;
   }
