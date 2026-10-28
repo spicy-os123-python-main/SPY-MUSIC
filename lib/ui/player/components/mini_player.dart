@@ -191,7 +191,13 @@ class MiniPlayer extends StatelessWidget {
                                     delay: const Duration(milliseconds: 300),
                                     duration: const Duration(seconds: 5),
                                     child: Text(
-                                      playerController.currentSong.value?.artist ?? "",
+                                      (playerController.currentSong.value?.artist != null &&
+                                              playerController.currentSong.value?.artist != 'null' &&
+                                              playerController.currentSong.value!.artist!.isNotEmpty)
+                                          ? playerController.currentSong.value!.artist!
+                                          : (playerController.currentSong.value?.extras?['artist'] ??
+                                              playerController.currentSong.value?.extras?['searchQuery'] ??
+                                              ""),
                                       maxLines: 1,
                                       style: Theme.of(context)
                                           .textTheme

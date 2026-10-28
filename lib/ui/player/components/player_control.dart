@@ -63,7 +63,13 @@ class PlayerControlWidget extends StatelessWidget {
                           duration: const Duration(seconds: 10),
                           id: "${playerController.currentSong.value?.id ?? 'idle'}_subtitle",
                           child: Text(
-                            playerController.currentSong.value?.artist ?? "NA",
+                            (playerController.currentSong.value?.artist != null &&
+                                    playerController.currentSong.value?.artist != 'null' &&
+                                    playerController.currentSong.value!.artist!.isNotEmpty)
+                                ? playerController.currentSong.value!.artist!
+                                : (playerController.currentSong.value?.extras?['artist'] ??
+                                    playerController.currentSong.value?.extras?['searchQuery'] ??
+                                    "unknownArtist".tr),
                             textAlign: TextAlign.start,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.labelSmall,

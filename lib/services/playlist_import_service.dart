@@ -111,6 +111,31 @@ class PlaylistImportService {
     }
   }
 
+  Future<String?> _fetchSpotifyTrackCover(String trackId) async {
+    if (trackId.isEmpty) return null;
+    try {
+      final oembedUrl =
+          'https://open.spotify.com/oembed?url=https://open.spotify.com/track/$trackId';
+      final resp = await _dio.get(
+        oembedUrl,
+        options: Options(
+          sendTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+        ),
+      );
+      if (resp.statusCode == 200 && resp.data != null) {
+        final data = resp.data is Map
+            ? resp.data as Map
+            : jsonDecode(resp.data.toString());
+        final thumb = data['thumbnail_url']?.toString();
+        if (thumb != null && thumb.isNotEmpty) {
+          return thumb;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<Map<String, dynamic>> _importSpotify(String url) async {
     try {
       // 1. Extract playlist ID (supporting direct links, shortened spotify.link, and URIs)
@@ -188,48 +213,72 @@ class PlaylistImportService {
         }
       } catch (_) {}
 
-      // 3. Process each track strictly as 1:1 Spotify track (NO YouTube search/replacement during import!)
+      // 3. Process each track strictly as 1:1 Spotify track with individual official cover art
       final List<MediaItem> items = [];
+      const int batchSize = 4;
 
-      for (int i = 0; i < trackList.length; i++) {
-        final t = trackList[i];
-        final trackName = (t['title'] ?? 'Unbekannt').toString().trim();
-        final trackArtist = (t['subtitle'] ?? '').toString().trim();
-        final durationMs = (t['duration'] is int)
-            ? t['duration'] as int
-            : (int.tryParse(t['duration']?.toString() ?? '180000') ?? 180000);
-        final uri = t['uri']?.toString() ?? 'spotify:track:${items.length}';
-        final trackId = uri.contains(':') ? uri.split(':').last : uri;
-        final previewUrl = t['audioPreview']?['url']?.toString();
+      for (int i = 0; i < trackList.length; i += batchSize) {
+        final end = (i + batchSize < trackList.length) ? i + batchSize : trackList.length;
+        final batch = trackList.sublist(i, end);
 
-        final targetItem = MediaItem(
-          id: 'sp_$trackId',
-          title: trackName,
-          artist: trackArtist.isNotEmpty ? trackArtist : 'Spotify Artist',
-          album: title,
-          duration: Duration(milliseconds: durationMs),
-          artUri: coverArtUrl != null
-              ? Uri.tryParse(coverArtUrl)
-              : Uri.tryParse(Playlist.thumbPlaceholderUrl),
-          extras: {
-            'searchQuery': '$trackName $trackArtist',
-            'isSpotify': true,
-            'platform': 'Spotify',
-            'spotifyUri': uri,
-            'audioPreviewUrl': previewUrl,
-            'duration': durationMs ~/ 1000,
-            'length':
-                "${(durationMs ~/ 1000) ~/ 60}:${((durationMs ~/ 1000) % 60).toString().padLeft(2, '0')}",
-          },
-        );
+        // Fetch official covers concurrently for this batch to ensure fast import with 100% accurate artwork
+        final covers = await Future.wait(batch.map((t) {
+          final uri = t['uri']?.toString() ?? '';
+          final trackId = uri.contains(':') ? uri.split(':').last : uri;
+          return _fetchSpotifyTrackCover(trackId);
+        }));
 
-        items.add(targetItem);
-        currentTrack.value = i + 1;
-        importProgress.value = (i + 1) / trackList.length;
-        importStatus.value = 'Importiere "$trackName" (${i + 1}/${trackList.length})';
+        for (int j = 0; j < batch.length; j++) {
+          final t = batch[j];
+          final trackCover = covers[j];
+          final trackName = (t['title'] ?? 'Unbekannt').toString().trim();
+          final rawArtist = (t['subtitle'] ?? '').toString().trim();
+          final trackArtist = rawArtist.isNotEmpty ? rawArtist : 'Spotify Artist';
+          final durationMs = (t['duration'] is int)
+              ? t['duration'] as int
+              : (int.tryParse(t['duration']?.toString() ?? '180000') ?? 180000);
+          final uri = t['uri']?.toString() ?? 'spotify:track:${items.length}';
+          final trackId = uri.contains(':') ? uri.split(':').last : uri;
+          final previewUrl = t['audioPreview']?['url']?.toString();
 
-        // Deliberate clean pacing: guarantees visual progress and avoids database locking
-        await Future.delayed(const Duration(milliseconds: 35));
+          final finalCover = trackCover ?? coverArtUrl ?? Playlist.thumbPlaceholderUrl;
+
+          final targetItem = MediaItem(
+            id: 'sp_$trackId',
+            title: trackName,
+            artist: trackArtist,
+            album: title,
+            duration: Duration(milliseconds: durationMs),
+            artUri: Uri.tryParse(finalCover),
+            extras: {
+              'searchQuery': '$trackName $trackArtist',
+              'artist': trackArtist,
+              'artists': [
+                {'name': trackArtist, 'id': ''}
+              ],
+              'isSpotify': true,
+              'platform': 'Spotify',
+              'spotifyUri': uri,
+              'audioPreviewUrl': previewUrl,
+              'duration': durationMs ~/ 1000,
+              'length':
+                  "${(durationMs ~/ 1000) ~/ 60}:${((durationMs ~/ 1000) % 60).toString().padLeft(2, '0')}",
+              'thumbnails': [
+                {'url': finalCover}
+              ],
+              'artworkUrl': finalCover,
+            },
+          );
+
+          items.add(targetItem);
+          currentTrack.value = items.length;
+          importProgress.value = items.length / trackList.length;
+          importStatus.value =
+              'Importiere "$trackName" ($trackArtist) (${items.length}/${trackList.length})';
+        }
+
+        // Slight deliberate pacing for UI responsiveness
+        await Future.delayed(const Duration(milliseconds: 30));
       }
 
       // 4. Save to local library

@@ -329,7 +329,13 @@ class _SongListTileState extends State<SongListTile>
                       }),
                       Expanded(
                         child: Text(
-                          "${widget.song.artist}",
+                          (widget.song.artist != null &&
+                                  widget.song.artist != 'null' &&
+                                  widget.song.artist!.isNotEmpty)
+                              ? widget.song.artist!
+                              : (widget.song.extras?['artist'] ??
+                                  widget.song.extras?['searchQuery'] ??
+                                  'unknownArtist'.tr),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style:
