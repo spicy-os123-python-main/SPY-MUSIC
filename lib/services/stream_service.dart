@@ -206,11 +206,19 @@ class StreamProvider {
           orElse: () => audioFormats!.first);
 
   Audio? get lowQualityAudio {
+    // 1. Prefer itag 250 (Opus ~70 kbps) for 85% Ultra Data Saver:
+    // It saves ~60% data while completely eliminating the harsh quantization noise, high-cut and hissing of itag 249.
+    final cleanOpus = audioFormats?.firstWhereOrNull((item) => item.itag == 250);
+    if (cleanOpus != null) return cleanOpus;
+
+    // 2. Prioritize clean audio with ratebypass
     final rateBypass = audioFormats?.firstWhereOrNull(
         (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
     if (rateBypass != null) return rateBypass;
 
-    return audioFormats?.lastWhere((item) => item.itag == 249 || item.itag == 139,
+    // 3. Fallback to AAC 128k (140) or last resort 249 / 139
+    return audioFormats?.lastWhere(
+        (item) => item.itag == 140 || item.itag == 249 || item.itag == 139,
         orElse: () => audioFormats!.first);
   }
 

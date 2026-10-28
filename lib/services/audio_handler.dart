@@ -110,10 +110,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         handleAudioSessionActivation: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 50),
+          minBufferDuration: Duration(seconds: 40),
           maxBufferDuration: Duration(seconds: 120),
-          bufferForPlaybackDuration: Duration(milliseconds: 50),
-          bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
+          bufferForPlaybackDuration: Duration(milliseconds: 2500),
+          bufferForPlaybackAfterRebufferDuration: Duration(seconds: 5),
         )));
     if (GetPlatform.isAndroid || GetPlatform.isIOS) {
       _initAudioSession();
@@ -1220,9 +1220,21 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         final presetName = extras!['preset'] as String;
         final gains = List<double>.from(
             (extras['gains'] as List).map((e) => (e as num).toDouble()));
+        final preserveBass = extras['preserveBass'] as bool? ?? false;
+        final customBass = (extras['customBass'] as num?)?.toDouble() ?? 0.0;
         if (_equalizer != null) {
           final params = await _equalizer!.parameters;
           final appPrefsBox = Hive.box("AppPrefs");
+
+          final effectiveBass = preserveBass && customBass > 0
+              ? customBass
+              : ((appPrefsBox.get("custom_bass_boost", defaultValue: 0.0) as num).toDouble() +
+                 (appPrefsBox.get("bummm_boost_gain", defaultValue: 0.0) as num).toDouble());
+
+          if (effectiveBass > 0 && gains.isNotEmpty) {
+            gains[0] = effectiveBass;
+          }
+
           Map savedBands = {};
           for (int i = 0; i < params.bands.length && i < gains.length; i++) {
             final justAudioGain =

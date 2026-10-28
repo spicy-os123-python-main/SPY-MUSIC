@@ -10,12 +10,16 @@
 
 <p align="center">
   <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk">
-    <img src="https://img.shields.io/badge/📲%20DIREKTER%20DOWNLOAD-SPY--MUSIC%20(APK)-FF0055?style=for-the-badge&logo=android&logoColor=white" height="48" alt="Download SPY MUSIC APK" />
+    <img src="https://img.shields.io/badge/📲%20ANDROID%20DOWNLOAD-SPY--MUSIC%20(APK)-FF0055?style=for-the-badge&logo=android&logoColor=white" height="48" alt="Download SPY MUSIC APK" />
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/SPY-MUSIC.ipa">
+    <img src="https://img.shields.io/badge/🍏%20IPHONE%20DOWNLOAD-SPY--MUSIC%20(IPA)-00D2FF?style=for-the-badge&logo=apple&logoColor=white" height="48" alt="Download SPY MUSIC IPA" />
   </a>
 </p>
 
 <p align="center">
-  👉 <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk">Hier tippen: spymusic-arm64-v8a.apk herunterladen (12 MB)</a></b> 👈
+  👉 <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk">Android APK herunterladen (12 MB)</a></b> &nbsp;•&nbsp; <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/SPY-MUSIC.ipa">iPhone IPA herunterladen (27 MB)</a></b> 👈
 </p>
 
 ---
@@ -41,7 +45,7 @@ SPY MUSIC kann auf jedem iPhone ohne App Store über **AltStore** installiert we
    - Gehe auf deinem iPhone zu *Einstellungen* > *Datenschutz & Sicherheit* > ganz unten *Entwicklermodus* aktivieren und das iPhone neu starten.
    - Gehe zu *Einstellungen* > *Allgemein* > *VPN und Geräteverwaltung* und tippe auf deine Apple-ID, um ihr zu vertrauen.
 3. **SPY MUSIC (.ipa) herunterladen:**
-   - Lade die Datei **`SPY-MUSIC.ipa`** aus dem [neuesten GitHub Release](https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest) direkt auf deinem iPhone in Safari herunter.
+   - 👉 **[Hier tippen: SPY-MUSIC.ipa direkt herunterladen (27 MB)](https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/SPY-MUSIC.ipa)** 👈 (oder aus den [Releases](https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest)) direkt auf deinem iPhone in Safari.
 4. **In AltStore öffnen:**
    - Öffne die **AltStore**-App auf dem iPhone, gehe auf *My Apps*, tippe oben links auf das **+** (Plus) und wähle die heruntergeladene `SPY-MUSIC.ipa` aus.
 5. **Fertig!**

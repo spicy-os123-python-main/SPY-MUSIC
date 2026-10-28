@@ -76,58 +76,63 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
         int attempts = 0;
 
         while (attempts < 3) {
-          // Attempt 0: Use NewPipe pattern (query range for iOS/Web, header Range for Android)
-          // Attempt 1: Swap range mechanism (header vs query)
-          // Attempt 2: Use NewPipe desktop Firefox User-Agent
-          final useQueryRange = attempts == 0 ? !isAndroid : isAndroid;
-          final ua = attempts < 2
-              ? defaultUa
-              : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0';
+          try {
+            // Attempt 0: Use NewPipe pattern (query range for iOS/Web, header Range for Android)
+            // Attempt 1: Swap range mechanism (header vs query)
+            // Attempt 2: Use NewPipe desktop Firefox User-Agent
+            final useQueryRange = attempts == 0 ? !isAndroid : isAndroid;
+            final ua = attempts < 2
+                ? defaultUa
+                : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0';
 
-          Uri reqUri = Uri.parse(url);
-          final qParams = Map<String, String>.from(reqUri.queryParameters);
-          qParams['rn'] = '$chunkIndex';
-          if (useQueryRange) {
-            qParams['range'] = '$current-$nextEnd';
-          } else {
-            qParams.remove('range');
+            Uri reqUri = Uri.parse(url);
+            final qParams = Map<String, String>.from(reqUri.queryParameters);
+            qParams['rn'] = '$chunkIndex';
+            if (useQueryRange) {
+              qParams['range'] = '$current-$nextEnd';
+            } else {
+              qParams.remove('range');
+            }
+            reqUri = reqUri.replace(queryParameters: qParams);
+
+            final req = await client.getUrl(reqUri);
+            req.headers.set('User-Agent', ua);
+            req.headers.set('Origin', 'https://www.youtube.com');
+            req.headers.set('Referer', 'https://www.youtube.com');
+            req.headers.set('Sec-Fetch-Dest', 'empty');
+            req.headers.set('Sec-Fetch-Mode', 'cors');
+            req.headers.set('Sec-Fetch-Site', 'cross-site');
+            req.headers.set('TE', 'trailers');
+            req.headers.set('Connection', 'keep-alive');
+
+            if (!useQueryRange) {
+              req.headers.set('Range', 'bytes=$current-$nextEnd');
+            }
+
+            if (customHeaders != null) {
+              customHeaders!.forEach((k, v) {
+                final lower = k.toLowerCase();
+                if (lower != 'user-agent' && lower != 'range') {
+                  req.headers.set(k, v);
+                }
+              });
+            }
+
+            resp = await req.close();
+            if (resp.statusCode == 200 || resp.statusCode == 206) {
+              break;
+            }
+
+            printERROR(
+                "ChunkedStreamAudioSource HTTP ${resp.statusCode} for chunk $chunkIndex ($current-$nextEnd, attempt ${attempts + 1})");
+            await resp.drain();
+          } catch (netErr) {
+            printERROR(
+                "ChunkedStreamAudioSource network attempt ${attempts + 1} failed: $netErr");
           }
-          reqUri = reqUri.replace(queryParameters: qParams);
-
-          final req = await client.getUrl(reqUri);
-          req.headers.set('User-Agent', ua);
-          req.headers.set('Origin', 'https://www.youtube.com');
-          req.headers.set('Referer', 'https://www.youtube.com');
-          req.headers.set('Sec-Fetch-Dest', 'empty');
-          req.headers.set('Sec-Fetch-Mode', 'cors');
-          req.headers.set('Sec-Fetch-Site', 'cross-site');
-          req.headers.set('TE', 'trailers');
-          req.headers.set('Connection', 'keep-alive');
-
-          if (!useQueryRange) {
-            req.headers.set('Range', 'bytes=$current-$nextEnd');
-          }
-
-          if (customHeaders != null) {
-            customHeaders!.forEach((k, v) {
-              final lower = k.toLowerCase();
-              if (lower != 'user-agent' && lower != 'range') {
-                req.headers.set(k, v);
-              }
-            });
-          }
-
-          resp = await req.close();
-          if (resp.statusCode == 200 || resp.statusCode == 206) {
-            break;
-          }
-
-          printERROR(
-              "ChunkedStreamAudioSource HTTP ${resp.statusCode} for chunk $chunkIndex ($current-$nextEnd, attempt ${attempts + 1})");
-          await resp.drain();
           attempts++;
           if (attempts < 3) {
-            await Future.delayed(const Duration(milliseconds: 250));
+            await Future.delayed(const Duration(milliseconds: 300));
           }
         }
 

@@ -84,7 +84,7 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
 
   void _setDeepBass(double val) {
     if (playerController.eqBands.isNotEmpty) {
-      playerController.setEqBandGain(0, val);
+      playerController.setDeepBass(val);
       // Clean Headroom-Protection: Mitten leicht abdämpfen bei extremem Bass für verzerrungsfreien Klang
       if (val > 8.0 && playerController.eqBands.length >= 3) {
         final currentMid =
@@ -399,7 +399,40 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    Obx(() {
+                      final hasCustomBass = playerController.customBassBoost.value > 0 ||
+                          playerController.bummmBoostGain.value > 0;
+                      if (!hasCustomBass) return const SizedBox.shrink();
+                      return Container(
+                        margin: const EdgeInsets.only(top: 10, bottom: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF0055).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFFFF0055).withOpacity(0.3),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.lock_rounded, size: 13, color: Color(0xFFFF0055)),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                "bassLockBadge".tr,
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 14),
 
                     // Slider 1: Deep Sub-Bass (~60 Hz)
                     Row(
@@ -468,7 +501,7 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                       final currentDeep = playerController.eqBands.isNotEmpty
                           ? ((playerController.eqBands[0]['gain'] as num)
                                   .toDouble())
-                              .clamp(0.0, 12.0)
+                              .clamp(0.0, 16.0)
                           : 0.0;
                       return SliderTheme(
                         data: SliderTheme.of(context).copyWith(
@@ -482,8 +515,8 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                         child: Slider(
                           value: currentDeep,
                           min: 0.0,
-                          max: 12.0,
-                          divisions: 24,
+                          max: 16.0,
+                          divisions: 32,
                           label: "+${currentDeep.toStringAsFixed(1)} dB",
                           onChanged: playerController.eqEnabled.value
                               ? (val) => _setDeepBass(val)
@@ -620,6 +653,125 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                                 color:
                                     const Color(0xFFFF0055).withOpacity(0.7))),
                       ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Dedicated BUMMM Sub-Bass Verstärker (for users who want maximum BUMMM)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF0055).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: const Color(0xFFFF0055).withOpacity(0.25),
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.speaker_group_rounded,
+                                color: Color(0xFFFF0055),
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "bummmTitle".tr,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 12.5,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    Text(
+                                      "bummmSub".tr,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.white54,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Obx(() {
+                                final bummm = playerController.bummmBoostGain.value;
+                                final isZero = bummm <= 0.05;
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 9, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: isZero
+                                        ? Colors.white10
+                                        : const Color(0xFFFF0055).withOpacity(0.25),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    isZero
+                                        ? "0 dB"
+                                        : "+${bummm.toStringAsFixed(1)} dB",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isZero
+                                          ? Colors.white60
+                                          : const Color(0xFFFF0055),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Obx(() {
+                            final bummm = playerController.bummmBoostGain.value;
+                            return SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                activeTrackColor: const Color(0xFFFF0055),
+                                inactiveTrackColor: Colors.white12,
+                                thumbColor: const Color(0xFFFF0055),
+                                overlayColor:
+                                    const Color(0xFFFF0055).withOpacity(0.2),
+                                trackHeight: 4,
+                              ),
+                              child: Slider(
+                                value: bummm.clamp(0.0, 12.0),
+                                min: 0.0,
+                                max: 12.0,
+                                divisions: 24,
+                                label: "+${bummm.toStringAsFixed(1)} dB",
+                                onChanged: playerController.eqEnabled.value
+                                    ? (val) => playerController.setBummmBoost(val)
+                                    : null,
+                              ),
+                            );
+                          }),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text("offDb".tr,
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.white.withOpacity(0.4))),
+                              Text("bummmDruckDb".tr,
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.white.withOpacity(0.4))),
+                              Text("bummmMaxDb".tr,
+                                  style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFFF0055))),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

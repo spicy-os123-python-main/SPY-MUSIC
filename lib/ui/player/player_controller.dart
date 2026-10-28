@@ -72,6 +72,8 @@ class PlayerController extends GetxController
   final eqMaxDecibels = 10.0.obs;
   final eqBands = <Map<String, dynamic>>[].obs;
   final eqPreset = "Normal".obs;
+  final customBassBoost = 0.0.obs;
+  final bummmBoostGain = 0.0.obs;
 
   // Video Mode State
   final isVideoMode = false.obs;
@@ -912,6 +914,12 @@ class PlayerController extends GetxController
 
         final bandsList = (res['bands'] as List?) ?? [];
         eqBands.value = bandsList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+        final appPrefs = Hive.box("AppPrefs");
+        final savedBass = (appPrefs.get("custom_bass_boost", defaultValue: 0.0) as num).toDouble();
+        final savedBummm = (appPrefs.get("bummm_boost_gain", defaultValue: 0.0) as num).toDouble();
+        customBassBoost.value = savedBass;
+        bummmBoostGain.value = savedBummm;
       } else {
         eqSupported.value = false;
       }
@@ -935,6 +943,29 @@ class PlayerController extends GetxController
     }
   }
 
+  Future<void> setDeepBass(double val) async {
+    customBassBoost.value = val;
+    await Hive.box("AppPrefs").put("custom_bass_boost", val);
+    final totalBass = (val + bummmBoostGain.value).clamp(0.0, 16.0);
+    await setEqBandGain(0, totalBass);
+  }
+
+  Future<void> setBummmBoost(double boost) async {
+    bummmBoostGain.value = boost;
+    await Hive.box("AppPrefs").put("bummm_boost_gain", boost);
+    final baseBass = customBassBoost.value;
+    final totalBass = (baseBass + boost).clamp(0.0, 16.0);
+    await setEqBandGain(0, totalBass);
+
+    // If BUMMM booster is pushed, subtly support with acoustic loudness for deep rumble without mid distortion
+    if (boost > 0) {
+      final targetLoudness = (boost / 2.5).clamp(0.0, 4.0);
+      if (eqLoudnessGain.value < targetLoudness) {
+        await setEqLoudnessGain(targetLoudness);
+      }
+    }
+  }
+
   Future<void> setEqLoudnessGain(double gain) async {
     eqLoudnessGain.value = gain;
     await _audioHandler.customAction("setLoudnessEnhancer", {
@@ -950,14 +981,24 @@ class PlayerController extends GetxController
 
   Future<void> applyEqPreset(String name, List<double> gains) async {
     eqPreset.value = name;
-    for (int i = 0; i < eqBands.length && i < gains.length; i++) {
+    final effectiveGains = List<double>.from(gains);
+
+    // Decouple Bass Booster: Preserve user's custom Bass & BUMMM boost across all presets!
+    final savedBass = customBassBoost.value + bummmBoostGain.value;
+    if (savedBass > 0 && effectiveGains.isNotEmpty) {
+      effectiveGains[0] = savedBass.clamp(0.0, 16.0);
+    }
+
+    for (int i = 0; i < eqBands.length && i < effectiveGains.length; i++) {
       final updated = Map<String, dynamic>.from(eqBands[i]);
-      updated['gain'] = gains[i];
+      updated['gain'] = effectiveGains[i];
       eqBands[i] = updated;
     }
     await _audioHandler.customAction("applyEqualizerPreset", {
       "preset": name,
-      "gains": gains,
+      "gains": effectiveGains,
+      "preserveBass": savedBass > 0,
+      "customBass": savedBass,
     });
   }
 
