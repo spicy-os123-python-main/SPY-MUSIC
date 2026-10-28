@@ -341,7 +341,15 @@ class PlatformSearchService {
     final origTitleLower = original.title.toLowerCase();
     final expectedTitle = _normalizeString(_coreTitle(original.title));
     final expectedArtist = _normalizeString(original.artist ?? '');
-    final expectedDurationSec = original.duration?.inSeconds ?? 0;
+    int expectedDurationSec = original.duration?.inSeconds ?? 0;
+    if (expectedDurationSec == 0 && original.extras != null) {
+      if (original.extras!['duration'] is int) {
+        expectedDurationSec = original.extras!['duration'] as int;
+      } else if (original.extras!['length'] != null) {
+        final parsed = _parseDurationString(original.extras!['length']?.toString());
+        if (parsed != null) expectedDurationSec = parsed;
+      }
+    }
 
     MediaItem? bestMatch;
     double bestScore = -1.0;
@@ -352,7 +360,15 @@ class PlatformSearchService {
       final cTitle = _normalizeString(_coreTitle(candidate.title));
       if (cTitle.isEmpty) continue;
       final cArtist = _normalizeString(candidate.artist ?? '');
-      final cDurationSec = candidate.duration?.inSeconds ?? 0;
+      int cDurationSec = candidate.duration?.inSeconds ?? 0;
+      if (cDurationSec == 0 && candidate.extras != null) {
+        if (candidate.extras!['duration'] is int) {
+          cDurationSec = candidate.extras!['duration'] as int;
+        } else if (candidate.extras!['length'] != null) {
+          final parsed = _parseDurationString(candidate.extras!['length']?.toString());
+          if (parsed != null) cDurationSec = parsed;
+        }
+      }
 
       // 1. Strict rejection of unwanted modifications (sped up, nightcore, slowed, remix, cover)
       // unless original track explicitly has that tag
@@ -420,8 +436,29 @@ class PlatformSearchService {
       }
     }
 
-    final minThreshold = strictSpeedCheck ? 65.0 : 55.0;
+    final minThreshold = strictSpeedCheck ? 65.0 : 45.0;
     return bestScore >= minThreshold ? bestMatch : null;
+  }
+
+  static int? _parseDurationString(String? time) {
+    if (time == null || time.isEmpty) return null;
+    try {
+      int sec = 0;
+      final splitted = time.split(':');
+      if (splitted.length == 3) {
+        sec += (int.tryParse(splitted[0]) ?? 0) * 3600 +
+            (int.tryParse(splitted[1]) ?? 0) * 60 +
+            (int.tryParse(splitted[2]) ?? 0);
+      } else if (splitted.length == 2) {
+        sec += (int.tryParse(splitted[0]) ?? 0) * 60 +
+            (int.tryParse(splitted[1]) ?? 0);
+      } else if (splitted.length == 1) {
+        sec += int.tryParse(splitted[0]) ?? 0;
+      }
+      return sec > 0 ? sec : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   static String _coreTitle(String title) {

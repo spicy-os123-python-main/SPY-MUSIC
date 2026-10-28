@@ -1609,7 +1609,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       return HMStreamingData(
         playable: false,
         statusMSG:
-            "Kein passender Stream für '${targetSong?.title ?? songId}' auf SoundCloud/YouTube gefunden.",
+            "Audio-Stream für '${targetSong?.title ?? songId}' ist derzeit nicht verfügbar.",
       );
     }
 

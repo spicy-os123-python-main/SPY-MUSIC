@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../services/playlist_import_service.dart';
 import '../../widgets/create_playlist_dialog.dart';
 import '../../widgets/import_playlist_dialog.dart';
 import '../Watchtime/watchtime_screen.dart';
@@ -19,6 +20,66 @@ class CombinedLibrary extends StatelessWidget {
         backgroundColor: Theme.of(context).canvasColor,
         elevation: 0,
         actions: [
+          Obx(() {
+            final importService = PlaylistImportService.instance;
+            if (!importService.isImporting.value) {
+              return const SizedBox.shrink();
+            }
+            final curr = importService.currentTrack.value;
+            final tot = importService.totalTracks.value;
+            final progressText = tot > 0 ? '$curr/$tot' : '...';
+
+            return Padding(
+              padding: const EdgeInsets.only(top: 50.0, right: 8),
+              child: Tooltip(
+                message: importService.importStatus.value.isNotEmpty
+                    ? importService.importStatus.value
+                    : 'Importiere Playlist...',
+                child: Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F1528),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFF00D2FF),
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00D2FF).withOpacity(0.35),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00D2FF)),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        progressText,
+                        style: const TextStyle(
+                          color: Color(0xFF00D2FF),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
           Padding(
             padding: const EdgeInsets.only(top: 50.0, right: 10),
             child: SizedBox(

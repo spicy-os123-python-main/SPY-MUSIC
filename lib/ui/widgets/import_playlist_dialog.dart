@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 import '../screens/Library/library_controller.dart';
 import '../../services/playlist_import_service.dart';
 import 'common_dialog_widget.dart';
-import 'snackbar.dart';
 
 class ImportPlaylistDialog extends StatefulWidget {
   const ImportPlaylistDialog({super.key});
@@ -15,27 +14,16 @@ class ImportPlaylistDialog extends StatefulWidget {
 
 class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
   final TextEditingController _urlController = TextEditingController();
-  bool _isLoading = false;
 
   Future<void> _handleImport() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) return;
 
-    setState(() => _isLoading = true);
-    final result = await PlaylistImportService().importFromUrl(url);
-    if (!mounted) return;
-    setState(() => _isLoading = false);
+    // Immediately close dialog so user can continue using the app
+    Navigator.of(context).pop();
 
-    if (result['success'] == true) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        snackbar(context, result['message'], size: SanckBarSize.BIG),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        snackbar(context, result['message'], size: SanckBarSize.BIG),
-      );
-    }
+    // Start background import with live progress in library top bar
+    PlaylistImportService.instance.startBackgroundImport(url, context: context);
   }
 
   Future<void> _pasteFromClipboard() async {
@@ -157,12 +145,12 @@ class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                  onPressed: () => Navigator.of(context).pop(),
                   child: Text('cancel'.tr, style: const TextStyle(color: Colors.white54)),
                 ),
                 const SizedBox(width: 12),
                 GestureDetector(
-                  onTap: _isLoading ? null : _handleImport,
+                  onTap: _handleImport,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                     decoration: BoxDecoration(
@@ -177,23 +165,14 @@ class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
                         ),
                       ],
                     ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            'Importieren',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
+                    child: const Text(
+                      'Importieren',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
                 ),
               ],
