@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:audio_service/audio_service.dart';
 import '../utils/helper.dart';
@@ -83,8 +84,8 @@ class WatchtimeService {
       final month = _monthKey();
       final year = _yearKey();
       final platform = _detectPlatform(song);
-      final rawArtist = (song.artist ?? 'Unbekannt').trim();
-      final artist = rawArtist.isEmpty ? 'Unbekannt' : rawArtist;
+      final rawArtist = (song.artist ?? 'unknownArtist'.tr).trim();
+      final artist = rawArtist.isEmpty ? 'unknownArtist'.tr : rawArtist;
 
       // 1. Daily, Monthly, Yearly Playtime
       final dayKey = 'daily_$today';
@@ -154,8 +155,8 @@ class WatchtimeService {
   static void recordSongStart(MediaItem song) {
     try {
       final box = _getBox();
-      final rawArtist = (song.artist ?? 'Unbekannt').trim();
-      final artist = rawArtist.isEmpty ? 'Unbekannt' : rawArtist;
+      final rawArtist = (song.artist ?? 'unknownArtist'.tr).trim();
+      final artist = rawArtist.isEmpty ? 'unknownArtist'.tr : rawArtist;
 
       // Artist play count
       final aCountKey = 'artist_count_$artist';
@@ -238,7 +239,16 @@ class WatchtimeService {
     }
   }
 
-  /// Get top songs sorted by playtime
+  static bool get _isEnglish {
+    try {
+      final code = Hive.box("AppPrefs").get('currentAppLanguageCode') ?? Get.locale?.languageCode ?? 'en';
+      return code.toString().toLowerCase().startsWith('en');
+    } catch (_) {
+      return (Get.locale?.languageCode ?? 'en').toLowerCase().startsWith('en');
+    }
+  }
+
+  /// Get top songs sorted by play count (or playtime as tiebreaker)
   static List<SongStat> getTopSongs({int limit = 10}) {
     try {
       final box = _getBox();
@@ -250,7 +260,10 @@ class WatchtimeService {
         final count = (box.get('song_count_$id', defaultValue: 0) as num).toInt();
         final meta = box.get('song_meta_$id') as Map?;
         final title = meta?['title']?.toString() ?? 'Track';
-        final artist = meta?['artist']?.toString() ?? 'Unbekannt';
+        final rawArtist = meta?['artist']?.toString();
+        final artist = (rawArtist == null || rawArtist.isEmpty || rawArtist == 'Unbekannt')
+            ? 'unknownArtist'.tr
+            : rawArtist;
         final platform = meta?['platform']?.toString() ?? 'All';
 
         if (time > 0 || count > 0) {
@@ -259,13 +272,17 @@ class WatchtimeService {
             title: title,
             artist: artist,
             playtimeSec: time,
-            playCount: count,
+            playCount: count > 0 ? count : (time > 60 ? (time ~/ 180) + 1 : 1),
             platform: platform,
           ));
         }
       }
 
-      list.sort((a, b) => b.playtimeSec.compareTo(a.playtimeSec));
+      list.sort((a, b) {
+        final countCmp = b.playCount.compareTo(a.playCount);
+        if (countCmp != 0) return countCmp;
+        return b.playtimeSec.compareTo(a.playtimeSec);
+      });
       return list.take(limit).toList();
     } catch (_) {
       return [];
@@ -289,17 +306,22 @@ class WatchtimeService {
 
   /// Format seconds into readable human format: e.g. "2h 45m" or "45m" or "32s"
   static String formatDuration(int totalSeconds) {
-    if (totalSeconds <= 0) return "0 Min.";
+    final isEn = _isEnglish;
+    if (totalSeconds <= 0) return isEn ? "0 min" : "0 Min.";
     final hours = totalSeconds ~/ 3600;
     final minutes = (totalSeconds % 3600) ~/ 60;
     final seconds = totalSeconds % 60;
 
     if (hours > 0) {
-      return "$hours Std. ${minutes > 0 ? '$minutes Min.' : ''}".trim();
+      final hUnit = isEn ? "h" : "Std.";
+      final mUnit = isEn ? "min" : "Min.";
+      return "$hours $hUnit ${minutes > 0 ? '$minutes $mUnit' : ''}".trim();
     } else if (minutes > 0) {
-      return "$minutes Min.";
+      final mUnit = isEn ? "min" : "Min.";
+      return "$minutes $mUnit";
     } else {
-      return "$seconds Sek.";
+      final sUnit = isEn ? "sec" : "Sek.";
+      return "$seconds $sUnit";
     }
   }
 

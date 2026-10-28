@@ -28,7 +28,7 @@ class CombinedLibrary extends StatelessWidget {
                 child: FloatingActionButton(
                     heroTag: 'watchtimeStatsBtn',
                     elevation: 0,
-                    tooltip: 'Watchtime Tracking',
+                    tooltip: 'watchtimeTracking'.tr,
                     backgroundColor: const Color(0xFF1B2338),
                     onPressed: () {
                       tabCon.tabController.animateTo(4);

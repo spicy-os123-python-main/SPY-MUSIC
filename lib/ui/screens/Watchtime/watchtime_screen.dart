@@ -196,21 +196,14 @@ class WatchtimeScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          "Watchtime Tracking",
-          style: TextStyle(
+        title: Text(
+          "watchtimeTracking".tr,
+          style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 20,
             color: Colors.white,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_sweep_outlined, color: Colors.white70),
-            tooltip: "resetStats".tr,
-            onPressed: () => _confirmReset(context),
-          ),
-        ],
       ),
       body: bodyContent,
     );
@@ -355,6 +348,10 @@ class WatchtimeScreen extends StatelessWidget {
                 ? "🥉"
                 : "#${index + 1}";
     final progress = maxSec > 0 ? (artist.playtimeSec / maxSec).clamp(0.0, 1.0) : 0.0;
+    final displayArtistName =
+        (artist.name.isEmpty || artist.name == 'Unbekannt')
+            ? 'unknownArtist'.tr
+            : artist.name;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -376,7 +373,7 @@ class WatchtimeScreen extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  artist.name,
+                  displayArtistName,
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -411,9 +408,15 @@ class WatchtimeScreen extends StatelessWidget {
   }
 
   Widget _buildSongRow(int index, SongStat song) {
+    final displayArtist =
+        (song.artist.isEmpty || song.artist == 'Unbekannt')
+            ? 'unknownArtist'.tr
+            : song.artist;
+    final count = song.playCount > 0 ? song.playCount : 1;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
         color: const Color(0xFF16161F),
         borderRadius: BorderRadius.circular(12),
@@ -422,7 +425,11 @@ class WatchtimeScreen extends StatelessWidget {
         children: [
           Text(
             "#${index + 1}",
-            style: const TextStyle(color: Colors.white38, fontSize: 13, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.white38,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -431,30 +438,41 @@ class WatchtimeScreen extends StatelessWidget {
               children: [
                 Text(
                   song.title,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 2),
                 Text(
-                  song.artist,
+                  displayArtist,
                   style: const TextStyle(color: Colors.white60, fontSize: 11),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                WatchtimeService.formatDuration(song.playtimeSec),
-                style: const TextStyle(color: Color(0xFF38EF7D), fontWeight: FontWeight.bold, fontSize: 12),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFF38EF7D).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: const Color(0xFF38EF7D).withOpacity(0.35),
+                width: 0.8,
               ),
-              if (song.playCount > 0)
-                Text(
-                  "${song.playCount}x gespielt",
-                  style: const TextStyle(color: Colors.white38, fontSize: 10),
-                ),
-            ],
+            ),
+            child: Text(
+              "$count${'timesPlayed'.tr}",
+              style: const TextStyle(
+                color: Color(0xFF38EF7D),
+                fontWeight: FontWeight.bold,
+                fontSize: 12.5,
+              ),
+            ),
           ),
         ],
       ),
@@ -474,38 +492,6 @@ class WatchtimeScreen extends StatelessWidget {
           msg,
           style: const TextStyle(color: Colors.white38, fontSize: 12),
         ),
-      ),
-    );
-  }
-
-  void _confirmReset(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF16161F),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          "resetStatsConfirmTitle".tr,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          "resetStatsConfirmMsg".tr,
-          style: const TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text("cancel".tr, style: const TextStyle(color: Colors.white60)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await WatchtimeService.resetAllStats();
-            },
-            child: Text("reset".tr, style: const TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
