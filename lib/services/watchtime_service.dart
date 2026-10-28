@@ -151,23 +151,73 @@ class WatchtimeService {
     }
   }
 
-  /// Record song start for play count tracking
+  /// Record song start: stores metadata only, does NOT increment play count!
+  /// Play count is ONLY counted when a song is listened to from beginning to end!
   static void recordSongStart(MediaItem song) {
     try {
       final box = _getBox();
       final rawArtist = (song.artist ?? 'unknownArtist'.tr).trim();
       final artist = rawArtist.isEmpty ? 'unknownArtist'.tr : rawArtist;
 
-      // Artist play count
+      final songMetaKey = 'song_meta_${song.id}';
+      if (!box.containsKey(songMetaKey)) {
+        box.put(songMetaKey, {
+          'id': song.id,
+          'title': song.title,
+          'artist': artist,
+          'platform': _detectPlatform(song),
+        });
+      }
+    } catch (_) {}
+  }
+
+  /// Records a verified completed play when a song has been listened to from beginning to end
+  static void recordSongCompleted(MediaItem song) {
+    try {
+      final box = _getBox();
+      final rawArtist = (song.artist ?? 'unknownArtist'.tr).trim();
+      final artist = rawArtist.isEmpty ? 'unknownArtist'.tr : rawArtist;
+
+      // 1. Song play count
+      final sCountKey = 'song_count_${song.id}';
+      final curSCount = (box.get(sCountKey, defaultValue: 0) as num).toInt();
+      box.put(sCountKey, curSCount + 1);
+
+      // 2. Artist play count
       final aCountKey = 'artist_count_$artist';
       final curACount = (box.get(aCountKey, defaultValue: 0) as num).toInt();
       box.put(aCountKey, curACount + 1);
 
-      // Song play count
-      final sCountKey = 'song_count_${song.id}';
-      final curSCount = (box.get(sCountKey, defaultValue: 0) as num).toInt();
-      box.put(sCountKey, curSCount + 1);
-    } catch (_) {}
+      // 3. Ensure song is in all_songs
+      final songList = List<String>.from(box.get('all_songs', defaultValue: <String>[]) as List);
+      if (!songList.contains(song.id)) {
+        songList.add(song.id);
+        box.put('all_songs', songList);
+      }
+
+      // 4. Ensure metadata is saved
+      final songMetaKey = 'song_meta_${song.id}';
+      if (!box.containsKey(songMetaKey)) {
+        box.put(songMetaKey, {
+          'id': song.id,
+          'title': song.title,
+          'artist': artist,
+          'platform': _detectPlatform(song),
+        });
+      }
+
+      final artists = List<String>.from(box.get('all_artists', defaultValue: <String>[]) as List);
+      if (!artists.contains(artist)) {
+        artists.add(artist);
+        box.put('all_artists', artists);
+      }
+
+      // Notify UI in real time
+      watchtimeNotifier.value = watchtimeNotifier.value + 1;
+      printINFO("Watchtime: Song '${song.title}' fully completed! Play count: ${curSCount + 1}");
+    } catch (e) {
+      printERROR("WatchtimeService.recordSongCompleted error: $e");
+    }
   }
 
   /// Get daily playtime in seconds
@@ -217,7 +267,7 @@ class WatchtimeService {
     }
   }
 
-  /// Get top artists sorted by listened playtime
+  /// Get top artists sorted by listened playtime (only artists with valid listening time)
   static List<ArtistStat> getTopArtists({int limit = 10}) {
     try {
       final box = _getBox();
@@ -226,10 +276,23 @@ class WatchtimeService {
 
       for (var a in artists) {
         final time = (box.get('artist_time_$a', defaultValue: 0) as num).toInt();
-        final count = (box.get('artist_count_$a', defaultValue: 0) as num).toInt();
-        if (time > 0 || count > 0) {
-          list.add(ArtistStat(name: a, playtimeSec: time, playCount: count));
+        int count = (box.get('artist_count_$a', defaultValue: 0) as num).toInt();
+
+        // Discard artists that were barely listened to (< 25s) and heal DB
+        if (time < 25) {
+          if (count > 0) {
+            box.put('artist_count_$a', 0);
+          }
+          continue;
         }
+
+        final maxPossible = time ~/ 25;
+        if (count > maxPossible && maxPossible > 0) {
+          count = maxPossible;
+          box.put('artist_count_$a', count);
+        }
+
+        list.add(ArtistStat(name: a, playtimeSec: time, playCount: count));
       }
 
       list.sort((a, b) => b.playtimeSec.compareTo(a.playtimeSec));
@@ -248,7 +311,8 @@ class WatchtimeService {
     }
   }
 
-  /// Get top songs sorted by play count (or playtime as tiebreaker)
+  /// Get top songs sorted by verified completed play count (or playtime as tiebreaker).
+  /// Strictly requires that the song was actually listened to from start to finish.
   static List<SongStat> getTopSongs({int limit = 10}) {
     try {
       final box = _getBox();
@@ -257,7 +321,27 @@ class WatchtimeService {
 
       for (var id in songIds) {
         final time = (box.get('song_time_$id', defaultValue: 0) as num).toInt();
-        final count = (box.get('song_count_$id', defaultValue: 0) as num).toInt();
+        int count = (box.get('song_count_$id', defaultValue: 0) as num).toInt();
+
+        // Self-healing check:
+        // A song cannot have legitimate completed plays if it was barely listened to!
+        if (time < 20) {
+          if (count > 0) {
+            box.put('song_count_$id', 0);
+          }
+          continue; // Discard phantom / skipped track
+        }
+
+        // Clamp count to physically possible plays based on recorded listening time
+        final maxPossible = time ~/ 25;
+        if (count > maxPossible && maxPossible > 0) {
+          count = maxPossible;
+          box.put('song_count_$id', count);
+        }
+
+        // Only songs with at least 1 verified full play are included in Top Songs
+        if (count <= 0) continue;
+
         final meta = box.get('song_meta_$id') as Map?;
         final title = meta?['title']?.toString() ?? 'Track';
         final rawArtist = meta?['artist']?.toString();
@@ -266,16 +350,14 @@ class WatchtimeService {
             : rawArtist;
         final platform = meta?['platform']?.toString() ?? 'All';
 
-        if (time > 0 || count > 0) {
-          list.add(SongStat(
-            id: id,
-            title: title,
-            artist: artist,
-            playtimeSec: time,
-            playCount: count > 0 ? count : (time > 60 ? (time ~/ 180) + 1 : 1),
-            platform: platform,
-          ));
-        }
+        list.add(SongStat(
+          id: id,
+          title: title,
+          artist: artist,
+          playtimeSec: time,
+          playCount: count,
+          platform: platform,
+        ));
       }
 
       list.sort((a, b) {

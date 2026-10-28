@@ -76,6 +76,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   bool _pausedByDeviceDisconnect = false;
   bool _wasPlayingBeforeInterruption = false;
 
+  // Tracking for verified "from beginning to end" song completion
+  int _currentSongPlayedSeconds = 0;
+  bool _currentSongCompletedRecorded = false;
+  String? _lastTrackedSongId;
+
   // list of shuffled queue songs ids
   List<String> shuffledQueue = [];
 
@@ -120,6 +125,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     }
     mediaItem.listen((item) {
       if (item != null) {
+        if (_lastTrackedSongId != item.id) {
+          _lastTrackedSongId = item.id;
+          _currentSongPlayedSeconds = 0;
+          _currentSongCompletedRecorded = false;
+          WatchtimeService.recordSongStart(item);
+        }
         DiscordService().updatePresence(
           item,
           isPlaying: _player.playing,
@@ -160,6 +171,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           mediaItem.value != null &&
           _player.processingState == ProcessingState.ready) {
         WatchtimeService.recordPlaytime(mediaItem.value!, seconds: 5);
+        _currentSongPlayedSeconds += 5;
+        _checkAndRecordSongCompletion();
       }
     });
   }
@@ -343,6 +356,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   void _notifyAudioHandlerAboutPlaybackEvents() {
     _player.playbackEventStream.listen((PlaybackEvent event) {
+      if (_player.processingState == ProcessingState.completed) {
+        _checkAndRecordSongCompletion();
+      }
       final playing = _player.playing;
       playbackState.add(playbackState.value.copyWith(
         controls: [
@@ -444,14 +460,47 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       if (_player.duration != null && _player.duration?.inSeconds != 0) {
         if (value.inMilliseconds >=
             (_player.duration!.inMilliseconds - playerDurationOffset)) {
+          _checkAndRecordSongCompletion();
           await _triggerNext();
         }
       }
     });
   }
 
+  void _checkAndRecordSongCompletion() {
+    final currentSong = mediaItem.value;
+    if (currentSong == null) return;
+    if (_currentSongCompletedRecorded) return;
+
+    final durationSec =
+        currentSong.duration?.inSeconds ?? _player.duration?.inSeconds ?? 0;
+    final currentPosSec = _player.position.inSeconds;
+
+    // 1. Must have reached the end of the song:
+    // Either player processingState is completed, OR current position reached at least 88% of duration
+    final bool reachedEnd =
+        (_player.processingState == ProcessingState.completed) ||
+            (durationSec > 0 && currentPosSec >= (durationSec * 0.88)) ||
+            (durationSec > 0 && (durationSec - currentPosSec) <= 4);
+
+    // 2. Must have actually listened to the song from beginning to end:
+    // Requires that user spent at least 50% of the song duration listening (or at least 25 seconds)
+    final int minRequiredListeningSec =
+        durationSec > 0 ? min(25, (durationSec * 0.50).round()) : 20;
+    final bool actuallyListened =
+        _currentSongPlayedSeconds >= minRequiredListeningSec;
+
+    if (reachedEnd && actuallyListened) {
+      _currentSongCompletedRecorded = true;
+      WatchtimeService.recordSongCompleted(currentSong);
+    }
+  }
+
   Future<void> _triggerNext() async {
+    _checkAndRecordSongCompletion();
     if (loopModeEnabled) {
+      _currentSongCompletedRecorded = false;
+      _currentSongPlayedSeconds = 0;
       await _player.seek(Duration.zero);
       if (!_player.playing) {
         _player.play();
@@ -742,6 +791,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   @override
   Future<void> skipToNext() async {
+    _checkAndRecordSongCompletion();
+    _currentSongCompletedRecorded = false;
+    _currentSongPlayedSeconds = 0;
     final index = _getNextSongIndex();
     if (index != currentIndex) {
       if (_player.position != Duration.zero) _player.seek(Duration.zero);
@@ -758,6 +810,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       _player.seek(Duration.zero);
       return;
     }
+    _checkAndRecordSongCompletion();
+    _currentSongCompletedRecorded = false;
+    _currentSongPlayedSeconds = 0;
     _player.seek(Duration.zero);
     final index = _getPrevSongIndex();
     if (index != currentIndex) {
