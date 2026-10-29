@@ -11,19 +11,20 @@ class StreamProvider {
   StreamProvider(
       {required this.playable, this.audioFormats, this.statusMSG = ""});
 
-  /// Each client gets its own attempt. Android clients (androidSdkless, android)
-  /// return muxed and audio streams reliably with ratebypass.
+  /// Each client gets its own attempt. Android & iOS clients
+  /// return pure audio streams reliably.
   static Future<StreamManifest> _manifestWithClients(
       YoutubeExplode yt, String videoId) async {
     final clients = <String, YoutubeApiClient>{
-      'androidSdkless': YoutubeApiClient.androidSdkless,
       'android': YoutubeApiClient.android,
       'ios': YoutubeApiClient.ios,
+      'androidSdkless': YoutubeApiClient.androidSdkless,
       'tv': YoutubeApiClient.tv,
       'androidVr': YoutubeApiClient.androidVr,
     };
     final watch = Stopwatch()..start();
     Object? lastError;
+    StreamManifest? fallbackManifest;
 
     for (final entry in clients.entries) {
       if (watch.elapsed > const Duration(seconds: 14)) break;
@@ -35,15 +36,21 @@ class StreamProvider {
               requireWatchPage: false,
             )
             .timeout(const Duration(seconds: 8));
-        if (manifest.streams.isNotEmpty) {
-          printINFO("YouTube client ${entry.key} worked for $videoId (${manifest.streams.length} streams)");
+        if (manifest.audioOnly.isNotEmpty) {
+          printINFO(
+              "YouTube client ${entry.key} returned ${manifest.audioOnly.length} pure audio streams for $videoId");
           return manifest;
         }
-        printERROR("YouTube client ${entry.key} returned no streams for $videoId");
+        if (manifest.streams.isNotEmpty && fallbackManifest == null) {
+          fallbackManifest = manifest;
+        }
       } catch (e) {
         lastError = e;
         printERROR("YouTube client ${entry.key} failed for $videoId: $e");
       }
+    }
+    if (fallbackManifest != null) {
+      return fallbackManifest;
     }
     throw lastError ??
         VideoUnavailableException('No YouTube client returned audio for $videoId');
@@ -56,22 +63,7 @@ class StreamProvider {
       final res = await _manifestWithClients(yt, videoId);
       final List<Audio> formats = [];
 
-      // 1. Prioritize ratebypass muxed streams (itag 18 has AAC stereo audio and ratebypass=yes, immune to 403 blocks)
-      for (final m in res.muxed) {
-        if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
-          formats.add(Audio(
-            itag: m.tag,
-            audioCodec: Codec.mp4a,
-            bitrate: 128000,
-            duration: 0,
-            loudnessDb: 0.0,
-            url: m.url.toString(),
-            size: m.size.totalBytes,
-          ));
-        }
-      }
-
-      // 2. Also add standalone audio streams
+      // 1. Add pure standalone audio streams (STRICTLY NO VIDEO DATA!)
       for (final a in res.audioOnly) {
         formats.add(Audio(
           itag: a.tag,
@@ -85,9 +77,10 @@ class StreamProvider {
         ));
       }
 
-      // Fallback: any other muxed stream if formats still empty
+      // 2. Only if audioOnly is completely empty, fallback to lowest resolution muxed stream (itag 18)
       if (formats.isEmpty && res.muxed.isNotEmpty) {
-        final m = res.muxed.first;
+        final m = res.muxed.firstWhereOrNull((item) => item.tag == 18) ??
+            res.muxed.first;
         formats.add(Audio(
           itag: m.tag,
           audioCodec: Codec.mp4a,
@@ -100,7 +93,8 @@ class StreamProvider {
       }
 
       if (formats.isEmpty) {
-        throw VideoUnavailableException('Keine abspielbaren Audio-Streams für $videoId gefunden');
+        throw VideoUnavailableException(
+            'Keine abspielbaren Audio-Streams für $videoId gefunden');
       }
 
       return StreamProvider(
@@ -184,52 +178,85 @@ class StreamProvider {
   }
 
   Audio? get highestQualityAudio {
-    final rateBypass = audioFormats?.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
+    if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    return audioFormats?.lastWhere((item) => item.itag == 251 || item.itag == 140,
-        orElse: () => audioFormats!.first);
+    final highOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
+    if (highOpus != null) return highOpus;
+
+    final highAac = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (highAac != null) return highAac;
+
+    final sorted = List<Audio>.from(audioFormats!)
+      ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+    return sorted.first;
   }
 
   Audio? get highestBitrateMp4aAudio {
-    final rateBypass = audioFormats?.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
-
-    return audioFormats?.lastWhere((item) => item.itag == 140 || item.itag == 139,
-        orElse: () => audioFormats!.first);
+    if (audioFormats == null || audioFormats!.isEmpty) return null;
+    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (aac140 != null) return aac140;
+    final aac139 = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
+    if (aac139 != null) return aac139;
+    return audioFormats!
+            .firstWhereOrNull((item) => item.audioCodec == Codec.mp4a) ??
+        audioFormats!.first;
   }
 
-  Audio? get highestBitrateOpusAudio =>
-      audioFormats?.lastWhere((item) => item.itag == 251 || item.itag == 250,
-          orElse: () => audioFormats!.first);
+  Audio? get highestBitrateOpusAudio {
+    if (audioFormats == null || audioFormats!.isEmpty) return null;
+    final op251 = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
+    if (op251 != null) return op251;
+    final op250 = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
+    if (op250 != null) return op250;
+    final op249 = audioFormats!.firstWhereOrNull((item) => item.itag == 249);
+    if (op249 != null) return op249;
+    return audioFormats!
+            .firstWhereOrNull((item) => item.audioCodec == Codec.opus) ??
+        audioFormats!.first;
+  }
 
   Audio? get lowQualityAudio {
-    // 1. Prefer itag 250 (Opus ~70 kbps) for 85% Ultra Data Saver:
-    // It saves ~60% data while completely eliminating the harsh quantization noise, high-cut and hissing of itag 249.
-    final cleanOpus = audioFormats?.firstWhereOrNull((item) => item.itag == 250);
+    if (audioFormats == null || audioFormats!.isEmpty) return null;
+
+    // Ultra Data Saver (-85% to -97% data savings):
+    // 1. Prefer itag 250 (Opus ~70 kbps) or itag 249 (Opus ~50 kbps)
+    // Consumes only ~1.1 to 1.6 MB per track!
+    final cleanOpus =
+        audioFormats!.firstWhereOrNull((item) => item.itag == 250) ??
+            audioFormats!.firstWhereOrNull((item) => item.itag == 249);
     if (cleanOpus != null) return cleanOpus;
 
-    // 2. Prioritize clean audio with ratebypass
-    final rateBypass = audioFormats?.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
+    // 2. Low-bitrate AAC (itag 139 ~48 kbps, ~1.2 MB per track)
+    final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
+    if (lowAac != null) return lowAac;
 
-    // 3. Fallback to AAC 128k (140) or last resort 249 / 139
-    return audioFormats?.lastWhere(
-        (item) => item.itag == 140 || item.itag == 249 || item.itag == 139,
-        orElse: () => audioFormats!.first);
+    // 3. Fallback to any audio stream <= 96 kbps
+    final anyLow = audioFormats!
+        .firstWhereOrNull((item) => item.bitrate > 0 && item.bitrate <= 96000);
+    if (anyLow != null) return anyLow;
+
+    // 4. Standard AAC (itag 140 ~128 kbps)
+    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (aac140 != null) return aac140;
+
+    // 5. Lowest bitrate available
+    final sorted = List<Audio>.from(audioFormats!)
+      ..sort((a, b) => a.bitrate.compareTo(b.bitrate));
+    return sorted.first;
   }
 
   Audio? get midQualityAudio {
-    final rateBypass = audioFormats?.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
+    if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    return audioFormats?.lastWhere(
-        (item) => item.itag == 250 || item.itag == 140,
-        orElse: () => lowQualityAudio ?? audioFormats!.first);
+    // Mid Data Saver:
+    // 1. Prefer itag 250 (Opus ~70 kbps) or itag 140 (AAC ~128 kbps)
+    final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
+    if (midOpus != null) return midOpus;
+
+    final midAac = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (midAac != null) return midAac;
+
+    return lowQualityAudio;
   }
 
   Map<String, dynamic> get hmStreamingData {

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'package:audio_service/audio_service.dart';
+import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
 import '../utils/helper.dart';
 
@@ -13,6 +15,7 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
   final String contentType;
   final Map<String, String>? customHeaders;
   final String? songId;
+  final String? cacheDirPath;
   final void Function(String id)? onStreamError;
 
   ChunkedStreamAudioSource({
@@ -21,6 +24,7 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
     this.contentType = 'audio/mp4',
     this.customHeaders,
     this.songId,
+    this.cacheDirPath,
     this.onStreamError,
     super.tag,
   });
@@ -66,6 +70,33 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
     client.connectionTimeout = const Duration(seconds: 15);
     final defaultUa = _resolveUserAgent(url);
     final isAndroid = url.contains('c=ANDROID');
+
+    final cacheDir =
+        cacheDirPath != null ? Directory('$cacheDirPath/cachedSongs') : null;
+    if (cacheDir != null && !cacheDir.existsSync()) {
+      try {
+        cacheDir.createSync(recursive: true);
+      } catch (_) {}
+    }
+    final targetCacheFile = (cacheDir != null && songId != null)
+        ? File('${cacheDir.path}/$songId.mp3')
+        : null;
+    final tempCacheFile = (cacheDir != null &&
+            songId != null &&
+            start == 0 &&
+            targetCacheFile != null &&
+            !targetCacheFile.existsSync())
+        ? File('${cacheDir.path}/$songId.part')
+        : null;
+
+    IOSink? cacheSink;
+    if (tempCacheFile != null) {
+      try {
+        cacheSink = tempCacheFile.openWrite();
+      } catch (e) {
+        printERROR("ChunkedStreamAudioSource cache sink open error: $e");
+      }
+    }
 
     try {
       while (targetEnd == null || current <= targetEnd) {
@@ -140,6 +171,11 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
             await for (final data in resp) {
               bytesReadInChunk += data.length;
               current += data.length;
+              if (cacheSink != null) {
+                try {
+                  cacheSink.add(data);
+                } catch (_) {}
+              }
               yield data;
             }
 
@@ -182,6 +218,39 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
       rethrow;
     } finally {
       client.close();
+      if (cacheSink != null) {
+        try {
+          await cacheSink.flush();
+          await cacheSink.close();
+          if (tempCacheFile != null &&
+              tempCacheFile.existsSync() &&
+              tempCacheFile.lengthSync() > 1024 &&
+              targetCacheFile != null) {
+            if (targetCacheFile.existsSync()) {
+              targetCacheFile.deleteSync();
+            }
+            tempCacheFile.renameSync(targetCacheFile.path);
+            printINFO(
+                "Successfully cached streamed song to disk: ${targetCacheFile.path} (${targetCacheFile.lengthSync()} bytes)");
+            try {
+              if (Hive.isBoxOpen("SongsCache") && songId != null) {
+                final cacheBox = Hive.box("SongsCache");
+                if (!cacheBox.containsKey(songId)) {
+                  cacheBox.put(songId, {
+                    'id': songId,
+                    'url': 'file://${targetCacheFile.path}',
+                    'title': (tag is MediaItem) ? (tag as MediaItem).title : '',
+                    'artist': (tag is MediaItem) ? (tag as MediaItem).artist : '',
+                    'date': DateTime.now().millisecondsSinceEpoch,
+                  });
+                }
+              }
+            } catch (_) {}
+          }
+        } catch (e) {
+          printERROR("ChunkedStreamAudioSource finalize cache error: $e");
+        }
+      }
     }
   }
 }

@@ -115,12 +115,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         handleAudioSessionActivation: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 60),
-          maxBufferDuration: Duration(seconds: 180),
+          minBufferDuration: Duration(seconds: 40),
+          maxBufferDuration: Duration(seconds: 90),
           bufferForPlaybackDuration: Duration(milliseconds: 1000),
           bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1500),
           prioritizeTimeOverSizeThresholds: true,
-          backBufferDuration: Duration(seconds: 60),
+          backBufferDuration: Duration(seconds: 45),
         )));
     if (GetPlatform.isAndroid || GetPlatform.isIOS) {
       _initAudioSession();
@@ -633,11 +633,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
     }
 
-    // Direct AudioSource.uri for streams with ratebypass=yes (itag 18 muxed MP4), SoundCloud, Piped, HLS
-    // Avoids ChunkedStreamAudioSource which triggers Google Video 403 blocks on range requests
-    if (url.contains('ratebypass=yes') ||
-        url.contains('itag=18') ||
-        url.contains('.m3u8') ||
+    // Direct AudioSource.uri for SoundCloud, Piped, HLS
+    if (url.contains('.m3u8') ||
         url.contains('soundcloud') ||
         url.contains('sndcdn') ||
         mediaItem.id.startsWith("sc_") ||
@@ -647,17 +644,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       isPlayingUsingLockCachingSource = false;
       return AudioSource.uri(
         Uri.parse(url),
-        headers: url.contains('googlevideo.com')
-            ? {
-                'User-Agent':
-                    'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
-              }
-            : null,
         tag: mediaItem,
       );
     }
 
-    // Direct chunked stream proxy for YouTube streams to bypass Google 403 Forbidden
+    // Direct chunked stream proxy for YouTube streams (ultra-low data pure audio with local caching)
     if (url.contains('googlevideo.com')) {
       final size = (mediaItem.extras?['size'] as int?) ?? 0;
       final codec = (mediaItem.extras?['codec'] as String?) ?? 'mp4a';
@@ -667,9 +658,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       isPlayingUsingLockCachingSource = false;
       return ChunkedStreamAudioSource(
         url: url,
-        totalBytes: size > 0 ? size : 10 * 1024 * 1024,
+        totalBytes: size > 0 ? size : 5 * 1024 * 1024,
         contentType: contentType,
         songId: mediaItem.id,
+        cacheDirPath: _cacheDir,
         onStreamError: (failedId) {
           _failedYouTubeSongs.add(failedId);
           try {
@@ -1811,9 +1803,19 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         !_failedYouTubeSongs.contains(songId)) {
       final streamInfoJson = songsUrlCacheBox.get(songId);
       if (streamInfoJson.runtimeType.toString().contains("Map") &&
-          !isExpired(url: (streamInfoJson['lowQualityAudio']['url']))) {
-        printINFO("Got cached Url ($songId)");
-        streamInfo = HMStreamingData.fromJson(streamInfoJson);
+          !isExpired(url: (streamInfoJson['lowQualityAudio']?['url']))) {
+        final lowItag = streamInfoJson['lowQualityAudio']?['itag'];
+        final highItag = streamInfoJson['highQualityAudio']?['itag'];
+        if (lowItag == 18 ||
+            lowItag == 22 ||
+            highItag == 18 ||
+            highItag == 22) {
+          printINFO("Evicting old video stream cache for ($songId)");
+          songsUrlCacheBox.delete(songId);
+        } else {
+          printINFO("Got cached Url ($songId)");
+          streamInfo = HMStreamingData.fromJson(streamInfoJson);
+        }
       }
     }
 
