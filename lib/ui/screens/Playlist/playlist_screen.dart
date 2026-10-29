@@ -168,25 +168,14 @@ class PlaylistScreen extends StatelessWidget {
                             width: 50,
                             child: IconButton(
                                 onPressed: () {
-                                  showModalBottomSheet(
-                                    constraints:
-                                        const BoxConstraints(maxWidth: 500),
-                                    backgroundColor: Colors.transparent,
-                                    isScrollControlled: true,
-                                    context: Get.find<PlayerController>()
-                                        .homeScaffoldkey
-                                        .currentState!
-                                        .context,
-                                    builder: (context) =>
-                                        PlaylistOptionsBottomSheet(
-                                      playlist:
-                                          playlistController.playlist.value,
-                                      onDeleted: () {
-                                        Get.nestedKey(ScreenNavigationSetup.id)
-                                            ?.currentState
-                                            ?.pop();
-                                      },
-                                    ),
+                                  PlaylistOptionsBottomSheet.show(
+                                    context: context,
+                                    playlist: playlistController.playlist.value,
+                                    onDeleted: () {
+                                      Get.nestedKey(ScreenNavigationSetup.id)
+                                          ?.currentState
+                                          ?.pop();
+                                    },
                                   );
                                 },
                                 icon: const Icon(Icons.more_vert)),

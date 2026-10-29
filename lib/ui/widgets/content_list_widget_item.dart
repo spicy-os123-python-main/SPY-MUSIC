@@ -55,11 +55,9 @@ class _ContentListItemState extends State<ContentListItem> {
             } catch (_) {}
           }
           if (p != null) {
-            showModalBottomSheet(
-              backgroundColor: Colors.transparent,
-              isScrollControlled: true,
+            PlaylistOptionsBottomSheet.show(
               context: context,
-              builder: (ctx) => PlaylistOptionsBottomSheet(playlist: p!),
+              playlist: p,
             );
           }
         }

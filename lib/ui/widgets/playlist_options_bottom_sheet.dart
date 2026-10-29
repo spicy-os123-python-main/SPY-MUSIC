@@ -27,6 +27,29 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
   final Playlist playlist;
   final VoidCallback? onDeleted;
 
+  static Future<T?> show<T>({
+    required BuildContext context,
+    required Playlist playlist,
+    VoidCallback? onDeleted,
+  }) {
+    final rootContext = (Get.isRegistered<PlayerController>() &&
+            Get.find<PlayerController>().homeScaffoldkey.currentContext != null)
+        ? Get.find<PlayerController>().homeScaffoldkey.currentContext!
+        : context;
+
+    return showModalBottomSheet<T>(
+      context: rootContext,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.70),
+      builder: (ctx) => PlaylistOptionsBottomSheet(
+        playlist: playlist,
+        onDeleted: onDeleted,
+      ),
+    );
+  }
+
   static bool isSystemPlaylist(Playlist playlist) {
     final id = playlist.playlistId;
     return id == "SongDownloads" ||
@@ -188,59 +211,68 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isSystem = isSystemPlaylist(playlist);
     final playerController = Get.find<PlayerController>();
+    final mediaQuery = MediaQuery.of(context);
+    final screenHeight = mediaQuery.size.height;
+    final bottomInset = mediaQuery.padding.bottom;
+
+    // Make the menu taller ("mach die einfach höher dieses menü"): ~68-72% of screen height
+    final double sheetHeight = min(screenHeight * 0.72, 600.0);
 
     return Container(
+      height: sheetHeight,
       decoration: BoxDecoration(
         color: const Color(0xFF0C101D),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         border: Border.all(
-          color: const Color(0xFF00D2FF).withOpacity(0.25),
-          width: 1.0,
+          color: const Color(0xFF00D2FF).withOpacity(0.3),
+          width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF00D2FF).withOpacity(0.12),
-            blurRadius: 25,
-            offset: const Offset(0, -4),
+            color: const Color(0xFF00D2FF).withOpacity(0.18),
+            blurRadius: 30,
+            offset: const Offset(0, -6),
           ),
         ],
       ),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Top drag pill
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+        top: false,
+        bottom: false,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            // Top drag pill
+            Center(
+              child: Container(
+                width: 44,
+                height: 4.5,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(3),
                 ),
               ),
-              const SizedBox(height: 16),
+            ),
+            const SizedBox(height: 16),
 
-              // Header: Playlist Thumbnail + Title + Info
-              Row(
+            // Header: Playlist Thumbnail + Title + Info
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
                 children: [
                   Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF00D2FF).withOpacity(0.25),
-                          blurRadius: 10,
+                          color: const Color(0xFF00D2FF).withOpacity(0.3),
+                          blurRadius: 12,
                         ),
                       ],
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       child: ImageWidget(
-                        size: 54,
+                        size: 58,
                         playlist: playlist,
                       ),
                     ),
@@ -256,11 +288,12 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 16,
+                            fontSize: 17,
                             fontWeight: FontWeight.bold,
+                            letterSpacing: 0.2,
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 4),
                         FutureBuilder<List<MediaItem>>(
                           future: loadPlaylistSongs(playlist),
                           builder: (context, snapshot) {
@@ -273,8 +306,8 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                color: Colors.white54,
-                                fontSize: 12,
+                                color: Colors.white60,
+                                fontSize: 12.5,
                               ),
                             );
                           },
@@ -284,118 +317,171 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Divider(color: Colors.white.withOpacity(0.08), height: 1),
-              const SizedBox(height: 10),
+            ),
+            const SizedBox(height: 16),
+            Divider(color: Colors.white.withOpacity(0.08), height: 1),
 
-              // 1. Play Playlist
-              _buildOptionTile(
-                icon: Icons.play_arrow_rounded,
-                iconColor: const Color(0xFF00D2FF),
-                iconBg: const Color(0xFF00D2FF).withOpacity(0.15),
-                title: "play".tr,
-                subtitle: "Playlist von Beginn an abspielen",
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  final songs = await loadPlaylistSongs(playlist);
-                  if (songs.isNotEmpty) {
-                    playerController.playPlayListSong(
-                      songs,
-                      0,
-                      playfrom: PlaylingFrom(
-                        name: playlist.title,
-                        type: PlaylingFromType.PLAYLIST,
+            // Scrollable Options List
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Column(
+                  children: [
+                    // 1. Play Playlist
+                    _buildOptionTile(
+                      icon: Icons.play_arrow_rounded,
+                      iconColor: const Color(0xFF00D2FF),
+                      iconBg: const Color(0xFF00D2FF).withOpacity(0.15),
+                      title: "play".tr,
+                      subtitle: "Playlist von Beginn an abspielen",
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        final songs = await loadPlaylistSongs(playlist);
+                        if (songs.isNotEmpty) {
+                          playerController.playPlayListSong(
+                            songs,
+                            0,
+                            playfrom: PlaylingFrom(
+                              name: playlist.title,
+                              type: PlaylingFromType.PLAYLIST,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+
+                    // 2. Enqueue
+                    _buildOptionTile(
+                      icon: Icons.queue_music_rounded,
+                      iconColor: const Color(0xFF38EF7D),
+                      iconBg: const Color(0xFF38EF7D).withOpacity(0.15),
+                      title: "enqueueSongs".tr,
+                      subtitle: "Titel an das Ende der Warteschlange anfügen",
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        final songs = await loadPlaylistSongs(playlist);
+                        if (songs.isNotEmpty) {
+                          await playerController.enqueueSongList(songs);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              snackbar(
+                                context,
+                                "${songs.length} Songs zur Warteschlange hinzugefügt",
+                                size: SanckBarSize.MEDIUM,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                    ),
+
+                    // 3. Rename (Custom / Imported only)
+                    if (!isSystem)
+                      _buildOptionTile(
+                        icon: Icons.drive_file_rename_outline_rounded,
+                        iconColor: const Color(0xFFFFB800),
+                        iconBg: const Color(0xFFFFB800).withOpacity(0.15),
+                        title: "renamePlaylist".tr,
+                        subtitle: "Neuen Namen für diese Playlist vergeben",
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          showDialog(
+                            context: context,
+                            builder: (dialogCtx) => CreateNRenamePlaylistPopup(
+                              renamePlaylist: true,
+                              playlist: playlist,
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  }
-                },
-              ),
 
-              // 2. Enqueue
-              _buildOptionTile(
-                icon: Icons.queue_music_rounded,
-                iconColor: const Color(0xFF38EF7D),
-                iconBg: const Color(0xFF38EF7D).withOpacity(0.15),
-                title: "enqueueSongs".tr,
-                subtitle: "Titel an das Ende der Warteschlange anfügen",
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  final songs = await loadPlaylistSongs(playlist);
-                  if (songs.isNotEmpty) {
-                    await playerController.enqueueSongList(songs);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        snackbar(
-                          context,
-                          "${songs.length} Songs zur Warteschlange hinzugefügt",
-                          size: SanckBarSize.MEDIUM,
+                    // 4. Share / Export
+                    _buildOptionTile(
+                      icon: Icons.share_rounded,
+                      iconColor: const Color(0xFFB537F2),
+                      iconBg: const Color(0xFFB537F2).withOpacity(0.15),
+                      title: "share".tr,
+                      subtitle: "Trackliste als Text oder Link teilen",
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        final songs = await loadPlaylistSongs(playlist);
+                        final buffer = StringBuffer();
+                        buffer.writeln(
+                            '🎵 SPY MUSIC Playlist: "${playlist.title}"');
+                        if (songs.isNotEmpty) {
+                          buffer.writeln('${songs.length} Songs:\n');
+                          for (int i = 0; i < min(30, songs.length); i++) {
+                            final s = songs[i];
+                            buffer.writeln(
+                                '${i + 1}. ${s.title} - ${s.artist ?? "Unbekannt"}');
+                          }
+                          if (songs.length > 30) {
+                            buffer.writeln(
+                                '... und ${songs.length - 30} weitere');
+                          }
+                        }
+                        await Share.share(buffer.toString());
+                      },
+                    ),
+
+                    // 5. Delete (Custom / Imported only)
+                    if (!isSystem)
+                      _buildOptionTile(
+                        icon: Icons.delete_forever_rounded,
+                        iconColor: const Color(0xFFFF0055),
+                        iconBg: const Color(0xFFFF0055).withOpacity(0.15),
+                        title: "removePlaylist".tr,
+                        subtitle:
+                            "Playlist dauerhaft aus der Bibliothek entfernen",
+                        isDanger: true,
+                        onTap: () => _showDeleteConfirmation(context),
+                      ),
+
+                    const SizedBox(height: 16),
+
+                    // Close Button
+                    Center(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 28, vertical: 11),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.12),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.close_rounded,
+                                  size: 18, color: Colors.white70),
+                              SizedBox(width: 8),
+                              Text(
+                                "Schließen",
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      );
-                    }
-                  }
-                },
-              ),
-
-              // 3. Rename (Custom / Imported only)
-              if (!isSystem)
-                _buildOptionTile(
-                  icon: Icons.drive_file_rename_outline_rounded,
-                  iconColor: const Color(0xFFFFB800),
-                  iconBg: const Color(0xFFFFB800).withOpacity(0.15),
-                  title: "renamePlaylist".tr,
-                  subtitle: "Neuen Namen für diese Playlist vergeben",
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    showDialog(
-                      context: context,
-                      builder: (dialogCtx) => CreateNRenamePlaylistPopup(
-                        renamePlaylist: true,
-                        playlist: playlist,
                       ),
-                    );
-                  },
-                ),
+                    ),
 
-              // 4. Share / Export
-              _buildOptionTile(
-                icon: Icons.share_rounded,
-                iconColor: const Color(0xFFB537F2),
-                iconBg: const Color(0xFFB537F2).withOpacity(0.15),
-                title: "share".tr,
-                subtitle: "Trackliste als Text oder Link teilen",
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  final songs = await loadPlaylistSongs(playlist);
-                  final buffer = StringBuffer();
-                  buffer.writeln('🎵 SPY MUSIC Playlist: "${playlist.title}"');
-                  if (songs.isNotEmpty) {
-                    buffer.writeln('${songs.length} Songs:\n');
-                    for (int i = 0; i < min(30, songs.length); i++) {
-                      final s = songs[i];
-                      buffer.writeln(
-                          '${i + 1}. ${s.title} - ${s.artist ?? "Unbekannt"}');
-                    }
-                    if (songs.length > 30) {
-                      buffer.writeln('... und ${songs.length - 30} weitere');
-                    }
-                  }
-                  await Share.share(buffer.toString());
-                },
+                    SizedBox(height: 24 + bottomInset),
+                  ],
+                ),
               ),
-
-              // 5. Delete (Custom / Imported only)
-              if (!isSystem)
-                _buildOptionTile(
-                  icon: Icons.delete_forever_rounded,
-                  iconColor: const Color(0xFFFF0055),
-                  iconBg: const Color(0xFFFF0055).withOpacity(0.15),
-                  title: "removePlaylist".tr,
-                  subtitle: "Playlist dauerhaft aus der Bibliothek entfernen",
-                  isDanger: true,
-                  onTap: () => _showDeleteConfirmation(context),
-                ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -411,24 +497,36 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
     bool isDanger = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3.5),
+      padding: const EdgeInsets.symmetric(vertical: 4.5),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: isDanger
+                  ? const Color(0xFFFF0055).withOpacity(0.07)
+                  : Colors.white.withOpacity(0.03),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isDanger
+                    ? const Color(0xFFFF0055).withOpacity(0.25)
+                    : Colors.white.withOpacity(0.05),
+                width: 1,
+              ),
+            ),
             child: Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: iconBg,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(icon, color: iconColor, size: 21),
+                  child: Icon(icon, color: iconColor, size: 23),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -438,17 +536,18 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                       Text(
                         title,
                         style: TextStyle(
-                          color: isDanger ? const Color(0xFFFF3366) : Colors.white,
-                          fontSize: 14,
+                          color:
+                              isDanger ? const Color(0xFFFF3366) : Colors.white,
+                          fontSize: 14.5,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 2.5),
                       Text(
                         subtitle,
                         style: const TextStyle(
                           color: Colors.white54,
-                          fontSize: 11.5,
+                          fontSize: 12,
                         ),
                       ),
                     ],
@@ -456,7 +555,7 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                 ),
                 Icon(
                   Icons.chevron_right_rounded,
-                  color: Colors.white.withOpacity(0.3),
+                  color: Colors.white.withOpacity(0.25),
                   size: 20,
                 ),
               ],
