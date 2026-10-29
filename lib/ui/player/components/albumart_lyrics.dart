@@ -29,6 +29,8 @@ class AlbumArtNLyrics extends StatelessWidget {
             children: [
               GestureDetector(
                 onLongPress: () {
+                  final song = playerController.currentSong.value;
+                  if (song == null) return;
                   showModalBottomSheet(
                     constraints: const BoxConstraints(maxWidth: 500),
                     shape: const RoundedRectangleBorder(
@@ -37,10 +39,11 @@ class AlbumArtNLyrics extends StatelessWidget {
                     ),
                     isScrollControlled: true,
                     context:
-                        playerController.homeScaffoldkey.currentState!.context,
+                        playerController.homeScaffoldkey.currentState?.context ??
+                            context,
                     barrierColor: Colors.transparent.withAlpha(100),
                     builder: (context) => SongInfoBottomSheet(
-                      playerController.currentSong.value!,
+                      song,
                       calledFromPlayer: true,
                     ),
                   ).whenComplete(() => Get.delete<SongInfoController>());

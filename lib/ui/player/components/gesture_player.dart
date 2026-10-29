@@ -76,16 +76,18 @@ class GesturePlayer extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.more_vert, size: 24, color: Colors.white),
                 onPressed: () {
+                  final song = playerController.currentSong.value;
+                  if (song == null) return;
                   showModalBottomSheet(
                     constraints: const BoxConstraints(maxWidth: 500),
                     shape: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
                     ),
                     isScrollControlled: true,
-                    context: playerController.homeScaffoldkey.currentState!.context,
+                    context: playerController.homeScaffoldkey.currentState?.context ?? context,
                     barrierColor: Colors.transparent.withAlpha(100),
                     builder: (context) => SongInfoBottomSheet(
-                      playerController.currentSong.value!,
+                      song,
                       calledFromPlayer: true,
                     ),
                   ).whenComplete(() => Get.delete<SongInfoController>());
@@ -127,16 +129,18 @@ class GesturePlayer extends StatelessWidget {
                       }
                     },
                     onLongPress: () {
+                      final song = playerController.currentSong.value;
+                      if (song == null) return;
                       showModalBottomSheet(
                         constraints: const BoxConstraints(maxWidth: 500),
                         shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
                         ),
                         isScrollControlled: true,
-                        context: playerController.homeScaffoldkey.currentState!.context,
+                        context: playerController.homeScaffoldkey.currentState?.context ?? context,
                         barrierColor: Colors.transparent.withAlpha(100),
                         builder: (context) => SongInfoBottomSheet(
-                          playerController.currentSong.value!,
+                          song,
                           calledFromPlayer: true,
                         ),
                       ).whenComplete(() => Get.delete<SongInfoController>());

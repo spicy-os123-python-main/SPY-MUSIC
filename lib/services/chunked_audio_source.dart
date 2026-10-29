@@ -57,12 +57,13 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
     final targetEnd = (end != null && end < totalBytes && end >= start)
         ? end
         : (totalBytes > 0 ? totalBytes - 1 : null);
-    const chunkSize = 1024 * 512; // 512 KB chunks
+    // 256 KB chunks ensure fast initial response & rock-solid streaming on weak mobile networks
+    const chunkSize = 1024 * 256;
     int current = start;
-    int chunkIndex = 0;
+    int chunkIndex = (start / chunkSize).floor();
 
     final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 10);
+    client.connectionTimeout = const Duration(seconds: 15);
     final defaultUa = _resolveUserAgent(url);
     final isAndroid = url.contains('c=ANDROID');
 
@@ -72,18 +73,23 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
             ? min(current + chunkSize - 1, targetEnd)
             : current + chunkSize - 1;
 
-        HttpClientResponse? resp;
         int attempts = 0;
+        bool chunkComplete = false;
 
-        while (attempts < 3) {
+        while (attempts < 5 && !chunkComplete) {
+          HttpClientResponse? resp;
           try {
             // Attempt 0: Use NewPipe pattern (query range for iOS/Web, header Range for Android)
             // Attempt 1: Swap range mechanism (header vs query)
-            // Attempt 2: Use NewPipe desktop Firefox User-Agent
-            final useQueryRange = attempts == 0 ? !isAndroid : isAndroid;
+            // Attempt 2+: Alternate user agent and range mechanism
+            final useQueryRange = attempts == 0
+                ? !isAndroid
+                : (attempts % 2 == 1 ? isAndroid : !isAndroid);
             final ua = attempts < 2
                 ? defaultUa
-                : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0';
+                : (attempts < 4
+                    ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0'
+                    : 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip');
 
             Uri reqUri = Uri.parse(url);
             final qParams = Map<String, String>.from(reqUri.queryParameters);
@@ -119,45 +125,52 @@ class ChunkedStreamAudioSource extends StreamAudioSource {
             }
 
             resp = await req.close();
-            if (resp.statusCode == 200 || resp.statusCode == 206) {
+            if (resp.statusCode != 200 && resp.statusCode != 206) {
+              printERROR(
+                  "ChunkedStreamAudioSource HTTP ${resp.statusCode} for chunk $chunkIndex ($current-$nextEnd, attempt ${attempts + 1})");
+              await resp.drain();
+              attempts++;
+              if (attempts < 5) {
+                await Future.delayed(Duration(milliseconds: 350 * attempts));
+              }
+              continue;
+            }
+
+            int bytesReadInChunk = 0;
+            await for (final data in resp) {
+              bytesReadInChunk += data.length;
+              current += data.length;
+              yield data;
+            }
+
+            if (bytesReadInChunk == 0) {
+              // Reached EOF
+              chunkComplete = true;
               break;
             }
 
-            printERROR(
-                "ChunkedStreamAudioSource HTTP ${resp.statusCode} for chunk $chunkIndex ($current-$nextEnd, attempt ${attempts + 1})");
-            await resp.drain();
+            if (current > nextEnd ||
+                (targetEnd != null && current > targetEnd)) {
+              chunkComplete = true;
+              chunkIndex++;
+              break;
+            }
           } catch (netErr) {
+            attempts++;
             printERROR(
-                "ChunkedStreamAudioSource network attempt ${attempts + 1} failed: $netErr");
+                "ChunkedStreamAudioSource network attempt $attempts failed at byte $current: $netErr");
+            if (attempts >= 5) {
+              if (songId != null) {
+                onStreamError?.call(songId!);
+              }
+              rethrow;
+            }
+            // Resilient exponential backoff retry for poor/intermittent connectivity
+            await Future.delayed(Duration(milliseconds: 350 * attempts));
           }
-          attempts++;
-          if (attempts < 3) {
-            await Future.delayed(const Duration(milliseconds: 300));
-          }
         }
 
-        if (resp == null || (resp.statusCode != 200 && resp.statusCode != 206)) {
-          final sCode = resp?.statusCode ?? 500;
-          printERROR("ChunkedStreamAudioSource unrecoverable HTTP $sCode at offset $current for song: $songId");
-          if (songId != null) {
-            onStreamError?.call(songId!);
-          }
-          throw HttpException("YouTube chunked streaming failed with HTTP $sCode at byte $current");
-        }
-
-        int bytesInChunk = 0;
-        await for (final data in resp) {
-          bytesInChunk += data.length;
-          yield data;
-        }
-
-        if (bytesInChunk == 0) {
-          break; // EOF
-        }
-
-        current += bytesInChunk;
-        chunkIndex++;
-        if (targetEnd != null && current > targetEnd) {
+        if (!chunkComplete && (targetEnd != null && current <= targetEnd)) {
           break;
         }
       }

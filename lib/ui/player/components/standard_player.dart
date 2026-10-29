@@ -208,6 +208,8 @@ class StandardPlayer extends StatelessWidget {
                     size: 25,
                   ),
                   onPressed: () {
+                    final song = playerController.currentSong.value;
+                    if (song == null) return;
                     showModalBottomSheet(
                       constraints: const BoxConstraints(maxWidth: 500),
                       shape: const RoundedRectangleBorder(
@@ -216,10 +218,11 @@ class StandardPlayer extends StatelessWidget {
                       ),
                       isScrollControlled: true,
                       context: playerController
-                          .homeScaffoldkey.currentState!.context,
+                              .homeScaffoldkey.currentState?.context ??
+                          context,
                       barrierColor: Colors.transparent.withAlpha(100),
                       builder: (context) => SongInfoBottomSheet(
-                        playerController.currentSong.value!,
+                        song,
                         calledFromPlayer: true,
                       ),
                     ).whenComplete(() => Get.delete<SongInfoController>());

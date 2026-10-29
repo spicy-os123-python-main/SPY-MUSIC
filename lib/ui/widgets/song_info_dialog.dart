@@ -29,7 +29,7 @@ class SongInfoDialog extends StatelessWidget {
                 InfoItem(title: "id".tr, value: song.id),
                 InfoItem(title: "title".tr, value: song.title),
                 InfoItem(title: "album".tr, value: song.album ?? "NA"),
-                InfoItem(title: "artists".tr, value: song.artist ?? "NA"),
+                InfoItem(title: "artists".tr, value: _getArtist(song)),
                 InfoItem(
                     title: "duration".tr,
                     value:
@@ -65,6 +65,24 @@ class SongInfoDialog extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _getArtist(MediaItem song) {
+    final artist = song.artist;
+    if (artist != null && artist.isNotEmpty && artist != 'null') {
+      return artist;
+    }
+    final extraArtist = song.extras?['artist'];
+    if (extraArtist != null &&
+        extraArtist.toString().isNotEmpty &&
+        extraArtist.toString() != 'null') {
+      return extraArtist.toString();
+    }
+    final sq = song.extras?['searchQuery'];
+    if (sq != null && sq.toString().isNotEmpty && sq.toString() != 'null') {
+      return sq.toString();
+    }
+    return "NA";
   }
 
   Map<dynamic, dynamic> _getStreamInfo(String id) {

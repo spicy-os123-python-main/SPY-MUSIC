@@ -24,6 +24,26 @@ import 'image_widget.dart';
 import 'song_info_dialog.dart';
 import 'inapp_equalizer_sheet.dart';
 
+String getSafeSongArtist(MediaItem song) {
+  final artist = song.artist;
+  if (artist != null && artist.isNotEmpty && artist != 'null') {
+    return artist;
+  }
+  final extraArtist = song.extras?['artist'];
+  if (extraArtist != null &&
+      extraArtist.toString().isNotEmpty &&
+      extraArtist.toString() != 'null') {
+    return extraArtist.toString();
+  }
+  final searchQuery = song.extras?['searchQuery'];
+  if (searchQuery != null &&
+      searchQuery.toString().isNotEmpty &&
+      searchQuery.toString() != 'null') {
+    return searchQuery.toString();
+  }
+  return 'unknownArtist'.tr;
+}
+
 class SongInfoBottomSheet extends StatelessWidget {
   const SongInfoBottomSheet(this.song,
       {super.key,
@@ -57,7 +77,11 @@ class SongInfoBottomSheet extends StatelessWidget {
                 song.title,
                 maxLines: 1,
               ),
-              subtitle: Text(song.artist!),
+              subtitle: Text(
+                getSafeSongArtist(song),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               trailing: SizedBox(
                 width: 110,
                 child: Row(
@@ -74,9 +98,10 @@ class SongInfoBottomSheet extends StatelessWidget {
                             icon: Icon(
                               Icons.info,
                               color: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium!
-                                  .color,
+                                      .textTheme
+                                      .titleMedium
+                                      ?.color ??
+                                  Colors.white,
                             ))
                         : IconButton(
                             onPressed: songInfoController.toggleFav,
@@ -85,9 +110,10 @@ class SongInfoBottomSheet extends StatelessWidget {
                                       ? Icons.favorite_border
                                       : Icons.favorite,
                                   color: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium!
-                                      .color,
+                                          .textTheme
+                                          .titleMedium
+                                          ?.color ??
+                                      Colors.white,
                                 ))),
                     SongDownloadButton(
                       song_: song,
@@ -244,7 +270,7 @@ class SongInfoBottomSheet extends StatelessWidget {
                     title: Text("removeFromQueue".tr),
                     onTap: () {
                       Navigator.of(context).pop();
-                      if (playerController.currentSong.value!.id == song.id) {
+                      if (playerController.currentSong.value?.id == song.id) {
                         ScaffoldMessenger.of(context).showSnackBar(snackbar(
                             context, "songRemovedfromQueueCurrSong".tr,
                             size: SanckBarSize.BIG));
@@ -335,8 +361,9 @@ class SongInfoBottomSheet extends StatelessWidget {
                           BorderRadius.vertical(top: Radius.circular(10.0)),
                     ),
                     isScrollControlled: true,
-                    context:
-                        playerController.homeScaffoldkey.currentState!.context,
+                    context: playerController
+                            .homeScaffoldkey.currentState?.context ??
+                        context,
                     barrierColor: Colors.transparent.withAlpha(100),
                     builder: (context) => const SleepTimerBottomSheet(),
                   );
@@ -359,9 +386,11 @@ class SongInfoBottomSheet extends StatelessWidget {
   List<Widget> artistWidgetList(MediaItem song, BuildContext context) {
     final artistList = [];
     final artists = song.extras?['artists'];
-    if (artists != null) {
+    if (artists != null && artists is Iterable) {
       for (dynamic each in artists) {
-        if (each.containsKey("id") && each['id'] != null) artistList.add(each);
+        if (each is Map && each.containsKey("id") && each['id'] != null) {
+          artistList.add(each);
+        }
       }
     }
     return artistList.isNotEmpty
@@ -385,7 +414,7 @@ class SongInfoBottomSheet extends StatelessWidget {
                   },
                   tileColor: Colors.transparent,
                   leading: const Icon(Icons.person),
-                  title: Text("${"viewArtist".tr} (${e['name']})"),
+                  title: Text("${"viewArtist".tr} (${e['name'] ?? ''})"),
                 ))
             .toList()
         : [const SizedBox.shrink()];
@@ -407,9 +436,11 @@ class SongInfoController extends GetxController
     isCurrentSongFav.value =
         (await Hive.openBox("LIBFAV")).containsKey(song.id);
     final artists = song.extras?['artists'];
-    if (artists != null) {
+    if (artists != null && artists is Iterable) {
       for (dynamic each in artists) {
-        if (each.containsKey("id") && each['id'] != null) artistList.add(each);
+        if (each is Map && each.containsKey("id") && each['id'] != null) {
+          artistList.add(each);
+        }
       }
     }
   }

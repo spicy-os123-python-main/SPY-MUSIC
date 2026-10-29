@@ -115,10 +115,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         handleAudioSessionActivation: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 40),
-          maxBufferDuration: Duration(seconds: 120),
-          bufferForPlaybackDuration: Duration(milliseconds: 2500),
-          bufferForPlaybackAfterRebufferDuration: Duration(seconds: 5),
+          minBufferDuration: Duration(seconds: 60),
+          maxBufferDuration: Duration(seconds: 180),
+          bufferForPlaybackDuration: Duration(milliseconds: 1000),
+          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1500),
+          prioritizeTimeOverSizeThresholds: true,
+          backBufferDuration: Duration(seconds: 60),
         )));
     if (GetPlatform.isAndroid || GetPlatform.isIOS) {
       _initAudioSession();
@@ -450,6 +452,32 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     });
   }
 
+  String? _lastPreloadedSongId;
+
+  void _preloadNextSongStream() {
+    if (queue.value.isEmpty) return;
+    final currIndex = playbackState.value.queueIndex ?? 0;
+    final nextIndex = currIndex + 1;
+    if (nextIndex >= queue.value.length) return;
+
+    final nextSong = queue.value[nextIndex];
+    if (nextSong.id == _lastPreloadedSongId) return;
+    _lastPreloadedSongId = nextSong.id;
+
+    if (Hive.box("SongsUrlCache").containsKey(nextSong.id) ||
+        Hive.box("SongDownloads").containsKey(nextSong.id) ||
+        Hive.box("SongsCache").containsKey(nextSong.id)) {
+      return;
+    }
+
+    printINFO(
+        "Background preloading next song stream for poor network resilience: ${nextSong.title} (${nextSong.id})");
+    checkNGetUrl(nextSong.id, targetMediaItem: nextSong).catchError((e) {
+      printINFO("Background preload encountered: $e");
+      return HMStreamingData(playable: false, statusMSG: "");
+    });
+  }
+
   void _listenToPlaybackForNextSong() {
     final playerDurationOffset = GetPlatform.isWindows
         ? 200
@@ -458,8 +486,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             : 0;
     _player.positionStream.listen((value) async {
       if (_player.duration != null && _player.duration?.inSeconds != 0) {
-        if (value.inMilliseconds >=
-            (_player.duration!.inMilliseconds - playerDurationOffset)) {
+        final totalMs = _player.duration!.inMilliseconds;
+        final currentMs = value.inMilliseconds;
+
+        // Preload next track's stream 25 seconds before the current song ends for seamless playback
+        if (totalMs > 30000 &&
+            (totalMs - currentMs) <= 25000 &&
+            (totalMs - currentMs) > 23000) {
+          _preloadNextSongStream();
+        }
+
+        if (currentMs >= (totalMs - playerDurationOffset)) {
           _checkAndRecordSongCompletion();
           await _triggerNext();
         }
@@ -927,10 +964,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           playbackState
               .add(playbackState.value.copyWith(queueIndex: currentIndex));
           await _playList.add(_createAudioSource(playableSong)).timeout(
-            const Duration(seconds: 15),
+            const Duration(seconds: 35),
             onTimeout: () {
               throw TimeoutException(
-                  "Playback loading timed out after 15 seconds");
+                  "Playback loading timed out after 35 seconds");
             },
           );
 
@@ -1047,10 +1084,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
           playbackState.add(playbackState.value.copyWith(queueIndex: 0));
           await _playList.add(_createAudioSource(playableSong)).timeout(
-            const Duration(seconds: 15),
+            const Duration(seconds: 35),
             onTimeout: () {
               throw TimeoutException(
-                  "Playback loading timed out after 15 seconds");
+                  "Playback loading timed out after 35 seconds");
             },
           );
           isSongLoading = false;
@@ -1786,7 +1823,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       try {
         streamInfoJson = await Isolate.run(
           () => getStreamInfo(songId, token),
-        ).timeout(const Duration(seconds: 18));
+        ).timeout(const Duration(seconds: 28));
       } catch (e) {
         printERROR("YouTube stream lookup failed for $songId: $e");
         streamInfoJson = {"playable": false, "statusMSG": e.toString()};
