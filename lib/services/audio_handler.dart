@@ -112,6 +112,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         handleInterruptions: false,
         androidApplyAudioAttributes: true,
         handleAudioSessionActivation: false,
+        useProxyForRequestHeaders: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
           minBufferDuration: Duration(seconds: 40),
@@ -649,9 +650,21 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
     }
 
-    // Direct AudioSource.uri for SoundCloud, Piped, HLS
+    // Direct HLS stream for SoundCloud or any HLS source (.m3u8 or /stream/hls)
     if (url.contains('.m3u8') ||
-        url.contains('soundcloud') ||
+        url.contains('/stream/hls') ||
+        url.contains('/hls')) {
+      printINFO(
+          "Playing HLS stream via HlsAudioSource: ${url.substring(0, min(80, url.length))}...");
+      isPlayingUsingLockCachingSource = false;
+      return HlsAudioSource(
+        Uri.parse(url),
+        tag: mediaItem,
+      );
+    }
+
+    // Direct AudioSource.uri for SoundCloud progressive or other non-YouTube streams
+    if (url.contains('soundcloud') ||
         url.contains('sndcdn') ||
         mediaItem.id.startsWith("sc_") ||
         (mediaItem.extras?['isSoundCloud'] == true)) {
@@ -669,9 +682,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       printINFO(
           "Playing YouTube stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
       isPlayingUsingLockCachingSource = false;
-      String ua = 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
+      String ua = 'com.google.android.youtube/20.10.38 (Linux; U; Android 11)';
       if (url.contains('c=IOS')) {
-        ua = 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)';
+        ua = 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X)';
       } else if (url.contains('c=WEB')) {
         ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0';
       }
@@ -679,8 +692,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         Uri.parse(url),
         headers: {
           'User-Agent': ua,
-          'Origin': 'https://www.youtube.com',
-          'Referer': 'https://www.youtube.com',
         },
         tag: mediaItem,
       );
@@ -1820,19 +1831,26 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         !generateNewUrl &&
         !_failedYouTubeSongs.contains(songId)) {
       final streamInfoJson = songsUrlCacheBox.get(songId);
-      if (streamInfoJson.runtimeType.toString().contains("Map") &&
-          !isExpired(url: (streamInfoJson['lowQualityAudio']?['url']))) {
-        final lowItag = streamInfoJson['lowQualityAudio']?['itag'];
-        final highItag = streamInfoJson['highQualityAudio']?['itag'];
-        if (lowItag == 18 ||
-            lowItag == 22 ||
-            highItag == 18 ||
-            highItag == 22) {
-          printINFO("Evicting old video stream cache for ($songId)");
-          songsUrlCacheBox.delete(songId);
+      if (streamInfoJson.runtimeType.toString().contains("Map")) {
+        final lowUrl = streamInfoJson['lowQualityAudio']?['url'];
+        final highUrl = streamInfoJson['highQualityAudio']?['url'];
+        final midUrl = streamInfoJson['midQualityAudio']?['url'];
+        final testUrl = highUrl ?? lowUrl ?? midUrl;
+        if (testUrl != null && !isExpired(url: testUrl)) {
+          final lowItag = streamInfoJson['lowQualityAudio']?['itag'];
+          final highItag = streamInfoJson['highQualityAudio']?['itag'];
+          if (lowItag == 18 ||
+              lowItag == 22 ||
+              highItag == 18 ||
+              highItag == 22) {
+            printINFO("Evicting old video stream cache for ($songId)");
+            songsUrlCacheBox.delete(songId);
+          } else {
+            printINFO("Got cached Url ($songId)");
+            streamInfo = HMStreamingData.fromJson(streamInfoJson);
+          }
         } else {
-          printINFO("Got cached Url ($songId)");
-          streamInfo = HMStreamingData.fromJson(streamInfoJson);
+          songsUrlCacheBox.delete(songId);
         }
       }
     }

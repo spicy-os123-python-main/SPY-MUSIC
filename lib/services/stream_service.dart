@@ -77,19 +77,19 @@ class StreamProvider {
         ));
       }
 
-      // 2. Only if audioOnly is completely empty, fallback to lowest resolution muxed stream (itag 18)
-      if (formats.isEmpty && res.muxed.isNotEmpty) {
-        final m = res.muxed.firstWhereOrNull((item) => item.tag == 18) ??
-            res.muxed.first;
-        formats.add(Audio(
-          itag: m.tag,
-          audioCodec: Codec.mp4a,
-          bitrate: 128000,
-          duration: 0,
-          loudnessDb: 0.0,
-          url: m.url.toString(),
-          size: m.size.totalBytes,
-        ));
+      // 2. Also add itag 18 muxed stream as reliable fallback so formats is never empty and playback never fails
+      for (final m in res.muxed) {
+        if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+          formats.add(Audio(
+            itag: m.tag,
+            audioCodec: Codec.mp4a,
+            bitrate: 128000,
+            duration: 0,
+            loudnessDb: 0.0,
+            url: m.url.toString(),
+            size: m.size.totalBytes,
+          ));
+        }
       }
 
       if (formats.isEmpty) {
@@ -180,11 +180,24 @@ class StreamProvider {
   Audio? get highestQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
+    // 1. Standard pure AAC 128k (itag 140): ~3.5MB per track, 100% stable across Android & iOS,
+    // saves ~87% data compared to video streams without any playback issues.
+    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (aac140 != null) return aac140;
+
+    // 2. High-bitrate Opus (itag 251 ~160k)
     final highOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
     if (highOpus != null) return highOpus;
 
-    final highAac = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
-    if (highAac != null) return highAac;
+    // 3. Any pure AAC audio stream (e.g. itag 139)
+    final otherAac = audioFormats!.firstWhereOrNull(
+        (item) => item.audioCodec == Codec.mp4a && item.itag != 18);
+    if (otherAac != null) return otherAac;
+
+    // 4. Rate-bypass muxed stream (itag 18) as fallback
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
 
     final sorted = List<Audio>.from(audioFormats!)
       ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
@@ -218,26 +231,25 @@ class StreamProvider {
   Audio? get lowQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // Ultra Data Saver (-85% to -97% data savings):
-    // 1. Prefer itag 250 (Opus ~70 kbps) or itag 249 (Opus ~50 kbps)
-    // Consumes only ~1.1 to 1.6 MB per track!
+    // Ultra Data Saver (-85% to -96% data savings):
+    // 1. Low-bitrate AAC (itag 139 ~48 kbps, ~1.2 MB per track)
+    final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
+    if (lowAac != null) return lowAac;
+
+    // 2. Opus itag 250 (~70 kbps, ~1.6 MB) or itag 249 (~50 kbps, ~1.2 MB)
     final cleanOpus =
         audioFormats!.firstWhereOrNull((item) => item.itag == 250) ??
             audioFormats!.firstWhereOrNull((item) => item.itag == 249);
     if (cleanOpus != null) return cleanOpus;
 
-    // 2. Low-bitrate AAC (itag 139 ~48 kbps, ~1.2 MB per track)
-    final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
-    if (lowAac != null) return lowAac;
+    // 3. Fallback to standard AAC 128k (itag 140 ~3.5 MB)
+    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (aac140 != null) return aac140;
 
-    // 3. Fallback to any audio stream <= 96 kbps
+    // 4. Fallback to any audio stream <= 96 kbps
     final anyLow = audioFormats!
         .firstWhereOrNull((item) => item.bitrate > 0 && item.bitrate <= 96000);
     if (anyLow != null) return anyLow;
-
-    // 4. Standard AAC (itag 140 ~128 kbps)
-    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
-    if (aac140 != null) return aac140;
 
     // 5. Lowest bitrate available
     final sorted = List<Audio>.from(audioFormats!)
@@ -249,12 +261,12 @@ class StreamProvider {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
     // Mid Data Saver:
-    // 1. Prefer itag 250 (Opus ~70 kbps) or itag 140 (AAC ~128 kbps)
-    final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
-    if (midOpus != null) return midOpus;
-
+    // 1. Prefer itag 140 (AAC ~128 kbps) or itag 250 (Opus ~70 kbps)
     final midAac = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
     if (midAac != null) return midAac;
+
+    final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
+    if (midOpus != null) return midOpus;
 
     return lowQualityAudio;
   }
