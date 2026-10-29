@@ -6,8 +6,7 @@ import 'package:get/get.dart';
 import 'package:widget_marquee/widget_marquee.dart';
 
 import '../../models/playlist.dart';
-import '../../models/music_source.dart';
-import 'platform_selector_widget.dart';
+import '../../utils/helper.dart';
 import '../player/player_controller.dart';
 import '../screens/Settings/settings_screen_controller.dart';
 import 'add_to_playlist.dart';
@@ -43,10 +42,18 @@ class _SongListTileState extends State<SongListTile>
     with RemoveSongFromPlaylistMixin {
   bool _isPressed = false;
 
-  String? _resolvePlatform(MediaItem song) {
+  String _resolvePlatform(MediaItem song) {
     final p = song.extras?['platform']?.toString();
-    if (p != null && p.isNotEmpty) {
-      if (p.toLowerCase() == 'yt' || p.toLowerCase() == 'youtube music') return 'YouTube';
+    if (p != null && p.isNotEmpty && p.toLowerCase() != 'null') {
+      final pLow = p.toLowerCase();
+      if (pLow == 'yt' || pLow == 'youtube music' || pLow == 'youtube') {
+        return 'YouTube';
+      }
+      if (pLow == 'spotify' || pLow == 'sp') return 'Spotify';
+      if (pLow == 'soundcloud' || pLow == 'sc') return 'SoundCloud';
+      if (pLow == 'amazon' || pLow == 'amazon music' || pLow == 'az') {
+        return 'Amazon Music';
+      }
       return p;
     }
     if (song.id.startsWith('sc_') || song.extras?['isSoundCloud'] == true) {
@@ -58,18 +65,7 @@ class _SongListTileState extends State<SongListTile>
     if (song.id.startsWith('az_') || song.extras?['isAmazon'] == true) {
       return 'Amazon Music';
     }
-    // If in All-In-One search mode, default tracks without prefix are YouTube
-    bool isAllInOne = false;
-    try {
-      if (Get.isRegistered<PlatformSelectorController>()) {
-        isAllInOne = Get.find<PlatformSelectorController>().selectedSource.value ==
-            MusicSource.all;
-      }
-    } catch (_) {}
-    if (isAllInOne) {
-      return 'YouTube';
-    }
-    return null;
+    return 'YouTube';
   }
 
   Widget _buildPlatformBadge(String platform) {
@@ -320,22 +316,10 @@ class _SongListTileState extends State<SongListTile>
                   ),
                   subtitle: Row(
                     children: [
-                      Builder(builder: (context) {
-                        final platform = _resolvePlatform(widget.song);
-                        if (platform != null && platform.isNotEmpty) {
-                          return _buildPlatformBadge(platform);
-                        }
-                        return const SizedBox.shrink();
-                      }),
+                      _buildPlatformBadge(_resolvePlatform(widget.song)),
                       Expanded(
                         child: Text(
-                          (widget.song.artist != null &&
-                                  widget.song.artist != 'null' &&
-                                  widget.song.artist!.isNotEmpty)
-                              ? widget.song.artist!
-                              : (widget.song.extras?['artist'] ??
-                                  widget.song.extras?['searchQuery'] ??
-                                  'unknownArtist'.tr),
+                          getSafeSongArtist(widget.song),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style:

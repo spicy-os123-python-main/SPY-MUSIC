@@ -27,12 +27,10 @@ class PlaylistShareService {
   ));
 
   /// Generates a short, shareable cloud link or falls back to a file.
-  /// Works smoothly even for 700+ songs.
+  /// Clean, concise format without AI emojis or fluff. Works smoothly even for 700+ songs.
   Future<void> sharePlaylist(Playlist playlist, List<MediaItem> songs) async {
     if (songs.isEmpty) {
-      final msg = 'emptyPlaylist'.tr;
-      await Share.share(
-          '🎵 SPY MUSIC ${"playlist".tr}: "${playlist.title}" ($msg)');
+      await Share.share('${playlist.title} (0 ${"songs".tr})');
       return;
     }
 
@@ -42,11 +40,7 @@ class PlaylistShareService {
             playlist.playlistId.startsWith('RD') ||
             playlist.playlistId.startsWith('UU'))) {
       final ytLink = 'https://youtube.com/playlist?list=${playlist.playlistId}';
-      final shareText =
-          '''🎵 SPY MUSIC ${"playlist".tr}: "${playlist.title}" (${songs.length} ${"songs".tr})
-$ytLink
-
-💡 ${"importShareHint".tr}''';
+      final shareText = '${playlist.title}\n$ytLink';
       await Share.share(shareText);
       return;
     }
@@ -95,11 +89,8 @@ $ytLink
 
     // 4. If short cloud link was generated successfully
     if (shortUrl != null && shortUrl.isNotEmpty) {
-      final shareText =
-          '''🎵 SPY MUSIC ${"playlist".tr}: "${playlist.title}" (${songs.length} ${"songs".tr})
-$shortUrl
-
-💡 ${"importShareHint".tr}''';
+      final cleanUrl = shortUrl.trim().replaceAll(RegExp(r'''[/\.,;\)\]>"']+$'''), '');
+      final shareText = '${playlist.title}\n$cleanUrl';
       await Share.share(shareText);
       return;
     }
@@ -114,14 +105,13 @@ $shortUrl
 
       await Share.shareXFiles(
         [XFile(file.path)],
-        text:
-            '🎵 SPY MUSIC ${"playlist".tr}: "${playlist.title}" (${songs.length} ${"songs".tr})',
+        text: playlist.title,
       );
     } catch (e) {
       printERROR("PlaylistShareService file fallback error: $e");
       // Ultimate fallback: text summary
       final fallbackText =
-          '🎵 SPY MUSIC ${"playlist".tr}: "${playlist.title}" (${songs.length} ${"songs".tr})';
+          '${playlist.title} (${songs.length} ${"songs".tr})';
       await Share.share(fallbackText);
     }
   }

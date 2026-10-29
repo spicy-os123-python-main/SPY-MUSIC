@@ -9,6 +9,7 @@ import 'package:widget_marquee/widget_marquee.dart';
 
 import '../../widgets/image_widget.dart';
 import '../../widgets/songinfo_bottom_sheet.dart';
+import '../../../utils/helper.dart';
 import '../player_controller.dart';
 import 'animated_play_button.dart';
 import 'player_mode_switch.dart';
@@ -293,13 +294,7 @@ class GesturePlayer extends StatelessWidget {
                                       duration: const Duration(seconds: 10),
                                       id: "${playerController.currentSong.value?.id ?? 'idle'}_subtitle",
                                       child: Text(
-                                        (playerController.currentSong.value?.artist != null &&
-                                                playerController.currentSong.value?.artist != 'null' &&
-                                                playerController.currentSong.value!.artist!.isNotEmpty)
-                                            ? playerController.currentSong.value!.artist!
-                                            : (playerController.currentSong.value?.extras?['artist'] ??
-                                                playerController.currentSong.value?.extras?['searchQuery'] ??
-                                                "unknownArtist".tr),
+                                        getSafeSongArtist(playerController.currentSong.value),
                                         textAlign: TextAlign.start,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(

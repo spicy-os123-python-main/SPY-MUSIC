@@ -24,26 +24,6 @@ import 'image_widget.dart';
 import 'song_info_dialog.dart';
 import 'inapp_equalizer_sheet.dart';
 
-String getSafeSongArtist(MediaItem song) {
-  final artist = song.artist;
-  if (artist != null && artist.isNotEmpty && artist != 'null') {
-    return artist;
-  }
-  final extraArtist = song.extras?['artist'];
-  if (extraArtist != null &&
-      extraArtist.toString().isNotEmpty &&
-      extraArtist.toString() != 'null') {
-    return extraArtist.toString();
-  }
-  final searchQuery = song.extras?['searchQuery'];
-  if (searchQuery != null &&
-      searchQuery.toString().isNotEmpty &&
-      searchQuery.toString() != 'null') {
-    return searchQuery.toString();
-  }
-  return 'unknownArtist'.tr;
-}
-
 class SongInfoBottomSheet extends StatelessWidget {
   const SongInfoBottomSheet(this.song,
       {super.key,

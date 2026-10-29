@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 
 import '/ui/widgets/common_dialog_widget.dart';
+import '/utils/helper.dart';
 
 class SongInfoDialog extends StatelessWidget {
   final MediaItem song;
@@ -68,21 +69,7 @@ class SongInfoDialog extends StatelessWidget {
   }
 
   String _getArtist(MediaItem song) {
-    final artist = song.artist;
-    if (artist != null && artist.isNotEmpty && artist != 'null') {
-      return artist;
-    }
-    final extraArtist = song.extras?['artist'];
-    if (extraArtist != null &&
-        extraArtist.toString().isNotEmpty &&
-        extraArtist.toString() != 'null') {
-      return extraArtist.toString();
-    }
-    final sq = song.extras?['searchQuery'];
-    if (sq != null && sq.toString().isNotEmpty && sq.toString() != 'null') {
-      return sq.toString();
-    }
-    return "NA";
+    return getSafeSongArtist(song);
   }
 
   Map<dynamic, dynamic> _getStreamInfo(String id) {

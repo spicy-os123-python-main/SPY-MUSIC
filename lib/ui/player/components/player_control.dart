@@ -5,6 +5,7 @@ import 'package:ionicons/ionicons.dart';
 import 'package:widget_marquee/widget_marquee.dart';
 
 import '/ui/player/components/animated_play_button.dart';
+import '/utils/helper.dart';
 import '../player_controller.dart';
 
 class PlayerControlWidget extends StatelessWidget {
@@ -63,13 +64,7 @@ class PlayerControlWidget extends StatelessWidget {
                           duration: const Duration(seconds: 10),
                           id: "${playerController.currentSong.value?.id ?? 'idle'}_subtitle",
                           child: Text(
-                            (playerController.currentSong.value?.artist != null &&
-                                    playerController.currentSong.value?.artist != 'null' &&
-                                    playerController.currentSong.value!.artist!.isNotEmpty)
-                                ? playerController.currentSong.value!.artist!
-                                : (playerController.currentSong.value?.extras?['artist'] ??
-                                    playerController.currentSong.value?.extras?['searchQuery'] ??
-                                    "unknownArtist".tr),
+                            getSafeSongArtist(playerController.currentSong.value),
                             textAlign: TextAlign.start,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.labelSmall,

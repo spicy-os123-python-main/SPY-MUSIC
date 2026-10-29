@@ -4,6 +4,17 @@ import 'package:audio_service/audio_service.dart';
 import '../models/thumbnail.dart';
 
 class MediaItemBuilder {
+  static bool _isValidString(dynamic val) {
+    if (val == null) return false;
+    final s = val.toString().trim();
+    final lower = s.toLowerCase();
+    return s.isNotEmpty &&
+        lower != 'null' &&
+        lower != 'na' &&
+        lower != 'n/a' &&
+        lower != 'undefined';
+  }
+
   static MediaItem fromJson(dynamic json, {String? url}) {
     if (json == null) {
       return const MediaItem(id: '', title: '');
@@ -14,37 +25,38 @@ class MediaItemBuilder {
       if (json['artists'] is List) {
         final list = (json['artists'] as List)
             .map((e) => e is Map ? (e['name'] ?? e.toString()) : e.toString())
-            .where((s) => s.isNotEmpty && s != "null")
+            .where((s) => _isValidString(s))
+            .map((s) => s.toString().trim())
             .toList();
         if (list.isNotEmpty) {
           artistName = list.join(', ');
         }
-      } else if (json['artists'] is String && json['artists'] != "null") {
-        artistName = json['artists'];
+      } else if (_isValidString(json['artists'])) {
+        artistName = json['artists'].toString().trim();
       }
     }
 
-    if (artistName == null || artistName.isEmpty || artistName == "null") {
+    if (!_isValidString(artistName)) {
       final a = json['artist']?.toString();
-      if (a != null && a.isNotEmpty && a != "null") {
-        artistName = a;
+      if (_isValidString(a)) {
+        artistName = a!.trim();
       }
     }
 
-    if (artistName == null || artistName.isEmpty || artistName == "null") {
+    if (!_isValidString(artistName)) {
       final a = json['extras']?['artist']?.toString();
-      if (a != null && a.isNotEmpty && a != "null") {
-        artistName = a;
+      if (_isValidString(a)) {
+        artistName = a!.trim();
       }
     }
 
     // Auto-recovery for previously saved tracks that had searchQuery: "$title $artist"
-    if (artistName == null || artistName.isEmpty || artistName == "null") {
+    if (!_isValidString(artistName)) {
       final sq = (json['extras']?['searchQuery'] ?? json['searchQuery'])?.toString();
       final title = json['title']?.toString() ?? '';
-      if (sq != null && title.isNotEmpty && sq.toLowerCase().startsWith(title.toLowerCase())) {
+      if (_isValidString(sq) && title.isNotEmpty && sq!.toLowerCase().startsWith(title.toLowerCase())) {
         final rem = sq.substring(title.length).trim();
-        if (rem.isNotEmpty) artistName = rem;
+        if (_isValidString(rem)) artistName = rem;
       }
     }
 
@@ -99,24 +111,37 @@ class MediaItemBuilder {
     extrasMap['date'] = json['date'] ?? extrasMap['date'];
     extrasMap['trackDetails'] = json['trackDetails'] ?? extrasMap['trackDetails'];
     extrasMap['year'] = json['year'] ?? extrasMap['year'];
-    if (artistName != null && artistName.isNotEmpty && artistName != "null") {
+    if (_isValidString(artistName)) {
       extrasMap['artist'] = artistName;
     }
+
+    final trackId = (json["videoId"] ?? json["id"] ?? "").toString();
+    String? platform = json['platform']?.toString() ?? extrasMap['platform']?.toString();
+    if (platform == null || platform.isEmpty || platform == 'null') {
+      if (trackId.startsWith('sp_') || extrasMap['isSpotify'] == true) {
+        platform = 'Spotify';
+      } else if (trackId.startsWith('sc_') || extrasMap['isSoundCloud'] == true) {
+        platform = 'SoundCloud';
+      } else if (trackId.startsWith('az_') || extrasMap['isAmazon'] == true) {
+        platform = 'Amazon Music';
+      } else {
+        platform = 'YouTube';
+      }
+    }
+    extrasMap['platform'] = platform;
 
     final albumName = album != null
         ? (album['name']?.toString())
         : (json['albumName']?.toString() ?? json['album']?.toString());
 
     return MediaItem(
-      id: (json["videoId"] ?? json["id"] ?? "").toString(),
+      id: trackId,
       title: (json["title"] ?? "Unbekannt").toString(),
       duration: json['duration'] != null
           ? Duration(seconds: json['duration'])
           : toDuration(json['length'] ?? extrasMap['length']),
       album: albumName,
-      artist: (artistName != null && artistName.isNotEmpty && artistName != "null")
-          ? artistName
-          : null,
+      artist: _isValidString(artistName) ? artistName : null,
       artUri: parsedArtUri,
       extras: extrasMap,
     );
@@ -152,7 +177,8 @@ class MediaItemBuilder {
       artists = mediaItem.extras?['artists'];
     } else if (mediaItem.artist != null &&
         mediaItem.artist!.isNotEmpty &&
-        mediaItem.artist != 'null') {
+        mediaItem.artist != 'null' &&
+        mediaItem.artist != 'NA') {
       artists = [
         {'name': mediaItem.artist!, 'id': ''}
       ];
@@ -165,15 +191,27 @@ class MediaItemBuilder {
         : <String, dynamic>{};
     if (mediaItem.artist != null &&
         mediaItem.artist!.isNotEmpty &&
-        mediaItem.artist != 'null') {
+        mediaItem.artist != 'null' &&
+        mediaItem.artist != 'NA') {
       extrasMap['artist'] = mediaItem.artist;
     }
+
+    final platform = mediaItem.extras?['platform'] ??
+        (mediaItem.id.startsWith('sp_')
+            ? 'Spotify'
+            : mediaItem.id.startsWith('sc_')
+                ? 'SoundCloud'
+                : mediaItem.id.startsWith('az_')
+                    ? 'Amazon Music'
+                    : 'YouTube');
+    extrasMap['platform'] = platform;
 
     return {
       "videoId": mediaItem.id,
       "id": mediaItem.id,
       "title": mediaItem.title,
       "artist": mediaItem.artist,
+      "platform": platform,
       'album': mediaItem.extras?['album'] ??
           (mediaItem.album != null ? {'name': mediaItem.album} : null),
       'albumName': mediaItem.album,

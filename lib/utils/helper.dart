@@ -273,6 +273,46 @@ Future<bool> newVersionCheck(String currentVersion) async {
   }
 }
 
+bool isValidArtist(String? val) {
+  if (val == null) return false;
+  final trimmed = val.trim();
+  final lower = trimmed.toLowerCase();
+  return trimmed.isNotEmpty &&
+      lower != 'null' &&
+      lower != 'na' &&
+      lower != 'n/a' &&
+      lower != 'undefined' &&
+      lower != 'unknown';
+}
+
+String getSafeSongArtist(dynamic song, {String? fallback}) {
+  if (song == null) return fallback ?? 'unknownArtist'.tr;
+
+  try {
+    final a = song.artist?.toString();
+    if (isValidArtist(a)) return a!.trim();
+  } catch (_) {}
+
+  try {
+    final a = song.extras?['artist']?.toString();
+    if (isValidArtist(a)) return a!.trim();
+  } catch (_) {}
+
+  try {
+    final sq = song.extras?['searchQuery']?.toString();
+    if (isValidArtist(sq)) {
+      final title = song.title?.toString().trim() ?? '';
+      if (title.isNotEmpty && sq!.toLowerCase().startsWith(title.toLowerCase())) {
+        final rem = sq.substring(title.length).trim();
+        if (isValidArtist(rem)) return rem;
+      }
+      return sq!.trim();
+    }
+  } catch (_) {}
+
+  return fallback ?? 'unknownArtist'.tr;
+}
+
 String getTimeString(Duration time) {
   final minutes = time.inMinutes.remainder(Duration.minutesPerHour).toString();
   final seconds = time.inSeconds

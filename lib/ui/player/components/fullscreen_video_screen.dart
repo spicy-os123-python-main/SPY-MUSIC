@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../player_controller.dart';
+import '/utils/helper.dart';
 
 class FullScreenVideoScreen extends StatefulWidget {
   const FullScreenVideoScreen({super.key});
@@ -89,7 +90,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
                                       ),
                                     ),
                                     Text(
-                                      playerController.currentSong.value?.artist ?? "",
+                                      getSafeSongArtist(playerController.currentSong.value),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(

@@ -102,9 +102,10 @@ class PlaylistImportService {
       }
     }
 
-    // 2. Extract URL if user copied full shared message (e.g. with emojis and hint text)
+    // 2. Extract URL if user copied full shared message (e.g. title + url)
     final urlMatch = RegExp(r'https?://[^\s]+').firstMatch(cleanUrl);
-    final targetUrl = urlMatch != null ? urlMatch.group(0)! : cleanUrl;
+    String targetUrl = urlMatch != null ? urlMatch.group(0)! : cleanUrl;
+    targetUrl = targetUrl.replaceAll(RegExp(r'''[/\.,;\)\]>"']+$'''), '');
     final uri = Uri.tryParse(targetUrl);
     if (uri == null) {
       return {'success': false, 'message': 'Ungültige URL'};
@@ -382,14 +383,19 @@ class PlaylistImportService {
   Future<Map<String, dynamic>> _importFromSpyMusicShare(String url) async {
     try {
       importStatus.value = "Lade Playlist-Daten herunter...";
-      final rawUrl = url.contains('dpaste.org') && !url.endsWith('/raw')
-          ? '$url/raw'
-          : url;
+      final clean = url.trim().replaceAll(RegExp(r'''[/\.,;\)\]>"']+$'''), '');
+      final rawUrl = clean.contains('dpaste.org') && !clean.endsWith('/raw')
+          ? '$clean/raw'
+          : clean;
 
       final response = await _dio.get(
         rawUrl,
         options: Options(
-          headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/plain, application/json, */*',
+          },
           sendTimeout: const Duration(seconds: 15),
           receiveTimeout: const Duration(seconds: 25),
         ),
@@ -398,15 +404,26 @@ class PlaylistImportService {
       if (response.statusCode != 200 || response.data == null) {
         return {
           'success': false,
-          'message': 'Konnte Playlist nicht vom Share-Link laden.'
+          'message': 'Konnte Playlist nicht vom Share-Link laden (HTTP ${response.statusCode}).'
         };
       }
 
-      final dynamic rawData = response.data is Map
-          ? response.data
-          : (response.data is String
-              ? jsonDecode(response.data as String)
-              : null);
+      dynamic rawData;
+      if (response.data is Map) {
+        rawData = response.data;
+      } else if (response.data is String) {
+        final text = (response.data as String).trim();
+        try {
+          rawData = jsonDecode(text);
+        } catch (_) {
+          final firstBrace = text.indexOf('{');
+          final lastBrace = text.lastIndexOf('}');
+          if (firstBrace != -1 && lastBrace > firstBrace) {
+            final jsonSub = text.substring(firstBrace, lastBrace + 1);
+            rawData = jsonDecode(jsonSub);
+          }
+        }
+      }
 
       if (rawData == null || rawData is! Map) {
         return {'success': false, 'message': 'Ungültiges Playlist-Format.'};
@@ -490,7 +507,7 @@ class PlaylistImportService {
       return {
         'success': true,
         'message':
-            '✅ Playlist "$title" (${items.length} Songs) erfolgreich importiert!',
+            'Playlist "$title" (${items.length} Songs) erfolgreich importiert!',
         'count': items.length,
       };
     } catch (e) {

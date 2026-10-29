@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import '/models/quick_picks.dart';
 import '../player/player_controller.dart';
+import '/utils/helper.dart';
 import 'image_widget.dart';
 import 'mini_equalizer.dart';
 import 'songinfo_bottom_sheet.dart';
@@ -181,7 +182,7 @@ class _QuickPickItemState extends State<_QuickPickItem> {
                   ],
                 ),
                 subtitle: Text(
-                  "${widget.song.artist}",
+                  getSafeSongArtist(widget.song),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(

@@ -8,6 +8,7 @@ import 'package:widget_marquee/widget_marquee.dart';
 import '/ui/widgets/lyrics_dialog.dart';
 import '/ui/widgets/song_info_dialog.dart';
 import '/ui/player/player_controller.dart';
+import '/utils/helper.dart';
 import '../../widgets/add_to_playlist.dart';
 import '../../widgets/sleep_timer_bottom_sheet.dart';
 import '../../widgets/song_download_btn.dart';
@@ -191,13 +192,7 @@ class MiniPlayer extends StatelessWidget {
                                     delay: const Duration(milliseconds: 300),
                                     duration: const Duration(seconds: 5),
                                     child: Text(
-                                      (playerController.currentSong.value?.artist != null &&
-                                              playerController.currentSong.value?.artist != 'null' &&
-                                              playerController.currentSong.value!.artist!.isNotEmpty)
-                                          ? playerController.currentSong.value!.artist!
-                                          : (playerController.currentSong.value?.extras?['artist'] ??
-                                              playerController.currentSong.value?.extras?['searchQuery'] ??
-                                              ""),
+                                      getSafeSongArtist(playerController.currentSong.value),
                                       maxLines: 1,
                                       style: Theme.of(context)
                                           .textTheme
