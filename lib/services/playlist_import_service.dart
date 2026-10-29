@@ -73,9 +73,39 @@ class PlaylistImportService {
     }
   }
 
-  /// Import a playlist from a URL (Spotify, YouTube, etc.)
+  /// Import a playlist from a URL, short share link, or shared text
   Future<Map<String, dynamic>> importFromUrl(String url) async {
-    final uri = Uri.tryParse(url.trim());
+    final cleanUrl = url.trim();
+    if (cleanUrl.isEmpty) {
+      return {'success': false, 'message': 'Leere Eingabe'};
+    }
+
+    // 1. Direct raw JSON pasted in the input field
+    if (cleanUrl.startsWith('{') && cleanUrl.contains('"songs"')) {
+      isImporting.value = true;
+      importProgress.value = 0.0;
+      currentTrack.value = 0;
+      totalTracks.value = 0;
+      importStatus.value = "Initialisiere Import...";
+      try {
+        final data = jsonDecode(cleanUrl);
+        if (data is Map<String, dynamic>) {
+          return await _importFromSpyMusicJsonData(data);
+        } else if (data is Map) {
+          return await _importFromSpyMusicJsonData(
+              Map<String, dynamic>.from(data));
+        }
+      } catch (e) {
+        return {'success': false, 'message': 'Ungültiges JSON-Format: $e'};
+      } finally {
+        _resetProgress();
+      }
+    }
+
+    // 2. Extract URL if user copied full shared message (e.g. with emojis and hint text)
+    final urlMatch = RegExp(r'https?://[^\s]+').firstMatch(cleanUrl);
+    final targetUrl = urlMatch != null ? urlMatch.group(0)! : cleanUrl;
+    final uri = Uri.tryParse(targetUrl);
     if (uri == null) {
       return {'success': false, 'message': 'Ungültige URL'};
     }
@@ -88,27 +118,40 @@ class PlaylistImportService {
     importStatus.value = "Initialisiere Import...";
 
     try {
-      // 1. Spotify Playlist Link
-      if (url.contains('spotify.com/playlist/') || url.contains('spotify.link')) {
-        return await _importSpotify(url);
+      // 3. SPY MUSIC Cloud Share Link (dpaste.org, direct raw JSON, or spymusic file)
+      if (targetUrl.contains('dpaste.org') ||
+          targetUrl.contains('paste.c-net.org') ||
+          targetUrl.endsWith('.json') ||
+          targetUrl.endsWith('.spymusic')) {
+        return await _importFromSpyMusicShare(targetUrl);
       }
 
-      // 2. YouTube / YouTube Music Playlist Link
-      if (url.contains('list=') || url.contains('youtube.com') || url.contains('youtu.be')) {
+      // 4. Spotify Playlist Link
+      if (targetUrl.contains('spotify.com/playlist/') ||
+          targetUrl.contains('spotify.link')) {
+        return await _importSpotify(targetUrl);
+      }
+
+      // 5. YouTube / YouTube Music Playlist Link
+      if (targetUrl.contains('list=') ||
+          targetUrl.contains('youtube.com') ||
+          targetUrl.contains('youtu.be')) {
         return await _importYouTube(uri);
       }
 
-      return {
-        'success': false,
-        'message': 'Nicht unterstützter Link. Bitte Spotify- oder YouTube-Playlist-Link eingeben.'
-      };
+      // 6. Generic link fallback: attempt to fetch as SPY MUSIC share
+      return await _importFromSpyMusicShare(targetUrl);
     } finally {
-      isImporting.value = false;
-      importProgress.value = 0.0;
-      currentTrack.value = 0;
-      totalTracks.value = 0;
-      importStatus.value = "";
+      _resetProgress();
     }
+  }
+
+  void _resetProgress() {
+    isImporting.value = false;
+    importProgress.value = 0.0;
+    currentTrack.value = 0;
+    totalTracks.value = 0;
+    importStatus.value = "";
   }
 
   Future<String?> _fetchSpotifyTrackCover(String trackId) async {
@@ -336,14 +379,138 @@ class PlaylistImportService {
     }
   }
 
-  Future<bool> _savePlaylistToLibrary(String title, List<MediaItem> songItems) async {
+  Future<Map<String, dynamic>> _importFromSpyMusicShare(String url) async {
+    try {
+      importStatus.value = "Lade Playlist-Daten herunter...";
+      final rawUrl = url.contains('dpaste.org') && !url.endsWith('/raw')
+          ? '$url/raw'
+          : url;
+
+      final response = await _dio.get(
+        rawUrl,
+        options: Options(
+          headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
+          sendTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 25),
+        ),
+      );
+
+      if (response.statusCode != 200 || response.data == null) {
+        return {
+          'success': false,
+          'message': 'Konnte Playlist nicht vom Share-Link laden.'
+        };
+      }
+
+      final dynamic rawData = response.data is Map
+          ? response.data
+          : (response.data is String
+              ? jsonDecode(response.data as String)
+              : null);
+
+      if (rawData == null || rawData is! Map) {
+        return {'success': false, 'message': 'Ungültiges Playlist-Format.'};
+      }
+
+      return await _importFromSpyMusicJsonData(
+          Map<String, dynamic>.from(rawData));
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Fehler beim Laden des Share-Links: $e'
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> _importFromSpyMusicJsonData(
+      Map<String, dynamic> data) async {
+    try {
+      final playlistInfo =
+          data['playlistInfo'] is Map ? data['playlistInfo'] as Map : {};
+      final title = (playlistInfo['title']?.toString() ??
+              data['title']?.toString() ??
+              'Geteilte Playlist')
+          .trim();
+      final rawSongs = data['songs'] is List ? data['songs'] as List : [];
+
+      if (rawSongs.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Die geteilte Playlist enthält keine Songs.'
+        };
+      }
+
+      currentPlaylistTitle.value = title;
+      totalTracks.value = rawSongs.length;
+      currentTrack.value = 0;
+      importProgress.value = 0.05;
+      importStatus.value = '$title (${rawSongs.length} Songs)...';
+
+      final List<MediaItem> items = [];
+      for (int i = 0; i < rawSongs.length; i++) {
+        final rawSong = rawSongs[i];
+        try {
+          final mediaItem = MediaItemBuilder.fromJson(rawSong);
+          if (mediaItem.id.isNotEmpty && mediaItem.title.isNotEmpty) {
+            items.add(mediaItem);
+          }
+        } catch (_) {}
+
+        currentTrack.value = i + 1;
+        importProgress.value = 0.1 + (0.85 * (i + 1) / rawSongs.length);
+        if (i % 30 == 0 || i == rawSongs.length - 1) {
+          importStatus.value =
+              'Importiere ${i + 1}/${rawSongs.length} Songs...';
+          await Future.delayed(const Duration(milliseconds: 2));
+        }
+      }
+
+      if (items.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Keine gültigen Songs in der Playlist gefunden.'
+        };
+      }
+
+      importStatus.value = 'Speichere Playlist in Bibliothek...';
+      final thumb = playlistInfo['thumbnailUrl']?.toString() ??
+          (items.isNotEmpty && items.first.artUri != null
+              ? items.first.artUri.toString()
+              : null) ??
+          Playlist.thumbPlaceholderUrl;
+
+      await _savePlaylistToLibrary(
+        title,
+        items,
+        customThumbnail: thumb,
+        description: 'Geteilt via SPY MUSIC (${items.length} Songs)',
+      );
+
+      importProgress.value = 1.0;
+      return {
+        'success': true,
+        'message':
+            '✅ Playlist "$title" (${items.length} Songs) erfolgreich importiert!',
+        'count': items.length,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Fehler beim Importieren der Playlist: $e'
+      };
+    }
+  }
+
+  Future<bool> _savePlaylistToLibrary(String title, List<MediaItem> songItems,
+      {String? customThumbnail, String? description}) async {
     final newPlaylist = Playlist(
       title: title,
       playlistId: 'LIB${DateTime.now().millisecondsSinceEpoch}',
-      thumbnailUrl: songItems.isNotEmpty
-          ? songItems.first.artUri.toString()
-          : Playlist.thumbPlaceholderUrl,
-      description: 'Importiert via SPY MUSIC',
+      thumbnailUrl: customThumbnail ??
+          (songItems.isNotEmpty && songItems.first.artUri != null
+              ? songItems.first.artUri.toString()
+              : Playlist.thumbPlaceholderUrl),
+      description: description ?? 'Importiert via SPY MUSIC',
       isCloudPlaylist: false,
     );
 

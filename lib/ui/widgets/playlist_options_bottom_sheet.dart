@@ -3,12 +3,12 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../models/media_Item_builder.dart';
 import '../../models/playling_from.dart';
 import '../../models/playlist.dart';
 import '../../services/piped_service.dart';
+import '../../services/playlist_share_service.dart';
 import '../../utils/helper.dart';
 import '../player/player_controller.dart';
 import '../screens/Library/library_controller.dart';
@@ -408,28 +408,18 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                       subtitle: "sharePlaylistSub".tr,
                       onTap: () async {
                         Navigator.of(context).pop();
-                        final songs = await loadPlaylistSongs(playlist);
-                        final buffer = StringBuffer();
-                        buffer.writeln(
-                            '🎵 SPY MUSIC ${"playlist".tr}: "${playlist.title}"');
-                        if (songs.isNotEmpty) {
-                          buffer.writeln('${songs.length} ${"songs".tr}:\n');
-                          for (int i = 0; i < min(30, songs.length); i++) {
-                            final s = songs[i];
-                            final artist = (s.artist == null ||
-                                    s.artist!.isEmpty ||
-                                    s.artist == 'Unbekannt')
-                                ? 'unknownArtist'.tr
-                                : s.artist!;
-                            buffer.writeln(
-                                '${i + 1}. ${s.title} - $artist');
-                          }
-                          if (songs.length > 30) {
-                            buffer.writeln(
-                                "andMoreSongs".tr.replaceAll("%s", "${songs.length - 30}"));
-                          }
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            snackbar(
+                              context,
+                              "generatingShareLink".tr,
+                              size: SanckBarSize.MEDIUM,
+                            ),
+                          );
                         }
-                        await Share.share(buffer.toString());
+                        final songs = await loadPlaylistSongs(playlist);
+                        await PlaylistShareService.instance
+                            .sharePlaylist(playlist, songs);
                       },
                     ),
 

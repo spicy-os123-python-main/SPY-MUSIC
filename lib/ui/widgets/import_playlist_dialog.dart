@@ -104,10 +104,12 @@ class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
                     child: TextField(
                       controller: _urlController,
                       style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: const InputDecoration(
-                        hintText: 'https://open.spotify.com/playlist/...',
-                        hintStyle: TextStyle(color: Colors.white30, fontSize: 13),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: InputDecoration(
+                        hintText: 'importPlaylistInputHint'.tr,
+                        hintStyle:
+                            const TextStyle(color: Colors.white30, fontSize: 13),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: InputBorder.none,
                       ),
                     ),

@@ -5014,7 +5014,7 @@ Map<String, Map<String, String>> get keys => {
   "deleteToken": "Token löschen",
   "discordTokenSaved": "✅ Discord Token gespeichert! Live-Status aktiv.",
   "discordTokenRemoved": "Discord Token entfernt.",
-  "importPlaylistHint": "Füge einen Spotify- oder YouTube-Playlist-Link ein, um alle Songs automatisch in deine SPY MUSIC Library zu laden:",
+  "importPlaylistHint": "Füge einen Spotify-, YouTube- oder SPY MUSIC Share-Link ein, um alle Songs in deine Bibliothek zu laden:",
   "paste": "Einfügen",
   "noVideoAvailable": "Kein Video für diesen Track verfügbar.",
   "discordLoginHint": "Melde dich normal bei Discord an oder scanne den QR-Code. Die App übernimmt deinen Login automatisch.",
@@ -5092,7 +5092,10 @@ Map<String, Map<String, String>> get keys => {
   "andMoreSongs": "... und %s weitere",
   "repairPlaylistTooltip": "Playlist reparieren (0:00 beheben)",
   "repairingPlaylist": "Repariere Playlist...",
-  "playlistRepairedSuccess": "✅ Playlist repariert: %s Songs aktualisiert!"
+  "playlistRepairedSuccess": "✅ Playlist repariert: %s Songs aktualisiert!",
+  "generatingShareLink": "Generiere kurzen Share-Link...",
+  "importShareHint": "In SPY MUSIC importieren: Bibliothek -> Playlist importieren",
+  "importPlaylistInputHint": "Spotify-, YouTube- oder SPY MUSIC-Link..."
 },"fr" : {
     "libPlaylists": "Playlists de la Bibliothèque",
     "networkError1": "Oups erreur réseau !",
@@ -9555,7 +9558,7 @@ Map<String, Map<String, String>> get keys => {
   "deleteToken": "Delete token",
   "discordTokenSaved": "✅ Discord token saved! Live status active.",
   "discordTokenRemoved": "Discord token removed.",
-  "importPlaylistHint": "Paste a Spotify or YouTube playlist link to automatically load all songs into your SPY MUSIC library:",
+  "importPlaylistHint": "Paste a Spotify, YouTube, or SPY MUSIC share link to load all songs into your library:",
   "paste": "Paste",
   "noVideoAvailable": "No video available for this track.",
   "discordLoginHint": "Log in to Discord as usual or scan the QR code. The app will detect your login automatically.",
@@ -9638,7 +9641,10 @@ Map<String, Map<String, String>> get keys => {
   "restoreSettingsAndPlaylists": "Restore Settings & Playlists",
   "repairPlaylistTooltip": "Repair Playlist (Fix 0:00)",
   "repairingPlaylist": "Repairing playlist...",
-  "playlistRepairedSuccess": "✅ Playlist repaired: %s songs updated!"
+  "playlistRepairedSuccess": "✅ Playlist repaired: %s songs updated!",
+  "generatingShareLink": "Generating short share link...",
+  "importShareHint": "Import in SPY MUSIC: Library -> Import Playlist",
+  "importPlaylistInputHint": "Spotify, YouTube, or SPY MUSIC share link..."
 },"hr" : {
     "home": "Početna",
     "songs": "Pjesme",

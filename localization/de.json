@@ -324,7 +324,7 @@
   "deleteToken": "Token löschen",
   "discordTokenSaved": "✅ Discord Token gespeichert! Live-Status aktiv.",
   "discordTokenRemoved": "Discord Token entfernt.",
-  "importPlaylistHint": "Füge einen Spotify- oder YouTube-Playlist-Link ein, um alle Songs automatisch in deine SPY MUSIC Library zu laden:",
+  "importPlaylistHint": "Füge einen Spotify-, YouTube- oder SPY MUSIC Share-Link ein, um alle Songs in deine Bibliothek zu laden:",
   "paste": "Einfügen",
   "noVideoAvailable": "Kein Video für diesen Track verfügbar.",
   "discordLoginHint": "Melde dich normal bei Discord an oder scanne den QR-Code. Die App übernimmt deinen Login automatisch.",
@@ -402,5 +402,8 @@
   "andMoreSongs": "... und %s weitere",
   "repairPlaylistTooltip": "Playlist reparieren (0:00 beheben)",
   "repairingPlaylist": "Repariere Playlist...",
-  "playlistRepairedSuccess": "✅ Playlist repariert: %s Songs aktualisiert!"
+  "playlistRepairedSuccess": "✅ Playlist repariert: %s Songs aktualisiert!",
+  "generatingShareLink": "Generiere kurzen Share-Link...",
+  "importShareHint": "In SPY MUSIC importieren: Bibliothek -> Playlist importieren",
+  "importPlaylistInputHint": "Spotify-, YouTube- oder SPY MUSIC-Link..."
 }
