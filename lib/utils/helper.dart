@@ -273,31 +273,89 @@ Future<bool> newVersionCheck(String currentVersion) async {
   }
 }
 
-bool isValidArtist(String? val) {
+bool isValidArtist(dynamic val) {
   if (val == null) return false;
-  final trimmed = val.trim();
-  final lower = trimmed.toLowerCase();
-  return trimmed.isNotEmpty &&
+  final s = val.toString().trim();
+  final lower = s.toLowerCase();
+  return s.isNotEmpty &&
       lower != 'null' &&
       lower != 'na' &&
       lower != 'n/a' &&
-      lower != 'undefined' &&
-      lower != 'unknown';
+      lower != 'undefined';
+}
+
+String? extractArtistName(dynamic val) {
+  if (val == null) return null;
+  if (val is String) {
+    if (isValidArtist(val)) return val.trim();
+    return null;
+  }
+  if (val is Map) {
+    final name = val['name'] ?? val['text'] ?? val['artist'];
+    if (name != null && isValidArtist(name)) {
+      return name.toString().trim();
+    }
+  }
+  if (val is List) {
+    final names = val
+        .map((e) => extractArtistName(e))
+        .whereType<String>()
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (names.isNotEmpty) {
+      return names.join(', ');
+    }
+  }
+  return null;
 }
 
 String getSafeSongArtist(dynamic song, {String? fallback}) {
-  if (song == null) return fallback ?? 'unknownArtist'.tr;
+  final defaultFallback = fallback ??
+      (Get.locale?.languageCode == 'de'
+          ? 'Unbekannter Künstler'
+          : 'Unknown Artist');
 
+  if (song == null) return defaultFallback;
+
+  // 1. Direct song.artist
   try {
     final a = song.artist?.toString();
     if (isValidArtist(a)) return a!.trim();
   } catch (_) {}
 
+  // 2. song.extras?['artist'] (can be String, Map, or List)
   try {
-    final a = song.extras?['artist']?.toString();
-    if (isValidArtist(a)) return a!.trim();
+    final a = extractArtistName(song.extras?['artist']);
+    if (a != null && a.isNotEmpty) return a;
   } catch (_) {}
 
+  // 3. song.extras?['artists'] (List of Maps, List of Strings, or String)
+  try {
+    final a = extractArtistName(song.extras?['artists']);
+    if (a != null && a.isNotEmpty) return a;
+  } catch (_) {}
+
+  // 4. song.extras?['author'] or uploaderName or uploader or channel
+  try {
+    final a = extractArtistName(song.extras?['author'] ??
+        song.extras?['uploaderName'] ??
+        song.extras?['uploader'] ??
+        song.extras?['channelTitle'] ??
+        song.extras?['channel']);
+    if (a != null && a.isNotEmpty) return a;
+  } catch (_) {}
+
+  // 5. song.extras?['subtitle']
+  try {
+    final sub = song.extras?['subtitle']?.toString();
+    if (isValidArtist(sub)) {
+      final parts = sub!.split('•');
+      final candidate = parts.first.trim();
+      if (isValidArtist(candidate)) return candidate;
+    }
+  } catch (_) {}
+
+  // 6. song.extras?['searchQuery']
   try {
     final sq = song.extras?['searchQuery']?.toString();
     if (isValidArtist(sq)) {
@@ -310,7 +368,20 @@ String getSafeSongArtist(dynamic song, {String? fallback}) {
     }
   } catch (_) {}
 
-  return fallback ?? 'unknownArtist'.tr;
+  // 7. song.album fallback if not generic
+  try {
+    final album = song.album?.toString();
+    if (isValidArtist(album) &&
+        album != song.title?.toString() &&
+        album != 'SoundCloud' &&
+        album != 'YouTube' &&
+        album != 'Spotify' &&
+        album != 'Amazon') {
+      return album!.trim();
+    }
+  } catch (_) {}
+
+  return defaultFallback;
 }
 
 String getTimeString(Duration time) {

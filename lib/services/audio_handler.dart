@@ -18,7 +18,6 @@ import 'package:rxdart/rxdart.dart';
 
 import 'soundcloud_service.dart';
 import 'platform_search_service.dart';
-import 'chunked_audio_source.dart';
 import 'watchtime_service.dart';
 import '/models/album.dart';
 import '../models/playlist.dart';
@@ -325,8 +324,25 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   Future<void> _createCacheDir() async {
     _cacheDir = (await getTemporaryDirectory()).path;
-    if (!Directory("$_cacheDir/cachedSongs/").existsSync()) {
-      Directory("$_cacheDir/cachedSongs/").createSync(recursive: true);
+    final cDir = Directory("$_cacheDir/cachedSongs/");
+    if (!cDir.existsSync()) {
+      cDir.createSync(recursive: true);
+    } else {
+      // Clean up any corrupt partial downloads from prior broken cache attempts
+      try {
+        final files = cDir.listSync();
+        for (final f in files) {
+          if (f is File) {
+            if (f.path.endsWith('.part') ||
+                (f.path.endsWith('.mp3') && f.lengthSync() < 800 * 1024)) {
+              printINFO("Cleaning corrupt/partial cache file: ${f.path}");
+              try {
+                f.deleteSync();
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {}
     }
   }
 
@@ -648,28 +664,23 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       );
     }
 
-    // Direct chunked stream proxy for YouTube streams (ultra-low data pure audio with local caching)
+    // Direct YouTube streams with accurate client headers (ultra-low data, zero chunk drops, zero 403 blocks)
     if (url.contains('googlevideo.com')) {
-      final size = (mediaItem.extras?['size'] as int?) ?? 0;
-      final codec = (mediaItem.extras?['codec'] as String?) ?? 'mp4a';
-      final contentType = codec == 'opus' ? 'audio/webm' : 'audio/mp4';
       printINFO(
-          "Playing YouTube stream via ChunkedStreamAudioSource ($contentType, size: $size bytes)");
+          "Playing YouTube stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
       isPlayingUsingLockCachingSource = false;
-      return ChunkedStreamAudioSource(
-        url: url,
-        totalBytes: size > 0 ? size : 5 * 1024 * 1024,
-        contentType: contentType,
-        songId: mediaItem.id,
-        cacheDirPath: _cacheDir,
-        onStreamError: (failedId) {
-          _failedYouTubeSongs.add(failedId);
-          try {
-            Hive.box("SongsUrlCache").delete(failedId);
-          } catch (_) {}
-          if (failedId.startsWith("sp_") || failedId.startsWith("az_")) {
-            PlatformSearchService.invalidateMatch(failedId);
-          }
+      String ua = 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
+      if (url.contains('c=IOS')) {
+        ua = 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)';
+      } else if (url.contains('c=WEB')) {
+        ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0';
+      }
+      return AudioSource.uri(
+        Uri.parse(url),
+        headers: {
+          'User-Agent': ua,
+          'Origin': 'https://www.youtube.com',
+          'Referer': 'https://www.youtube.com',
         },
         tag: mediaItem,
       );
@@ -1606,8 +1617,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       if (allowFallback) {
         printINFO(
             "SoundCloud track $songId stream not available, trying YouTube fallback...");
+        final artistName = getSafeSongArtist(targetSong, fallback: '');
         final query =
-            '${targetSong?.title ?? ''} ${targetSong?.artist ?? ''}'.trim();
+            '${targetSong?.title ?? ''} $artistName'.trim();
         final ytMatch = await PlatformSearchService.resolveMatchedTrack(
             songId, query,
             originalTrack: targetSong, skipSoundCloud: true);
@@ -1631,8 +1643,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       if (generateNewUrl) {
         PlatformSearchService.invalidateMatch(songId);
       }
+      final artistName = getSafeSongArtist(targetSong, fallback: '');
       final query = (targetSong?.extras?['searchQuery'] as String?) ??
-          ('${targetSong?.title ?? ''} ${targetSong?.artist ?? ''}').trim();
+          ('${targetSong?.title ?? ''} $artistName').trim();
       var matchedTrack = await PlatformSearchService.resolveMatchedTrack(
           songId, query,
           originalTrack: targetSong);
@@ -1703,8 +1716,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     final cachedFile = File(cachedFilePath);
 
     if (!offlineReplacementUrl && songsCacheBox.containsKey(songId)) {
-      if (cachedFile.existsSync() && cachedFile.lengthSync() > 1024) {
-        printINFO("Got Song from cachedbox ($songId) with verified file");
+      if (cachedFile.existsSync() && cachedFile.lengthSync() >= 800 * 1024) {
+        printINFO("Got Song from cachedbox ($songId) with verified file (${cachedFile.lengthSync()} bytes)");
         final streamInfo = songsCacheBox.get(songId)["streamInfo"];
         Audio? cacheAudioPlaceholder;
         if (streamInfo != null && streamInfo.isNotEmpty) {
@@ -1715,8 +1728,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               audioCodec: Codec.mp4a,
               bitrate: 0,
               loudnessDb: 0,
-              duration: 0,
-              size: 0,
+              duration: targetSong?.duration?.inMilliseconds ?? 0,
+              size: cachedFile.lengthSync(),
               url: "file://$cachedFilePath",
               itag: 0);
         }
@@ -1727,9 +1740,14 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             lowQualityAudio: cacheAudioPlaceholder,
             highQualityAudio: cacheAudioPlaceholder);
       } else {
-        // Cache file was deleted (e.g. clear cache) or is empty -> Evict stale DB entry so fresh stream is fetched
+        // Cache file was deleted, corrupted, or incomplete (<800KB) -> Evict stale DB entry so fresh stream is fetched
         printINFO(
-            "Cached song file missing on disk for ($songId). Evicting from SongsCache and fetching fresh stream.");
+            "Cached song file missing or incomplete for ($songId). Evicting from SongsCache and fetching fresh stream.");
+        if (cachedFile.existsSync()) {
+          try {
+            cachedFile.deleteSync();
+          } catch (_) {}
+        }
         await songsCacheBox.delete(songId);
       }
     }

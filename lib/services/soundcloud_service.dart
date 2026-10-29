@@ -211,6 +211,11 @@ class SoundCloudService {
             'duration': durationMs > 0 ? (durationMs / 1000).round() : null,
             'permalink': track['permalink_url']?.toString(),
             'platform': 'SoundCloud',
+            'artist': artist,
+            'artists': [
+              {'name': artist, 'id': ''}
+            ],
+            'searchQuery': '$title $artist',
           },
         ));
       }

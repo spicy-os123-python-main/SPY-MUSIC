@@ -2,61 +2,31 @@
 
 import 'package:audio_service/audio_service.dart';
 import '../models/thumbnail.dart';
+import '../utils/helper.dart';
 
 class MediaItemBuilder {
-  static bool _isValidString(dynamic val) {
-    if (val == null) return false;
-    final s = val.toString().trim();
-    final lower = s.toLowerCase();
-    return s.isNotEmpty &&
-        lower != 'null' &&
-        lower != 'na' &&
-        lower != 'n/a' &&
-        lower != 'undefined';
-  }
-
   static MediaItem fromJson(dynamic json, {String? url}) {
     if (json == null) {
       return const MediaItem(id: '', title: '');
     }
 
-    String? artistName;
-    if (json['artists'] != null) {
-      if (json['artists'] is List) {
-        final list = (json['artists'] as List)
-            .map((e) => e is Map ? (e['name'] ?? e.toString()) : e.toString())
-            .where((s) => _isValidString(s))
-            .map((s) => s.toString().trim())
-            .toList();
-        if (list.isNotEmpty) {
-          artistName = list.join(', ');
-        }
-      } else if (_isValidString(json['artists'])) {
-        artistName = json['artists'].toString().trim();
-      }
-    }
-
-    if (!_isValidString(artistName)) {
-      final a = json['artist']?.toString();
-      if (_isValidString(a)) {
-        artistName = a!.trim();
-      }
-    }
-
-    if (!_isValidString(artistName)) {
-      final a = json['extras']?['artist']?.toString();
-      if (_isValidString(a)) {
-        artistName = a!.trim();
-      }
-    }
+    String? artistName = extractArtistName(json['artists']) ??
+        extractArtistName(json['artist']) ??
+        extractArtistName(json['extras']?['artist']) ??
+        extractArtistName(json['extras']?['artists']) ??
+        extractArtistName(json['author']) ??
+        extractArtistName(json['uploaderName']) ??
+        extractArtistName(json['uploader']) ??
+        extractArtistName(json['channelTitle']) ??
+        extractArtistName(json['subtitle']);
 
     // Auto-recovery for previously saved tracks that had searchQuery: "$title $artist"
-    if (!_isValidString(artistName)) {
+    if (!isValidArtist(artistName)) {
       final sq = (json['extras']?['searchQuery'] ?? json['searchQuery'])?.toString();
       final title = json['title']?.toString() ?? '';
-      if (_isValidString(sq) && title.isNotEmpty && sq!.toLowerCase().startsWith(title.toLowerCase())) {
+      if (isValidArtist(sq) && title.isNotEmpty && sq!.toLowerCase().startsWith(title.toLowerCase())) {
         final rem = sq.substring(title.length).trim();
-        if (_isValidString(rem)) artistName = rem;
+        if (isValidArtist(rem)) artistName = rem;
       }
     }
 
@@ -111,8 +81,13 @@ class MediaItemBuilder {
     extrasMap['date'] = json['date'] ?? extrasMap['date'];
     extrasMap['trackDetails'] = json['trackDetails'] ?? extrasMap['trackDetails'];
     extrasMap['year'] = json['year'] ?? extrasMap['year'];
-    if (_isValidString(artistName)) {
+    if (isValidArtist(artistName)) {
       extrasMap['artist'] = artistName;
+      if (extrasMap['artists'] == null) {
+        extrasMap['artists'] = [
+          {'name': artistName, 'id': ''}
+        ];
+      }
     }
 
     final trackId = (json["videoId"] ?? json["id"] ?? "").toString();
@@ -134,6 +109,8 @@ class MediaItemBuilder {
         ? (album['name']?.toString())
         : (json['albumName']?.toString() ?? json['album']?.toString());
 
+    final finalArtist = isValidArtist(artistName) ? artistName : null;
+
     return MediaItem(
       id: trackId,
       title: (json["title"] ?? "Unbekannt").toString(),
@@ -141,7 +118,7 @@ class MediaItemBuilder {
           ? Duration(seconds: json['duration'])
           : toDuration(json['length'] ?? extrasMap['length']),
       album: albumName,
-      artist: _isValidString(artistName) ? artistName : null,
+      artist: finalArtist,
       artUri: parsedArtUri,
       extras: extrasMap,
     );
@@ -172,15 +149,14 @@ class MediaItemBuilder {
   }
 
   static Map<String, dynamic> toJson(MediaItem mediaItem) {
+    final artistName = mediaItem.artist ?? getSafeSongArtist(mediaItem, fallback: '');
+
     List<dynamic> artists = [];
-    if (mediaItem.extras?['artists'] != null) {
+    if (mediaItem.extras?['artists'] != null && mediaItem.extras?['artists'] is List) {
       artists = mediaItem.extras?['artists'];
-    } else if (mediaItem.artist != null &&
-        mediaItem.artist!.isNotEmpty &&
-        mediaItem.artist != 'null' &&
-        mediaItem.artist != 'NA') {
+    } else if (isValidArtist(artistName)) {
       artists = [
-        {'name': mediaItem.artist!, 'id': ''}
+        {'name': artistName, 'id': ''}
       ];
     }
 
@@ -189,11 +165,9 @@ class MediaItemBuilder {
     final extrasMap = mediaItem.extras != null
         ? Map<String, dynamic>.from(mediaItem.extras!)
         : <String, dynamic>{};
-    if (mediaItem.artist != null &&
-        mediaItem.artist!.isNotEmpty &&
-        mediaItem.artist != 'null' &&
-        mediaItem.artist != 'NA') {
-      extrasMap['artist'] = mediaItem.artist;
+    if (isValidArtist(artistName)) {
+      extrasMap['artist'] = artistName;
+      extrasMap['artists'] = artists;
     }
 
     final platform = mediaItem.extras?['platform'] ??
@@ -210,7 +184,7 @@ class MediaItemBuilder {
       "videoId": mediaItem.id,
       "id": mediaItem.id,
       "title": mediaItem.title,
-      "artist": mediaItem.artist,
+      "artist": isValidArtist(artistName) ? artistName : null,
       "platform": platform,
       'album': mediaItem.extras?['album'] ??
           (mediaItem.album != null ? {'name': mediaItem.album} : null),

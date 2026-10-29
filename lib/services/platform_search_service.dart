@@ -64,6 +64,10 @@ class PlatformSearchService {
         'platform': platform,
         'is$platform': true,
         'searchQuery': '$title $artist',
+        'artist': artist,
+        'artists': [
+          {'name': artist, 'id': ''}
+        ],
         'originalId': id,
         'duration': durationSec,
         'length':
@@ -93,6 +97,10 @@ class PlatformSearchService {
         'platform': platform,
         'is$platform': true,
         'searchQuery': '$title $artist',
+        'artist': artist,
+        'artists': [
+          {'name': artist, 'id': ''}
+        ],
         'originalId': id,
         'duration': durationSec,
         'length':
