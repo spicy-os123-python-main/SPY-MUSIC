@@ -76,9 +76,9 @@ class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
                   child: const Icon(Icons.cloud_download_rounded, color: Colors.white, size: 22),
                 ),
                 const SizedBox(width: 12),
-                const Text(
-                  'Playlist Importieren',
-                  style: TextStyle(
+                Text(
+                  'importPlaylistTitle'.tr,
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -165,9 +165,9 @@ class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
                         ),
                       ],
                     ),
-                    child: const Text(
-                      'Importieren',
-                      style: TextStyle(
+                    child: Text(
+                      'import'.tr,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 13,

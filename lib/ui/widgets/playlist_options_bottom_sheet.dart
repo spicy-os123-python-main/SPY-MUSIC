@@ -118,10 +118,10 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      "Playlist löschen?",
-                      style: TextStyle(
+                      "deletePlaylistConfirmTitle".tr,
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -132,7 +132,9 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               Text(
-                'Möchtest du die Playlist "${playlist.title}" wirklich dauerhaft entfernen? Die Songs in der Playlist werden gelöscht.',
+                "deletePlaylistConfirmMsg"
+                    .tr
+                    .replaceAll("{title}", playlist.title),
                 style: const TextStyle(
                   fontSize: 13,
                   color: Colors.white70,
@@ -165,7 +167,7 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                             ScaffoldMessenger.of(context).showSnackBar(
                               snackbar(
                                 context,
-                                'Playlist "${playlist.title}" gelöscht',
+                                '${"playlist".tr} "${playlist.title}" ${"playlistDeletedSnackbar".tr}',
                                 size: SanckBarSize.BIG,
                               ),
                             );
@@ -188,9 +190,9 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: const Text(
-                        "Löschen",
-                        style: TextStyle(
+                      child: Text(
+                        "delete".tr,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
@@ -299,7 +301,7 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                           builder: (context, snapshot) {
                             final count = snapshot.data?.length;
                             final subtitle = count != null
-                                ? "$count Songs • ${isSystem ? 'System-Playlist' : 'Eigene Playlist'}"
+                                ? "$count ${'songs'.tr} • ${isSystem ? 'systemPlaylist'.tr : 'customPlaylist'.tr}"
                                 : (playlist.description ?? "SPY MUSIC");
                             return Text(
                               subtitle,
@@ -335,7 +337,7 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                       iconColor: const Color(0xFF00D2FF),
                       iconBg: const Color(0xFF00D2FF).withOpacity(0.15),
                       title: "play".tr,
-                      subtitle: "Playlist von Beginn an abspielen",
+                      subtitle: "playPlaylistSub".tr,
                       onTap: () async {
                         Navigator.of(context).pop();
                         final songs = await loadPlaylistSongs(playlist);
@@ -358,7 +360,7 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                       iconColor: const Color(0xFF38EF7D),
                       iconBg: const Color(0xFF38EF7D).withOpacity(0.15),
                       title: "enqueueSongs".tr,
-                      subtitle: "Titel an das Ende der Warteschlange anfügen",
+                      subtitle: "enqueuePlaylistSub".tr,
                       onTap: () async {
                         Navigator.of(context).pop();
                         final songs = await loadPlaylistSongs(playlist);
@@ -368,7 +370,7 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                             ScaffoldMessenger.of(context).showSnackBar(
                               snackbar(
                                 context,
-                                "${songs.length} Songs zur Warteschlange hinzugefügt",
+                                "${songs.length} ${'songsEnqueuedSnackbar'.tr}",
                                 size: SanckBarSize.MEDIUM,
                               ),
                             );
@@ -384,7 +386,7 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                         iconColor: const Color(0xFFFFB800),
                         iconBg: const Color(0xFFFFB800).withOpacity(0.15),
                         title: "renamePlaylist".tr,
-                        subtitle: "Neuen Namen für diese Playlist vergeben",
+                        subtitle: "renamePlaylistSub".tr,
                         onTap: () {
                           Navigator.of(context).pop();
                           showDialog(
@@ -403,23 +405,28 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                       iconColor: const Color(0xFFB537F2),
                       iconBg: const Color(0xFFB537F2).withOpacity(0.15),
                       title: "share".tr,
-                      subtitle: "Trackliste als Text oder Link teilen",
+                      subtitle: "sharePlaylistSub".tr,
                       onTap: () async {
                         Navigator.of(context).pop();
                         final songs = await loadPlaylistSongs(playlist);
                         final buffer = StringBuffer();
                         buffer.writeln(
-                            '🎵 SPY MUSIC Playlist: "${playlist.title}"');
+                            '🎵 SPY MUSIC ${"playlist".tr}: "${playlist.title}"');
                         if (songs.isNotEmpty) {
-                          buffer.writeln('${songs.length} Songs:\n');
+                          buffer.writeln('${songs.length} ${"songs".tr}:\n');
                           for (int i = 0; i < min(30, songs.length); i++) {
                             final s = songs[i];
+                            final artist = (s.artist == null ||
+                                    s.artist!.isEmpty ||
+                                    s.artist == 'Unbekannt')
+                                ? 'unknownArtist'.tr
+                                : s.artist!;
                             buffer.writeln(
-                                '${i + 1}. ${s.title} - ${s.artist ?? "Unbekannt"}');
+                                '${i + 1}. ${s.title} - $artist');
                           }
                           if (songs.length > 30) {
                             buffer.writeln(
-                                '... und ${songs.length - 30} weitere');
+                                "andMoreSongs".tr.replaceAll("%s", "${songs.length - 30}"));
                           }
                         }
                         await Share.share(buffer.toString());
@@ -433,8 +440,7 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                         iconColor: const Color(0xFFFF0055),
                         iconBg: const Color(0xFFFF0055).withOpacity(0.15),
                         title: "removePlaylist".tr,
-                        subtitle:
-                            "Playlist dauerhaft aus der Bibliothek entfernen",
+                        subtitle: "removePlaylistSub".tr,
                         isDanger: true,
                         onTap: () => _showDeleteConfirmation(context),
                       ),
@@ -456,15 +462,15 @@ class PlaylistOptionsBottomSheet extends StatelessWidget {
                               color: Colors.white.withOpacity(0.12),
                             ),
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.close_rounded,
+                              const Icon(Icons.close_rounded,
                                   size: 18, color: Colors.white70),
-                              SizedBox(width: 8),
+                              const SizedBox(width: 8),
                               Text(
-                                "Schließen",
-                                style: TextStyle(
+                                "close".tr,
+                                style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,

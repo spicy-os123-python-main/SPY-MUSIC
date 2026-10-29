@@ -34,7 +34,7 @@ class CombinedLibrary extends StatelessWidget {
               child: Tooltip(
                 message: importService.importStatus.value.isNotEmpty
                     ? importService.importStatus.value
-                    : 'Importiere Playlist...',
+                    : 'importingPlaylist'.tr,
                 child: Container(
                   height: 38,
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -107,7 +107,7 @@ class CombinedLibrary extends StatelessWidget {
                 child: FloatingActionButton(
                     heroTag: 'importPlaylistBtn',
                     elevation: 0,
-                    tooltip: 'Playlist importieren',
+                    tooltip: 'importPlaylistTitle'.tr,
                     backgroundColor: const Color(0xFF00D2FF),
                     onPressed: () {
                       showDialog(
@@ -155,13 +155,14 @@ class CombinedLibrary extends StatelessWidget {
             Tab(text: "playlists".tr),
             Tab(text: "albums".tr),
             Tab(text: "artists".tr),
-            const Tab(
+            Tab(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.timer_rounded, size: 16, color: Color(0xFF00D2FF)),
-                  SizedBox(width: 6),
-                  Text("Watchtime"),
+                  const Icon(Icons.timer_rounded,
+                      size: 16, color: Color(0xFF00D2FF)),
+                  const SizedBox(width: 6),
+                  Text("watchtime".tr),
                 ],
               ),
             ),

@@ -421,12 +421,12 @@ class PlaylistScreen extends StatelessWidget {
                                           // Repair button for fixing 0:00 durations & offline streams
                                           IconButton(
                                               tooltip:
-                                                  "Playlist reparieren (0:00 beheben)",
+                                                  "repairPlaylistTooltip".tr,
                                               onPressed: () async {
                                                 ScaffoldMessenger.of(context)
                                                     .showSnackBar(
                                                   snackbar(context,
-                                                      "Repariere Playlist...",
+                                                      "repairingPlaylist".tr,
                                                       size:
                                                           SanckBarSize.MEDIUM),
                                                 );
@@ -442,7 +442,10 @@ class PlaylistScreen extends StatelessWidget {
                                                       .showSnackBar(
                                                     snackbar(
                                                       context,
-                                                      "✅ Playlist repariert: $repaired Songs aktualisiert!",
+                                                      "playlistRepairedSuccess"
+                                                          .tr
+                                                          .replaceAll(
+                                                              "%s", "$repaired"),
                                                       size: SanckBarSize.BIG,
                                                     ),
                                                   );
