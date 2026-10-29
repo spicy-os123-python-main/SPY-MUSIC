@@ -83,9 +83,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   // list of shuffled queue songs ids
   List<String> shuffledQueue = [];
 
-  final _playList =
-      ConcatenatingAudioSource(children: [], useLazyPreparation: false);
-
   MyAudioHandler() {
     if (GetPlatform.isWindows || GetPlatform.isLinux) {
       JustAudioMediaKit.title = 'SPY MUSIC';
@@ -115,12 +112,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         useProxyForRequestHeaders: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 40),
-          maxBufferDuration: Duration(seconds: 90),
-          bufferForPlaybackDuration: Duration(milliseconds: 1000),
-          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1500),
-          prioritizeTimeOverSizeThresholds: true,
-          backBufferDuration: Duration(seconds: 45),
+          minBufferDuration: Duration(seconds: 25),
+          maxBufferDuration: Duration(seconds: 60),
+          bufferForPlaybackDuration: Duration(milliseconds: 1500),
+          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 2500),
+          prioritizeTimeOverSizeThresholds: false,
+          backBufferDuration: Duration(seconds: 30),
         )));
     if (GetPlatform.isAndroid || GetPlatform.isIOS) {
       _initAudioSession();
@@ -150,7 +147,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
     });
     _createCacheDir();
-    _addEmptyList();
     _notifyAudioHandlerAboutPlaybackEvents();
     _listenToPlaybackForNextSong();
     _listenForSequenceStateChanges();
@@ -344,14 +340,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
         }
       } catch (_) {}
-    }
-  }
-
-  void _addEmptyList() {
-    try {
-      _player.setAudioSource(_playList);
-    } catch (r) {
-      printERROR(r.toString());
     }
   }
 
@@ -677,22 +665,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       );
     }
 
-    // Direct YouTube streams with accurate client headers (ultra-low data, zero chunk drops, zero 403 blocks)
+    // Direct YouTube streams (ultra-low data, zero chunk drops, clean native streaming)
     if (url.contains('googlevideo.com')) {
       printINFO(
           "Playing YouTube stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
       isPlayingUsingLockCachingSource = false;
-      String ua = 'com.google.android.youtube/20.10.38 (Linux; U; Android 11)';
-      if (url.contains('c=IOS')) {
-        ua = 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X)';
-      } else if (url.contains('c=WEB')) {
-        ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0';
-      }
       return AudioSource.uri(
         Uri.parse(url),
-        headers: {
-          'User-Agent': ua,
-        },
         tag: mediaItem,
       );
     }
@@ -908,11 +887,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       case 'resetLoadingState':
         isSongLoading = false;
         try {
-          if (_playList.children.isNotEmpty) {
-            await _playList.clear();
-          }
-        } catch (_) {}
-        try {
           await _player.stop();
         } catch (_) {}
         await _createCacheDir();
@@ -936,9 +910,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           isSongLoading = true;
           playbackState.add(playbackState.value
               .copyWith(processingState: AudioProcessingState.loading));
-          if (_playList.children.isNotEmpty) {
-            await _playList.clear();
-          }
 
           mediaItem.add(currentSong);
           final streamInfo = await checkNGetUrl(
@@ -977,7 +948,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           WatchtimeService.recordSongStart(playableSong);
           playbackState
               .add(playbackState.value.copyWith(queueIndex: currentIndex));
-          await _playList.add(_createAudioSource(playableSong)).timeout(
+
+          final audioSource = _createAudioSource(playableSong);
+          final startPos = restoreSession
+              ? Duration(milliseconds: extras['position'] ?? 0)
+              : Duration.zero;
+
+          await _player.setAudioSource(
+            audioSource,
+            initialPosition: startPos,
+          ).timeout(
             const Duration(seconds: 35),
             onTimeout: () {
               throw TimeoutException(
@@ -990,19 +970,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             _normalizeVolume(streamInfo.audio!.loudnessDb);
           }
 
-          if (restoreSession) {
-            if (!GetPlatform.isDesktop) {
-              final position = extras['position'];
-              await _player.load();
-              await _player.seek(
-                Duration(
-                  milliseconds: position,
-                ),
-                index: 0,
-              );
-            }
-          } else {
-            await _player.seek(Duration.zero, index: 0);
+          if (!restoreSession || GetPlatform.isDesktop) {
             await _player.play();
           }
         } catch (e, st) {
@@ -1068,7 +1036,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           queue.add([currMed]);
           isSongLoading = true;
           currentIndex = 0;
-          await _playList.clear();
 
           final streamInfo = await checkNGetUrl(
             currMed.id,
@@ -1097,7 +1064,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           WatchtimeService.recordSongStart(playableSong);
 
           playbackState.add(playbackState.value.copyWith(queueIndex: 0));
-          await _playList.add(_createAudioSource(playableSong)).timeout(
+          final audioSource = _createAudioSource(playableSong);
+          await _player.setAudioSource(
+            audioSource,
+            initialPosition: Duration.zero,
+          ).timeout(
             const Duration(seconds: 35),
             onTimeout: () {
               throw TimeoutException(
@@ -1111,7 +1082,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             _normalizeVolume(streamInfo.audio!.loudnessDb);
           }
 
-          await _player.seek(Duration.zero, index: 0);
           await _player.play();
         } catch (e, st) {
           printERROR("setSourceNPlay error for ${currMed.id}: $e\n$st");
