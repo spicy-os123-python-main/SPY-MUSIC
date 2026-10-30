@@ -22,7 +22,6 @@ import '../navigator.dart';
 import 'song_download_btn.dart';
 import 'image_widget.dart';
 import 'song_info_dialog.dart';
-import 'inapp_equalizer_sheet.dart';
 
 class SongInfoBottomSheet extends StatelessWidget {
   const SongInfoBottomSheet(this.song,
@@ -120,11 +119,11 @@ class SongInfoBottomSheet extends StatelessWidget {
                 ),
               ),
               title: Text(
-                "equalizerSheetTitle".tr,
+                "equalizer".tr,
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               subtitle: Text(
-                "equalizerSheetSub".tr,
+                "equalizerDes".tr,
                 style: TextStyle(
                   color: Theme.of(context)
                           .textTheme
@@ -138,17 +137,7 @@ class SongInfoBottomSheet extends StatelessWidget {
               trailing: const Icon(Icons.chevron_right, color: Colors.white54),
               onTap: () {
                 Navigator.of(context).pop();
-                showModalBottomSheet(
-                  constraints: const BoxConstraints(maxWidth: 550),
-                  shape: const RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(24.0)),
-                  ),
-                  isScrollControlled: true,
-                  context: context,
-                  barrierColor: Colors.black.withOpacity(0.6),
-                  builder: (context) => const InAppEqualizerSheet(),
-                );
+                playerController.openEqualizer();
               },
             ),
             ListTile(

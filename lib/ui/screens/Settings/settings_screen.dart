@@ -7,7 +7,7 @@ import '../../widgets/common_dialog_widget.dart';
 import '../../widgets/cust_switch.dart';
 import '../../widgets/export_file_dialog.dart';
 import '../../widgets/snackbar.dart';
-import '/ui/widgets/inapp_equalizer_sheet.dart';
+import '/ui/player/player_controller.dart';
 import '/services/music_service.dart';
 import '/services/discord_service.dart';
 import '../../widgets/discord_login_dialog.dart';
@@ -520,20 +520,11 @@ class SettingsScreen extends StatelessWidget {
                     ListTile(
                       contentPadding:
                           const EdgeInsets.only(left: 5, right: 10, top: 0),
-                      title: Text("equalizerSettingsTitle".tr),
-                      subtitle: Text("equalizerSettingsSub".tr),
+                      title: Text("equalizer".tr),
+                      subtitle: Text("equalizerDes".tr),
                       trailing: const Icon(Icons.equalizer_rounded, color: Color(0xFF00D2FF)),
                       onTap: () {
-                        showModalBottomSheet(
-                          constraints: const BoxConstraints(maxWidth: 550),
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
-                          ),
-                          isScrollControlled: true,
-                          context: context,
-                          barrierColor: Colors.black.withOpacity(0.6),
-                          builder: (context) => const InAppEqualizerSheet(),
-                        );
+                        Get.find<PlayerController>().openEqualizer();
                       },
                     ),
                   if (!isDesktop)

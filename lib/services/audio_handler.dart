@@ -88,36 +88,20 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       JustAudioMediaKit.title = 'SPY MUSIC';
       JustAudioMediaKit.protocolWhitelist = const ['http', 'https', 'file'];
     }
-    if (GetPlatform.isAndroid) {
-      try {
-        _loudnessEnhancer = AndroidLoudnessEnhancer();
-        _equalizer = AndroidEqualizer();
-      } catch (e) {
-        printERROR("AudioEffect init error: $e");
-      }
-    }
     _mediaLibrary = MediaLibrary();
     _player = AudioPlayer(
-        audioPipeline: (GetPlatform.isAndroid &&
-                _equalizer != null &&
-                _loudnessEnhancer != null)
-            ? AudioPipeline(androidAudioEffects: [
-                _loudnessEnhancer!,
-                _equalizer!,
-              ])
-            : null,
         handleInterruptions: false,
         androidApplyAudioAttributes: true,
         handleAudioSessionActivation: false,
         useProxyForRequestHeaders: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 25),
-          maxBufferDuration: Duration(seconds: 60),
-          bufferForPlaybackDuration: Duration(milliseconds: 1500),
-          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 2500),
-          prioritizeTimeOverSizeThresholds: false,
-          backBufferDuration: Duration(seconds: 30),
+          minBufferDuration: Duration(seconds: 15),
+          maxBufferDuration: Duration(seconds: 35),
+          bufferForPlaybackDuration: Duration(milliseconds: 500),
+          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1000),
+          prioritizeTimeOverSizeThresholds: true,
+          backBufferDuration: Duration(seconds: 15),
         )));
     if (GetPlatform.isAndroid || GetPlatform.isIOS) {
       _initAudioSession();
@@ -176,43 +160,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   Future<void> _initEqualizerFromPrefs() async {
-    if (!GetPlatform.isAndroid ||
-        _equalizer == null ||
-        _loudnessEnhancer == null) {
-      return;
-    }
     try {
       final appPrefsBox = Hive.box("AppPrefs");
-      final eqEnabled =
-          appPrefsBox.get("eq_enabled", defaultValue: false) as bool;
-      final loudnessEnabled =
-          appPrefsBox.get("eq_loudness_enabled", defaultValue: false) as bool;
-      final loudnessGain =
-          (appPrefsBox.get("eq_loudness_gain", defaultValue: 0.0) as num)
-              .toDouble();
-
-      await _equalizer!.setEnabled(eqEnabled);
-      await _loudnessEnhancer!.setEnabled(loudnessEnabled);
-      if (loudnessGain > 0 && loudnessEnabled) {
-        // Correct mB scaling: 1 dB = 100 mB. just_audio multiplies targetGain by 1000 in Java.
-        final scaled = (loudnessGain / 10.0).clamp(0.0, 0.8);
-        await _loudnessEnhancer!.setTargetGain(scaled);
-      }
-
-      final savedBands = appPrefsBox.get("eq_band_gains");
-      if (savedBands is Map) {
-        final params = await _equalizer!.parameters;
-        for (var band in params.bands) {
-          if (savedBands.containsKey(band.index)) {
-            final rawGain = (savedBands[band.index] as num).toDouble();
-            final justAudioGain = (rawGain.abs() > 1.5 ? (rawGain / 10.0) : rawGain)
-                .clamp(params.minDecibels, params.maxDecibels);
-            await band.setGain(justAudioGain);
-          }
-        }
-      }
+      await appPrefsBox.put("eq_enabled", false);
+      await appPrefsBox.put("eq_loudness_enabled", false);
+      await appPrefsBox.put("eq_loudness_gain", 0.0);
+      await appPrefsBox.put("eq_band_gains", {});
+      await appPrefsBox.put("eq_preset", "Normal");
+      await appPrefsBox.put("custom_bass_boost", 0.0);
+      await appPrefsBox.put("bummm_boost_gain", 0.0);
     } catch (e) {
-      printERROR("Error initializing equalizer from prefs: $e");
+      printERROR("Error resetting equalizer prefs: $e");
     }
   }
 
@@ -347,13 +305,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _player.androidAudioSessionIdStream.listen((int? id) {
       if (id != null) {
         try {
-          final isAppEq = Hive.box("AppPrefs")
-              .get("eq_enabled", defaultValue: false) as bool;
-          if (!isAppEq) {
-            EqualizerService.initAudioEffect(id);
-          } else {
-            EqualizerService.endAudioEffect(id);
-          }
+          EqualizerService.initAudioEffect(id);
         } catch (e) {
           printERROR("initAudioEffect error: $e");
         }

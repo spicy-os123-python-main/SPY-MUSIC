@@ -74,7 +74,6 @@ class _AnimatedPlayButtonState extends State<AnimatedPlayButton>
         child: IconButton(
           iconSize: widget.iconSize,
           onPressed: () {
-            if (isLoading) return;
             if (isPlaying) {
               controller.pause();
             } else {
