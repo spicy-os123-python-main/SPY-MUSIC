@@ -5,12 +5,14 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
 import 'package:palette_generator/palette_generator.dart';
+import '../themes/app_themes.dart';
 import '/utils/helper.dart';
 
 class ThemeController extends GetxController {
   final primaryColor = Colors.deepPurple[400].obs;
   final textColor = Colors.white24.obs;
   final themedata = Rxn<ThemeData>();
+  final activeCustomTheme = Rxn<SpyThemeConfig>();
 
   /// The method channel for setting the title bar color on Windows.
   final platform = const MethodChannel('win_titlebar_color');
@@ -43,6 +45,28 @@ class ThemeController extends GetxController {
   }
 
   void changeThemeModeType(dynamic value, {bool sysCall = false}) {
+    if (value is ThemeType && AppThemes.isCustomTheme(value)) {
+      if (sysCall) return;
+      final config = AppThemes.fromType(value)!;
+      activeCustomTheme.value = config;
+      final iconBrightness = config.isLight ? Brightness.dark : Brightness.light;
+      SystemChrome.setSystemUIOverlayStyle(
+        SystemUiOverlayStyle(
+          statusBarIconBrightness: iconBrightness,
+          statusBarColor: Colors.transparent,
+          systemNavigationBarColor: Colors.white.withOpacity(0.002),
+          systemNavigationBarDividerColor: Colors.transparent,
+          systemNavigationBarIconBrightness: iconBrightness,
+          systemStatusBarContrastEnforced: false,
+          systemNavigationBarContrastEnforced: !config.isLight,
+        ),
+      );
+      themedata.value = config.createThemeData();
+      setWindowsTitleBarColor(config.bg);
+      return;
+    }
+
+    activeCustomTheme.value = null;
     if (value == ThemeType.system) {
       themedata.value = _createThemeData(
           null,
@@ -404,4 +428,11 @@ enum ThemeType {
   system,
   dark,
   light,
+  emberGlass,
+  inferno,
+  blueFlame,
+  liquidGlass,
+  glassNight,
+  warp,
+  signal,
 }

@@ -3,6 +3,9 @@ import 'package:get/get.dart';
 
 import '/ui/player/components/lyrics_widget.dart';
 import '/ui/player/player_controller.dart';
+import '../../themes/components/signal_oscilloscope.dart';
+import '../../themes/components/themed_cover.dart';
+import '../../utils/theme_controller.dart';
 import 'spy_video_player.dart';
 import '../../widgets/image_widget.dart';
 import '../../widgets/sleep_timer_bottom_sheet.dart';
@@ -66,39 +69,85 @@ class AlbumArtNLyrics extends StatelessWidget {
                     playerController.playerPanelController.close();
                   }
                 },
-                child: Container(
-                  width: playerArtImageSize,
-                  height: playerArtImageSize,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: const Color(0xFF00D2FF).withOpacity(0.40),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF00D2FF).withOpacity(0.35),
-                        blurRadius: 26,
-                        spreadRadius: 1,
-                        offset: const Offset(-3, 6),
-                      ),
-                      BoxShadow(
-                        color: const Color(0xFFFF0055).withOpacity(0.30),
-                        blurRadius: 30,
-                        spreadRadius: 2,
-                        offset: const Offset(3, 10),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: ImageWidget(
+                child: Obx(() {
+                  final customTheme =
+                      Get.find<ThemeController>().activeCustomTheme.value;
+
+                  if (customTheme != null) {
+                    if (customTheme.isSignal) {
+                      return SizedBox(
+                        width: playerArtImageSize,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Align(
+                              alignment: Alignment.topRight,
+                              child: ThemedCover(
+                                size: 80.0,
+                                child: ImageWidget(
+                                  size: 80.0,
+                                  song: playerController.currentSong.value!,
+                                  isPlayerArtImage: true,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            SignalOscilloscope(
+                              height: 75.0,
+                              limeColor: customTheme.accent,
+                              tealColor: customTheme.c3,
+                              isPlaying: playerController.buttonState.value ==
+                                  PlayButtonState.playing,
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return ThemedCover(
                       size: playerArtImageSize,
-                      song: playerController.currentSong.value!,
-                      isPlayerArtImage: true,
+                      child: ImageWidget(
+                        size: playerArtImageSize,
+                        song: playerController.currentSong.value!,
+                        isPlayerArtImage: true,
+                      ),
+                    );
+                  }
+
+                  return Container(
+                    width: playerArtImageSize,
+                    height: playerArtImageSize,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: const Color(0xFF00D2FF).withOpacity(0.40),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00D2FF).withOpacity(0.35),
+                          blurRadius: 26,
+                          spreadRadius: 1,
+                          offset: const Offset(-3, 6),
+                        ),
+                        BoxShadow(
+                          color: const Color(0xFFFF0055).withOpacity(0.30),
+                          blurRadius: 30,
+                          spreadRadius: 2,
+                          offset: const Offset(3, 10),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: ImageWidget(
+                        size: playerArtImageSize,
+                        song: playerController.currentSong.value!,
+                        isPlayerArtImage: true,
+                      ),
+                    ),
+                  );
+                }),
               ),
               Obx(() => playerController.showLyricsflag.isTrue
                   ? InkWell(

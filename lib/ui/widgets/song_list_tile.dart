@@ -9,6 +9,7 @@ import '../../models/playlist.dart';
 import '../../utils/helper.dart';
 import '../player/player_controller.dart';
 import '../screens/Settings/settings_screen_controller.dart';
+import '../utils/theme_controller.dart';
 import 'add_to_playlist.dart';
 import 'image_widget.dart';
 import 'mini_equalizer.dart';
@@ -208,13 +209,109 @@ class _SongListTileState extends State<SongListTile>
               final isPlaying = isCurrent &&
                   playerController.buttonState.value == PlayButtonState.playing;
 
-              return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
+              final customTheme =
+                  Get.find<ThemeController>().activeCustomTheme.value;
+
+              Decoration decoration;
+              BorderRadius rowRadius;
+              BorderRadius coverRadius;
+              bool showLeftAccent = false;
+
+              if (customTheme != null) {
+                rowRadius = customTheme.isSignal
+                    ? BorderRadius.zero
+                    : BorderRadius.circular(
+                        customTheme.radius > 20 ? 24 : customTheme.radius);
+                coverRadius = customTheme.isSignal
+                    ? BorderRadius.zero
+                    : BorderRadius.circular(customTheme.radius > 20 ? 18 : 8);
+                showLeftAccent = customTheme.isFlame || customTheme.isWarp;
+
+                if (customTheme.isGlass) {
+                  decoration = BoxDecoration(
+                    color: isCurrent
+                        ? customTheme.accent.withOpacity(0.22)
+                        : (customTheme.glassFill ?? const Color(0x1AFFFFFF)),
+                    borderRadius: rowRadius,
+                    border: Border.all(
+                      color: isCurrent
+                          ? customTheme.accent
+                          : (customTheme.glassBorder ?? const Color(0x4DFFFFFF)),
+                      width: 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: customTheme.glassDropShadow ?? Colors.black26,
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  );
+                } else if (customTheme.isFlame) {
+                  decoration = BoxDecoration(
+                    color: isCurrent
+                        ? customTheme.accent.withOpacity(0.2)
+                        : (customTheme.cardColor ?? const Color(0xCC1E0A06)),
+                    borderRadius: rowRadius,
+                    border: Border.all(
+                      color: isCurrent
+                          ? customTheme.accent
+                          : (customTheme.lineColor ?? const Color(0x4DFF6A00)),
+                      width: 1.0,
+                    ),
+                    boxShadow: (_isPressed || isCurrent)
+                        ? [
+                            BoxShadow(
+                              color: customTheme.accent.withOpacity(0.35),
+                              blurRadius: 16,
+                            ),
+                          ]
+                        : null,
+                  );
+                } else if (customTheme.isWarp) {
+                  decoration = BoxDecoration(
+                    color: isCurrent
+                        ? customTheme.accent.withOpacity(0.2)
+                        : (customTheme.cardColor ?? const Color(0xB3081026)),
+                    borderRadius: rowRadius,
+                    border: Border.all(
+                      color: isCurrent
+                          ? customTheme.accent
+                          : (customTheme.lineColor ?? const Color(0x3800F0FF)),
+                      width: 1.0,
+                    ),
+                    boxShadow: (_isPressed || isCurrent)
+                        ? [
+                            BoxShadow(
+                              color: customTheme.accent.withOpacity(0.35),
+                              blurRadius: 16,
+                            ),
+                          ]
+                        : null,
+                  );
+                } else {
+                  // Signal
+                  decoration = BoxDecoration(
+                    color: isCurrent
+                        ? customTheme.accent.withOpacity(0.18)
+                        : (customTheme.cardColor ?? const Color(0xFF0A0D0C)),
+                    borderRadius: BorderRadius.zero,
+                    border: Border.all(
+                      color: isCurrent || _isPressed
+                          ? customTheme.accent
+                          : (customTheme.lineColor ?? const Color(0x29B8FF3C)),
+                      width: 1.0,
+                    ),
+                  );
+                }
+              } else {
+                rowRadius = BorderRadius.circular(12);
+                coverRadius = BorderRadius.circular(8);
+                decoration = BoxDecoration(
                   color: isCurrent
                       ? const Color(0xFF00D2FF).withOpacity(0.12)
                       : const Color(0xFF101322).withOpacity(0.55),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: rowRadius,
                   border: Border.all(
                     color: isCurrent
                         ? const Color(0xFF00D2FF).withOpacity(0.65)
@@ -230,58 +327,66 @@ class _SongListTileState extends State<SongListTile>
                           ),
                         ]
                       : null,
-                ),
-                child: ListTile(
-                  onTap: widget.onTap,
-                  onLongPress: () async {
-                    showModalBottomSheet(
-                      constraints: const BoxConstraints(maxWidth: 500),
-                      shape: const RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(10.0)),
-                      ),
-                      isScrollControlled: true,
-                      context: playerController
-                          .homeScaffoldkey.currentState!.context,
-                      barrierColor: Colors.transparent.withAlpha(100),
-                      builder: (context) => SongInfoBottomSheet(
-                        widget.song,
-                        playlist: widget.playlist,
-                      ),
-                    ).whenComplete(() => Get.delete<SongInfoController>());
-                  },
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  leading: widget.thumbReplacementWithIndex
-                      ? SizedBox(
-                          width: 28,
-                          height: 52,
-                          child: Center(
-                            child: Text(
-                              "${widget.index}.",
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
+                );
+              }
+
+              Widget tile = Stack(
+                children: [
+                  Container(
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: decoration,
+                    child: ListTile(
+                      onTap: widget.onTap,
+                      onLongPress: () async {
+                        showModalBottomSheet(
+                          constraints: const BoxConstraints(maxWidth: 500),
+                          shape: const RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.vertical(top: Radius.circular(10.0)),
                           ),
-                        )
-                      : Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.35),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
+                          isScrollControlled: true,
+                          context: playerController
+                              .homeScaffoldkey.currentState!.context,
+                          barrierColor: Colors.transparent.withAlpha(100),
+                          builder: (context) => SongInfoBottomSheet(
+                            widget.song,
+                            playlist: widget.playlist,
+                          ),
+                        ).whenComplete(() => Get.delete<SongInfoController>());
+                      },
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      leading: widget.thumbReplacementWithIndex
+                          ? SizedBox(
+                              width: 28,
+                              height: 52,
+                              child: Center(
+                                child: Text(
+                                  "${widget.index}.",
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
                               ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: ImageWidget(
-                              size: 52,
-                              song: widget.song,
+                            )
+                          : Container(
+                              decoration: BoxDecoration(
+                                borderRadius: coverRadius,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.35),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: coverRadius,
+                                child: ImageWidget(
+                                  size: 52,
+                                  song: widget.song,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
                   title: Row(
                     children: [
                       Expanded(
@@ -374,12 +479,40 @@ class _SongListTileState extends State<SongListTile>
                                   () => Get.delete<SongInfoController>());
                             },
                             icon: const Icon(Icons.more_vert),
-                          )
+                          ),
                       ],
                     ),
                   ),
                 ),
+              ),
+              if (showLeftAccent && customTheme != null)
+                    Positioned(
+                      left: 6,
+                      top: 3,
+                      bottom: 3,
+                      width: 3.5,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.only(
+                          topLeft: rowRadius.topLeft,
+                          bottomLeft: rowRadius.bottomLeft,
+                        ),
+                        child: Container(color: customTheme.accent),
+                      ),
+                    ),
+                ],
               );
+
+              if (customTheme != null && customTheme.isWarp && _isPressed) {
+                tile = Transform(
+                  transform: Matrix4.identity()
+                    ..setEntry(3, 2, 0.001)
+                    ..translate(6.0, 0.0, 0.0)
+                    ..rotateY(-0.1),
+                  child: tile,
+                );
+              }
+
+              return tile;
             }),
           ),
         ),

@@ -8,6 +8,7 @@ import 'package:widget_marquee/widget_marquee.dart';
 import '/ui/widgets/lyrics_dialog.dart';
 import '/ui/widgets/song_info_dialog.dart';
 import '/ui/player/player_controller.dart';
+import '/ui/utils/theme_controller.dart';
 import '/utils/helper.dart';
 import '../../widgets/add_to_playlist.dart';
 import '../../widgets/sleep_timer_bottom_sheet.dart';
@@ -50,44 +51,116 @@ class MiniPlayer extends StatelessWidget {
                 playerController.dismissPlayer();
               }
             },
-            child: Container(
-              height: playerController.playerPanelMinHeight.value,
-              width: size.width,
-            decoration: BoxDecoration(
-              color: const Color(0xF2080A14),
-              border: Border(
-                top: BorderSide(
-                  color: const Color(0xFF00D2FF).withOpacity(0.40),
-                  width: 1.2,
-                ),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF00D2FF).withOpacity(0.18),
-                  blurRadius: 16,
-                  offset: const Offset(0, -3),
-                ),
-                BoxShadow(
-                  color: const Color(0xFFFF0055).withOpacity(0.12),
-                  blurRadius: 20,
-                  offset: const Offset(0, -1),
-                ),
-              ],
-            ),
-            child: Center(
-              child: Column(
-                children: [
-                  !isWideScreen || bottomNavEnabled
-                      ? GetX<PlayerController>(
-                          builder: (controller) => Container(
-                              height: 3,
-                              color: Colors.transparent,
-                              child: MiniPlayerProgressBar(
-                                  progressBarStatus:
-                                      controller.progressBarStatus.value,
-                                  progressBarColor: const Color(0xFF00D2FF))),
-                        )
-                      : GetX<PlayerController>(builder: (controller) {
+            child: Obx(() {
+              final customTheme = Get.find<ThemeController>().activeCustomTheme.value;
+              BoxDecoration decoration;
+              if (customTheme != null) {
+                if (customTheme.isGlass) {
+                  decoration = BoxDecoration(
+                    color: customTheme.glassFill ?? const Color(0x1AFFFFFF),
+                    border: Border(
+                      top: BorderSide(
+                        color: customTheme.glassBorder ?? const Color(0x4DFFFFFF),
+                        width: 1.0,
+                      ),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: customTheme.glassDropShadow ?? Colors.black26,
+                        blurRadius: 16,
+                        offset: const Offset(0, -3),
+                      ),
+                    ],
+                  );
+                } else if (customTheme.isFlame) {
+                  decoration = BoxDecoration(
+                    color: customTheme.cardColor ?? const Color(0xCC1E0A06),
+                    border: Border(
+                      top: BorderSide(
+                        color: customTheme.lineColor ?? customTheme.accent.withOpacity(0.3),
+                        width: 1.0,
+                      ),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: customTheme.accent.withOpacity(0.18),
+                        blurRadius: 16,
+                        offset: const Offset(0, -3),
+                      ),
+                    ],
+                  );
+                } else if (customTheme.isWarp) {
+                  decoration = BoxDecoration(
+                    color: customTheme.cardColor ?? const Color(0xB3081026),
+                    border: Border(
+                      top: BorderSide(
+                        color: customTheme.lineColor ?? const Color(0x3800F0FF),
+                        width: 1.0,
+                      ),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: customTheme.accent.withOpacity(0.2),
+                        blurRadius: 16,
+                        offset: const Offset(0, -3),
+                      ),
+                    ],
+                  );
+                } else {
+                  decoration = BoxDecoration(
+                    color: customTheme.cardColor ?? const Color(0xFF0A0D0C),
+                    border: Border(
+                      top: BorderSide(
+                        color: customTheme.lineColor ?? const Color(0x29B8FF3C),
+                        width: 1.0,
+                      ),
+                    ),
+                  );
+                }
+              } else {
+                decoration = BoxDecoration(
+                  color: const Color(0xF2080A14),
+                  border: Border(
+                    top: BorderSide(
+                      color: const Color(0xFF00D2FF).withOpacity(0.40),
+                      width: 1.2,
+                    ),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00D2FF).withOpacity(0.18),
+                      blurRadius: 16,
+                      offset: const Offset(0, -3),
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFFFF0055).withOpacity(0.12),
+                      blurRadius: 20,
+                      offset: const Offset(0, -1),
+                    ),
+                  ],
+                );
+              }
+
+              return Container(
+                height: playerController.playerPanelMinHeight.value,
+                width: size.width,
+                decoration: decoration,
+                child: Center(
+                  child: Column(
+                    children: [
+                      !isWideScreen || bottomNavEnabled
+                          ? GetX<PlayerController>(
+                              builder: (controller) => Container(
+                                  height: 3,
+                                  color: Colors.transparent,
+                                  child: MiniPlayerProgressBar(
+                                      progressBarStatus:
+                                          controller.progressBarStatus.value,
+                                      progressBarColor: customTheme != null
+                                          ? customTheme.accent
+                                          : const Color(0xFF00D2FF))),
+                            )
+                          : GetX<PlayerController>(builder: (controller) {
                           return Padding(
                             padding: const EdgeInsets.only(
                                 left: 15.0, top: 8, right: 15, bottom: 0),
@@ -581,7 +654,8 @@ class MiniPlayer extends StatelessWidget {
                 ],
               ),
             ),
-          ),
+          );
+        }),
         ),
       ),
     );

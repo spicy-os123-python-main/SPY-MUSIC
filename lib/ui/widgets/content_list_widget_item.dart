@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../models/playlist.dart';
 import '../navigator.dart';
+import '../utils/theme_controller.dart';
 import 'image_widget.dart';
 import 'playlist_options_bottom_sheet.dart';
 
@@ -73,30 +74,102 @@ class _ContentListItemState extends State<ContentListItem> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF00D2FF).withOpacity(0.15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: isAlbum
-                    ? ImageWidget(
-                        size: imgSize,
-                        album: widget.content,
-                      )
-                    : widget.content.isCloudPlaylist ||
-                            !(widget.content.playlistId == 'LIBRP' ||
-                                widget.content.playlistId == 'LIBFAV' ||
-                                widget.content.playlistId == 'SongsCache' ||
-                                widget.content.playlistId == 'SongDownloads')
-                        ? SizedBox.square(
-                            dimension: imgSize,
-                            child: Stack(
+              Obx(() {
+                final customTheme =
+                    Get.find<ThemeController>().activeCustomTheme.value;
+
+                Decoration decoration;
+                BorderRadius radius;
+
+                if (customTheme != null) {
+                  radius = customTheme.isSignal
+                      ? BorderRadius.zero
+                      : BorderRadius.circular(
+                          customTheme.radius > 20 ? 24 : customTheme.radius);
+
+                  if (customTheme.isGlass) {
+                    decoration = BoxDecoration(
+                      borderRadius: radius,
+                      border: Border.all(
+                        color: customTheme.glassBorder ?? const Color(0x4DFFFFFF),
+                        width: 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: customTheme.glassDropShadow ?? Colors.black26,
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    );
+                  } else if (customTheme.isFlame) {
+                    decoration = BoxDecoration(
+                      borderRadius: radius,
+                      border: Border.all(
+                        color: customTheme.accent,
+                        width: 2.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: customTheme.accent.withOpacity(0.4),
+                          blurRadius: 18,
+                        ),
+                      ],
+                    );
+                  } else if (customTheme.isWarp) {
+                    decoration = BoxDecoration(
+                      borderRadius: radius,
+                      border: Border.all(
+                        color: customTheme.accent,
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: customTheme.accent.withOpacity(0.35),
+                          blurRadius: 14,
+                        ),
+                      ],
+                    );
+                  } else {
+                    decoration = BoxDecoration(
+                      borderRadius: BorderRadius.zero,
+                      border: Border.all(
+                        color: customTheme.lineColor ?? const Color(0x29B8FF3C),
+                        width: 1.0,
+                      ),
+                    );
+                  }
+                } else {
+                  radius = BorderRadius.circular(12);
+                  decoration = BoxDecoration(
+                    borderRadius: radius,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00D2FF).withOpacity(0.15),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  );
+                }
+
+                return Container(
+                  decoration: decoration,
+                  child: ClipRRect(
+                    borderRadius: radius,
+                    child: isAlbum
+                        ? ImageWidget(
+                            size: imgSize,
+                            album: widget.content,
+                          )
+                        : widget.content.isCloudPlaylist ||
+                                !(widget.content.playlistId == 'LIBRP' ||
+                                    widget.content.playlistId == 'LIBFAV' ||
+                                    widget.content.playlistId == 'SongsCache' ||
+                                    widget.content.playlistId == 'SongDownloads')
+                            ? SizedBox.square(
+                                dimension: imgSize,
+                                child: Stack(
                               children: [
                                 ImageWidget(
                                   size: imgSize,
@@ -173,7 +246,9 @@ class _ContentListItemState extends State<ContentListItem> {
                               color: Colors.white,
                               size: 40,
                             ))),
-              ),
+                  ),
+                );
+              }),
               const SizedBox(height: 5),
               Expanded(
                 child: Column(

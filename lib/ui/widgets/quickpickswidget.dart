@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import '/models/quick_picks.dart';
 import '../player/player_controller.dart';
+import '../utils/theme_controller.dart';
 import '/utils/helper.dart';
 import 'image_widget.dart';
 import 'mini_equalizer.dart';
@@ -116,13 +117,105 @@ class _QuickPickItemState extends State<_QuickPickItem> {
             final isPlaying = isCurrent &&
                 playerController.buttonState.value == PlayButtonState.playing;
 
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-              decoration: BoxDecoration(
+            final customTheme =
+                Get.find<ThemeController>().activeCustomTheme.value;
+
+            Decoration decoration;
+            BorderRadius rowRadius;
+            BorderRadius coverRadius;
+
+            if (customTheme != null) {
+              rowRadius = customTheme.isSignal
+                  ? BorderRadius.zero
+                  : BorderRadius.circular(customTheme.radius > 20 ? 18 : 12);
+              coverRadius = customTheme.isSignal
+                  ? BorderRadius.zero
+                  : BorderRadius.circular(customTheme.radius > 20 ? 14 : 8);
+
+              if (customTheme.isGlass) {
+                decoration = BoxDecoration(
+                  color: isCurrent
+                      ? customTheme.accent.withOpacity(0.2)
+                      : (customTheme.glassFill ?? const Color(0x1AFFFFFF)),
+                  borderRadius: rowRadius,
+                  border: Border.all(
+                    color: isCurrent
+                        ? customTheme.accent
+                        : (customTheme.glassBorder ?? const Color(0x4DFFFFFF)),
+                    width: 1.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: customTheme.glassDropShadow ?? Colors.black26,
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                );
+              } else if (customTheme.isFlame) {
+                decoration = BoxDecoration(
+                  color: isCurrent
+                      ? customTheme.accent.withOpacity(0.2)
+                      : (customTheme.cardColor ?? const Color(0xCC1E0A06)),
+                  borderRadius: rowRadius,
+                  border: Border.all(
+                    color: isCurrent
+                        ? customTheme.accent
+                        : (customTheme.lineColor ?? const Color(0x4DFF6A00)),
+                    width: 1.0,
+                  ),
+                  boxShadow: isCurrent
+                      ? [
+                          BoxShadow(
+                            color: customTheme.accent.withOpacity(0.35),
+                            blurRadius: 10,
+                          ),
+                        ]
+                      : null,
+                );
+              } else if (customTheme.isWarp) {
+                decoration = BoxDecoration(
+                  color: isCurrent
+                      ? customTheme.accent.withOpacity(0.2)
+                      : (customTheme.cardColor ?? const Color(0xB3081026)),
+                  borderRadius: rowRadius,
+                  border: Border.all(
+                    color: isCurrent
+                        ? customTheme.accent
+                        : (customTheme.lineColor ?? const Color(0x3800F0FF)),
+                    width: 1.0,
+                  ),
+                  boxShadow: isCurrent
+                      ? [
+                          BoxShadow(
+                            color: customTheme.accent.withOpacity(0.35),
+                            blurRadius: 10,
+                          ),
+                        ]
+                      : null,
+                );
+              } else {
+                decoration = BoxDecoration(
+                  color: isCurrent
+                      ? customTheme.accent.withOpacity(0.18)
+                      : (customTheme.cardColor ?? const Color(0xFF0A0D0C)),
+                  borderRadius: BorderRadius.zero,
+                  border: Border.all(
+                    color: isCurrent
+                        ? customTheme.accent
+                        : (customTheme.lineColor ?? const Color(0x29B8FF3C)),
+                    width: 1.0,
+                  ),
+                );
+              }
+            } else {
+              rowRadius = BorderRadius.circular(12);
+              coverRadius = BorderRadius.circular(8);
+              decoration = BoxDecoration(
                 color: isCurrent
                     ? const Color(0xFF00D2FF).withOpacity(0.12)
                     : const Color(0xFF121526).withOpacity(0.65),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: rowRadius,
                 border: Border.all(
                   color: isCurrent
                       ? const Color(0xFF00D2FF).withOpacity(0.6)
@@ -138,13 +231,18 @@ class _QuickPickItemState extends State<_QuickPickItem> {
                         ),
                       ]
                     : null,
-              ),
+              );
+            }
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+              decoration: decoration,
               child: ListTile(
                 dense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 6),
                 leading: Container(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: coverRadius,
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.3),
@@ -154,7 +252,7 @@ class _QuickPickItemState extends State<_QuickPickItem> {
                     ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: coverRadius,
                     child: ImageWidget(
                       song: widget.song,
                       size: 50,

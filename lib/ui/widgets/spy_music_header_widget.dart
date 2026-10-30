@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../player/player_controller.dart';
+import '../themes/components/themed_heading.dart';
+import '../utils/theme_controller.dart';
 import 'live_equalizer_widget.dart';
 
 class SpyMusicHeaderWidget extends StatelessWidget {
@@ -45,33 +47,49 @@ class SpyMusicHeaderWidget extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ShaderMask(
-                    shaderCallback: (bounds) => const LinearGradient(
-                      colors: [
-                        Color(0xFF00D2FF),
-                        Color(0xFF8A00FF),
-                        Color(0xFFFF0055),
-                      ],
-                    ).createShader(bounds),
-                    child: const Text(
-                      'SPY MUSIC',
-                      style: TextStyle(
+                  Obx(() {
+                    final customTheme =
+                        Get.find<ThemeController>().activeCustomTheme.value;
+                    if (customTheme != null) {
+                      return const ThemedHeading(
+                        'SPY MUSIC',
                         fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2.0,
-                        color: Colors.white,
+                      );
+                    }
+                    return ShaderMask(
+                      shaderCallback: (bounds) => const LinearGradient(
+                        colors: [
+                          Color(0xFF00D2FF),
+                          Color(0xFF8A00FF),
+                          Color(0xFFFF0055),
+                        ],
+                      ).createShader(bounds),
+                      child: const Text(
+                        'SPY MUSIC',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2.0,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                  ),
-                  const Text(
-                    'YT • SPOTIFY • SOUNDCLOUD • AMAZON',
-                    style: TextStyle(
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.0,
-                      color: Colors.white54,
-                    ),
-                  ),
+                    );
+                  }),
+                  Obx(() {
+                    final customTheme =
+                        Get.find<ThemeController>().activeCustomTheme.value;
+                    return Text(
+                      'YT • SPOTIFY • SOUNDCLOUD • AMAZON',
+                      style: TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                        color: customTheme != null
+                            ? customTheme.muted
+                            : Colors.white54,
+                      ),
+                    );
+                  }),
                 ],
               ),
             ],
@@ -80,20 +98,24 @@ class SpyMusicHeaderWidget extends StatelessWidget {
           // Live Animated Equalizer
           Obx(() {
             final isPlaying = playerController.buttonState.value == PlayButtonState.playing;
+            final customTheme = Get.find<ThemeController>().activeCustomTheme.value;
+            final accentColor = customTheme != null ? customTheme.accent : const Color(0xFFFF0055);
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF10131E).withOpacity(0.7),
-                borderRadius: BorderRadius.circular(12),
+                color: customTheme != null
+                    ? (customTheme.cardColor ?? customTheme.bg)
+                    : const Color(0xFF10131E).withOpacity(0.7),
+                borderRadius: BorderRadius.circular(customTheme != null ? customTheme.radius.clamp(0, 12) : 12),
                 border: Border.all(
                   color: isPlaying
-                      ? const Color(0xFFFF0055).withOpacity(0.4)
-                      : Colors.white10,
+                      ? accentColor.withOpacity(0.5)
+                      : (customTheme != null ? customTheme.lineColor ?? Colors.white10 : Colors.white10),
                 ),
                 boxShadow: isPlaying
                     ? [
                         BoxShadow(
-                          color: const Color(0xFFFF0055).withOpacity(0.2),
+                          color: accentColor.withOpacity(0.25),
                           blurRadius: 8,
                         ),
                       ]
@@ -102,6 +124,7 @@ class SpyMusicHeaderWidget extends StatelessWidget {
               child: LiveEqualizerWidget(
                 isPlaying: isPlaying,
                 height: 18,
+                color: accentColor,
               ),
             );
           }),

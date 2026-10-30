@@ -19,6 +19,7 @@ import 'home_screen_controller.dart';
 import '../../widgets/platform_selector_widget.dart';
 import '../../widgets/spy_music_header_widget.dart';
 import '../../widgets/watchtime_home_widget.dart';
+import '../../themes/components/themed_stagger.dart';
 import '../Settings/settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -224,7 +225,10 @@ class Body extends StatelessWidget {
                           padding:
                               EdgeInsets.only(bottom: 200, top: topPadding),
                           itemCount: items.length,
-                          itemBuilder: (context, index) => items[index],
+                          itemBuilder: (context, index) => ThemedStagger(
+                            index: index,
+                            child: items[index],
+                          ),
                         );
                       }),
               ),

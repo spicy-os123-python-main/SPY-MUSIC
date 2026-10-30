@@ -91,22 +91,26 @@ class SettingsScreen extends StatelessWidget {
                     title: Text("themeMode".tr),
                     subtitle: Obx(
                       () => Text(
-                          settingsController.themeModetype.value ==
-                                  ThemeType.dynamic
-                              ? "dynamic".tr
-                              : settingsController.themeModetype.value ==
-                                      ThemeType.system
-                                  ? "systemDefault".tr
-                                  : settingsController.themeModetype.value ==
-                                          ThemeType.dark
-                                      ? "dark".tr
-                                      : "light".tr,
+                          _getThemeModeLabel(
+                              settingsController.themeModetype.value),
                           style: Theme.of(context).textTheme.bodyMedium),
                     ),
                     onTap: () => showDialog(
                       context: context,
                       builder: (context) => const ThemeSelectorDialog(),
                     ),
+                  ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.only(left: 5, right: 10),
+                    title: const Text("Reduce effects"),
+                    subtitle: Text(
+                      "Reduce animations and blur for better performance",
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    trailing: Obx(() => CustSwitch(
+                          value: settingsController.reduceEffects.value,
+                          onChanged: settingsController.toggleReduceEffects,
+                        )),
                   ),
                   ListTile(
                     contentPadding: const EdgeInsets.only(left: 5, right: 10),
@@ -772,6 +776,33 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
+String _getThemeModeLabel(ThemeType type) {
+  switch (type) {
+    case ThemeType.dynamic:
+      return "dynamic".tr;
+    case ThemeType.system:
+      return "systemDefault".tr;
+    case ThemeType.dark:
+      return "dark".tr;
+    case ThemeType.light:
+      return "light".tr;
+    case ThemeType.emberGlass:
+      return "Ember Glass";
+    case ThemeType.inferno:
+      return "Inferno";
+    case ThemeType.blueFlame:
+      return "Blue Flame";
+    case ThemeType.liquidGlass:
+      return "Liquid Glass";
+    case ThemeType.glassNight:
+      return "Glass Night";
+    case ThemeType.warp:
+      return "Warp";
+    case ThemeType.signal:
+      return "Signal";
+  }
+}
+
 class ThemeSelectorDialog extends StatelessWidget {
   const ThemeSelectorDialog({super.key});
 
@@ -780,38 +811,89 @@ class ThemeSelectorDialog extends StatelessWidget {
     final settingsController = Get.find<SettingsScreenController>();
     return CommonDialog(
       child: Container(
-        height: 300,
-        //color: Theme.of(context).cardColor,
-        padding: const EdgeInsets.only(top: 30, left: 5, right: 30, bottom: 10),
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 20.0, bottom: 5),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "themeMode".tr,
-                style: Theme.of(context).textTheme.titleLarge,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
+        padding: const EdgeInsets.only(top: 24, left: 5, right: 15, bottom: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 20.0, bottom: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "themeMode".tr,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
               ),
             ),
-          ),
-          radioWidget(
-            label: "dynamic".tr,
-            controller: settingsController,
-            value: ThemeType.dynamic,
-          ),
-          radioWidget(
-              label: "systemDefault".tr,
-              controller: settingsController,
-              value: ThemeType.system),
-          radioWidget(
-              label: "dark".tr,
-              controller: settingsController,
-              value: ThemeType.dark),
-          radioWidget(
-              label: "light".tr,
-              controller: settingsController,
-              value: ThemeType.light),
-          Align(
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    radioWidget(
+                      label: "dynamic".tr,
+                      controller: settingsController,
+                      value: ThemeType.dynamic,
+                    ),
+                    radioWidget(
+                      label: "systemDefault".tr,
+                      controller: settingsController,
+                      value: ThemeType.system,
+                    ),
+                    radioWidget(
+                      label: "dark".tr,
+                      controller: settingsController,
+                      value: ThemeType.dark,
+                    ),
+                    radioWidget(
+                      label: "light".tr,
+                      controller: settingsController,
+                      value: ThemeType.light,
+                    ),
+                    const Divider(height: 16, indent: 15, endIndent: 15),
+                    radioWidget(
+                      label: "Ember Glass",
+                      controller: settingsController,
+                      value: ThemeType.emberGlass,
+                    ),
+                    radioWidget(
+                      label: "Inferno",
+                      controller: settingsController,
+                      value: ThemeType.inferno,
+                    ),
+                    radioWidget(
+                      label: "Blue Flame",
+                      controller: settingsController,
+                      value: ThemeType.blueFlame,
+                    ),
+                    radioWidget(
+                      label: "Liquid Glass",
+                      controller: settingsController,
+                      value: ThemeType.liquidGlass,
+                    ),
+                    radioWidget(
+                      label: "Glass Night",
+                      controller: settingsController,
+                      value: ThemeType.glassNight,
+                    ),
+                    radioWidget(
+                      label: "Warp",
+                      controller: settingsController,
+                      value: ThemeType.warp,
+                    ),
+                    radioWidget(
+                      label: "Signal",
+                      controller: settingsController,
+                      value: ThemeType.signal,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Align(
               alignment: Alignment.centerRight,
               child: InkWell(
                 child: Padding(
@@ -819,8 +901,10 @@ class ThemeSelectorDialog extends StatelessWidget {
                   child: Text("cancel".tr),
                 ),
                 onTap: () => Navigator.of(context).pop(),
-              ))
-        ]),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

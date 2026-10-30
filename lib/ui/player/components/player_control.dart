@@ -4,7 +4,8 @@ import 'package:get/get.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:widget_marquee/widget_marquee.dart';
 
-import '/ui/player/components/animated_play_button.dart';
+import '../../themes/components/themed_heading.dart';
+import '../../themes/components/themed_play_button.dart';
 import '/utils/helper.dart';
 import '../player_controller.dart';
 
@@ -48,12 +49,10 @@ class PlayerControlWidget extends StatelessWidget {
                           delay: const Duration(milliseconds: 300),
                           duration: const Duration(seconds: 10),
                           id: "${playerController.currentSong.value}_title",
-                          child: Text(
+                          child: ThemedHeading(
                             playerController.currentSong.value?.title ?? "NA",
-                            textAlign: TextAlign.start,
-                            style: Theme.of(context).textTheme.labelMedium ??
-                                const TextStyle(
-                                    fontSize: 23, fontWeight: FontWeight.bold),
+                            fontSize: 23,
+                            style: Theme.of(context).textTheme.labelMedium,
                           ),
                         ),
                         const SizedBox(
@@ -127,30 +126,7 @@ class PlayerControlWidget extends StatelessWidget {
                                 .withOpacity(0.2),
                       ))),
               _previousButton(playerController, context),
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF00D2FF), Color(0xFFFF0055)],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFF0055).withOpacity(0.55),
-                      blurRadius: 20,
-                      spreadRadius: 2,
-                    ),
-                    BoxShadow(
-                      color: const Color(0xFF00D2FF).withOpacity(0.4),
-                      blurRadius: 14,
-                    ),
-                  ],
-                ),
-                child: const CircleAvatar(
-                  radius: 35,
-                  backgroundColor: Colors.transparent,
-                  child: AnimatedPlayButton(key: Key("playButton")),
-                ),
-              ),
+              const ThemedPlayButton(radius: 35),
               _nextButton(playerController, context),
               Obx(() {
                 final isSongLoop = playerController.isLoopModeEnabled.value;

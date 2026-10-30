@@ -34,6 +34,7 @@ class SettingsScreenController extends GetxController {
   final cacheSongs = false.obs;
   final setBox = Hive.box("AppPrefs");
   final themeModetype = ThemeType.dynamic.obs;
+  final reduceEffects = false.obs;
   final skipSilenceEnabled = false.obs;
   final loudnessNormalizationEnabled = false.obs;
   final noOfHomeScreenContent = 3.obs;
@@ -140,7 +141,15 @@ class SettingsScreenController extends GetxController {
         setBox.get("isTransitionAnimationDisabled") ?? false;
     cacheSongs.value = setBox.get('cacheSongs') ?? false;
     discordRpcEnabled.value = setBox.get('discordRpcEnabled') ?? true;
-    themeModetype.value = ThemeType.values[setBox.get('themeModeType') ?? 0];
+    reduceEffects.value = setBox.get('reduceEffects') ?? false;
+    final savedThemeIndex = setBox.get('themeModeType') ?? 0;
+    if (savedThemeIndex is int &&
+        savedThemeIndex >= 0 &&
+        savedThemeIndex < ThemeType.values.length) {
+      themeModetype.value = ThemeType.values[savedThemeIndex];
+    } else {
+      themeModetype.value = ThemeType.dynamic;
+    }
     skipSilenceEnabled.value =
         isDesktop ? false : setBox.get("skipSilenceEnabled");
     loudnessNormalizationEnabled.value = isDesktop
@@ -373,6 +382,11 @@ class SettingsScreenController extends GetxController {
     setBox.put('themeModeType', ThemeType.values.indexOf(val));
     themeModetype.value = val;
     Get.find<ThemeController>().changeThemeModeType(val);
+  }
+
+  void toggleReduceEffects(bool val) {
+    setBox.put('reduceEffects', val);
+    reduceEffects.value = val;
   }
 
   void onContentChange(dynamic value) {
