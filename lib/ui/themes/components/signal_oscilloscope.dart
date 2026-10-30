@@ -121,3 +121,4 @@ class _OscilloscopePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _OscilloscopePainter oldDelegate) => true;
 }
+

@@ -335,3 +335,4 @@ class _ConfettiParticle {
     required this.rotation,
   });
 }
+

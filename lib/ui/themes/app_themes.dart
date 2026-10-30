@@ -358,3 +358,4 @@ class AppThemes {
     return fromType(type) != null;
   }
 }
+

@@ -167,11 +167,11 @@ class _ThemeBackgroundState extends State<ThemeBackground>
           child: Container(
             decoration: BoxDecoration(
               gradient: RadialGradient(
-                center: const Alignment(0.0, 1.3),
-                radius: 1.1,
+                center: const Alignment(0.0, 1.05),
+                radius: 0.85,
                 colors: [
-                  (config.bgGlow ?? const Color(0xFF5A0F00)).withOpacity(0.9),
-                  config.bg,
+                  (config.bgGlow ?? const Color(0xFF5A0F00)).withOpacity(0.40),
+                  config.bg.withOpacity(0.0),
                 ],
                 stops: const [0.0, 0.75],
               ),
@@ -181,10 +181,10 @@ class _ThemeBackgroundState extends State<ThemeBackground>
 
         // Flame layer at bottom edge
         Positioned(
-          left: -40,
-          right: -40,
-          bottom: -30,
-          height: 340,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 190,
           child: AnimatedBuilder(
             animation: _animController,
             builder: (context, _) {
@@ -227,7 +227,7 @@ class _ThemeBackgroundState extends State<ThemeBackground>
 
   Widget _buildFlameFallback(SpyThemeConfig config) {
     final t = _animController.value * 2 * math.pi;
-    final scaleY = 0.95 + 0.1 * math.sin(t * 3);
+    final scaleY = 0.95 + 0.08 * math.sin(t * 3);
     return Transform.scale(
       scaleY: scaleY,
       alignment: Alignment.bottomCenter,
@@ -235,15 +235,15 @@ class _ThemeBackgroundState extends State<ThemeBackground>
         decoration: BoxDecoration(
           gradient: RadialGradient(
             center: const Alignment(0.0, 1.0),
-            radius: 0.9,
+            radius: 0.8,
             colors: [
-              (config.flameHot ?? Colors.white).withOpacity(0.6),
-              (config.flameCore ?? Colors.yellow).withOpacity(0.45),
-              (config.flameMid ?? Colors.orange).withOpacity(0.3),
-              (config.flameOuter ?? Colors.red).withOpacity(0.15),
+              (config.flameHot ?? Colors.white).withOpacity(0.35),
+              (config.flameCore ?? Colors.yellow).withOpacity(0.25),
+              (config.flameMid ?? Colors.orange).withOpacity(0.15),
+              (config.flameOuter ?? Colors.red).withOpacity(0.06),
               Colors.transparent,
             ],
-            stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
+            stops: const [0.0, 0.2, 0.45, 0.7, 1.0],
           ),
         ),
       ),
