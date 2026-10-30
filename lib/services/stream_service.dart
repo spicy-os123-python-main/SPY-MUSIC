@@ -17,8 +17,8 @@ class StreamProvider {
       YoutubeExplode yt, String videoId) async {
     final clients = <String, YoutubeApiClient>{
       'android': YoutubeApiClient.android,
-      'ios': YoutubeApiClient.ios,
       'androidSdkless': YoutubeApiClient.androidSdkless,
+      'ios': YoutubeApiClient.ios,
       'tv': YoutubeApiClient.tv,
       'androidVr': YoutubeApiClient.androidVr,
     };
@@ -36,9 +36,9 @@ class StreamProvider {
               requireWatchPage: false,
             )
             .timeout(const Duration(seconds: 8));
-        if (manifest.audioOnly.isNotEmpty) {
+        if (manifest.muxed.any((m) => m.tag == 18 || m.url.toString().contains('ratebypass=yes'))) {
           printINFO(
-              "YouTube client ${entry.key} returned ${manifest.audioOnly.length} pure audio streams for $videoId");
+              "YouTube client ${entry.key} returned ratebypass streams for $videoId");
           return manifest;
         }
         if (manifest.streams.isNotEmpty && fallbackManifest == null) {
@@ -180,24 +180,25 @@ class StreamProvider {
   Audio? get highestQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // 1. Standard pure AAC 128k (itag 140): ~3.5MB per track, 100% stable across Android & iOS,
-    // saves ~87% data compared to video streams without any playback issues.
-    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
-    if (aac140 != null) return aac140;
-
-    // 2. High-bitrate Opus (itag 251 ~160k)
-    final highOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
-    if (highOpus != null) return highOpus;
-
-    // 3. Any pure AAC audio stream (e.g. itag 139)
-    final otherAac = audioFormats!.firstWhereOrNull(
-        (item) => item.audioCodec == Codec.mp4a && item.itag != 18);
-    if (otherAac != null) return otherAac;
-
-    // 4. Rate-bypass muxed stream (itag 18) as fallback
+    // 1. Rate-bypass stream (itag 18): Always preferred because it contains ratebypass=yes,
+    // which Google CDN requires to allow progressive streaming in ExoPlayer/AVPlayer
+    // without returning HTTP 403 Forbidden. Total size is only ~2-3.5 MB per track (saving 95% data).
     final rateBypass = audioFormats!.firstWhereOrNull(
         (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
     if (rateBypass != null) return rateBypass;
+
+    // 2. High-quality pure AAC stream (itag 140) if ratebypass stream is absent
+    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (aac140 != null) return aac140;
+
+    // 3. High-bitrate Opus (itag 251 ~160k)
+    final highOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
+    if (highOpus != null) return highOpus;
+
+    // 4. Any other pure AAC audio stream (e.g. itag 139)
+    final otherAac = audioFormats!.firstWhereOrNull(
+        (item) => item.audioCodec == Codec.mp4a);
+    if (otherAac != null) return otherAac;
 
     final sorted = List<Audio>.from(audioFormats!)
       ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
@@ -206,6 +207,9 @@ class StreamProvider {
 
   Audio? get highestBitrateMp4aAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
     final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
     if (aac140 != null) return aac140;
     final aac139 = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
@@ -231,27 +235,29 @@ class StreamProvider {
   Audio? get lowQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // Ultra Data Saver (-85% to -96% data savings):
-    // 1. Low-bitrate AAC (itag 139 ~48 kbps, ~1.2 MB per track)
+    // 1. Rate-bypass stream (itag 18): Only ~2-3 MB per track, immune to 403 blocks
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
+
+    // 2. Low-bitrate AAC (itag 139 ~48 kbps)
     final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
     if (lowAac != null) return lowAac;
 
-    // 2. Opus itag 250 (~70 kbps, ~1.6 MB) or itag 249 (~50 kbps, ~1.2 MB)
+    // 3. Opus itag 250 / 249
     final cleanOpus =
         audioFormats!.firstWhereOrNull((item) => item.itag == 250) ??
             audioFormats!.firstWhereOrNull((item) => item.itag == 249);
     if (cleanOpus != null) return cleanOpus;
 
-    // 3. Fallback to standard AAC 128k (itag 140 ~3.5 MB)
+    // 4. Standard AAC 128k (itag 140)
     final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
     if (aac140 != null) return aac140;
 
-    // 4. Fallback to any audio stream <= 96 kbps
     final anyLow = audioFormats!
         .firstWhereOrNull((item) => item.bitrate > 0 && item.bitrate <= 96000);
     if (anyLow != null) return anyLow;
 
-    // 5. Lowest bitrate available
     final sorted = List<Audio>.from(audioFormats!)
       ..sort((a, b) => a.bitrate.compareTo(b.bitrate));
     return sorted.first;
@@ -260,8 +266,10 @@ class StreamProvider {
   Audio? get midQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // Mid Data Saver:
-    // 1. Prefer itag 140 (AAC ~128 kbps) or itag 250 (Opus ~70 kbps)
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
+
     final midAac = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
     if (midAac != null) return midAac;
 

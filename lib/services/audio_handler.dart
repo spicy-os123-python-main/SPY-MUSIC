@@ -975,6 +975,36 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
         } catch (e, st) {
           printERROR("playByIndex error for ${currentSong.id}: $e\n$st");
+          if (!isNewUrlReq && _songErrorRetryCount == 0) {
+            _songErrorRetryCount = 1;
+            Hive.box("SongsUrlCache").delete(currentSong.id);
+            try {
+              final freshInfo = await checkNGetUrl(
+                currentSong.id,
+                targetMediaItem: currentSong,
+                generateNewUrl: true,
+              ).timeout(const Duration(seconds: 30));
+              if (freshInfo.playable && freshInfo.audio?.url != null) {
+                final playableSong = currentSong.copyWith(extras: {
+                  ...Map<String, dynamic>.from(currentSong.extras ?? {}),
+                  'url': freshInfo.audio!.url,
+                  'size': freshInfo.audio!.size,
+                  'codec': freshInfo.audio!.audioCodec.name,
+                });
+                if (songIndex < queue.value.length) {
+                  queue.value[songIndex] = playableSong;
+                }
+                mediaItem.add(playableSong);
+                await _player.setAudioSource(
+                  _createAudioSource(playableSong),
+                  initialPosition: Duration.zero,
+                ).timeout(const Duration(seconds: 35));
+                isSongLoading = false;
+                await _player.play();
+                return;
+              }
+            } catch (_) {}
+          }
           currentSongUrl = null;
           final msg = "Fehler beim Laden des Tracks: $e";
           try {
@@ -1085,6 +1115,34 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           await _player.play();
         } catch (e, st) {
           printERROR("setSourceNPlay error for ${currMed.id}: $e\n$st");
+          if (_songErrorRetryCount == 0) {
+            _songErrorRetryCount = 1;
+            Hive.box("SongsUrlCache").delete(currMed.id);
+            try {
+              final freshInfo = await checkNGetUrl(
+                currMed.id,
+                targetMediaItem: currMed,
+                generateNewUrl: true,
+              ).timeout(const Duration(seconds: 30));
+              if (freshInfo.playable && freshInfo.audio?.url != null) {
+                final playableSong = currMed.copyWith(extras: {
+                  ...Map<String, dynamic>.from(currMed.extras ?? {}),
+                  'url': freshInfo.audio!.url,
+                  'size': freshInfo.audio!.size,
+                  'codec': freshInfo.audio!.audioCodec.name,
+                });
+                queue.add([playableSong]);
+                mediaItem.add(playableSong);
+                await _player.setAudioSource(
+                  _createAudioSource(playableSong),
+                  initialPosition: Duration.zero,
+                ).timeout(const Duration(seconds: 35));
+                isSongLoading = false;
+                await _player.play();
+                return;
+              }
+            } catch (_) {}
+          }
           currentSongUrl = null;
           final msg = "Fehler beim Starten des Songs: $e";
           try {
@@ -1809,11 +1867,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         if (testUrl != null && !isExpired(url: testUrl)) {
           final lowItag = streamInfoJson['lowQualityAudio']?['itag'];
           final highItag = streamInfoJson['highQualityAudio']?['itag'];
-          if (lowItag == 18 ||
-              lowItag == 22 ||
+          final isRateBypass = testUrl.contains('ratebypass=yes') ||
               highItag == 18 ||
-              highItag == 22) {
-            printINFO("Evicting old video stream cache for ($songId)");
+              lowItag == 18;
+          // Evict old HD video streams (itag 22) or blocked non-ratebypass streams (itag 140/139) from googlevideo
+          if (testUrl.contains('googlevideo.com') &&
+              (!isRateBypass || highItag == 22 || lowItag == 22)) {
+            printINFO("Evicting incompatible cached stream for ($songId)");
             songsUrlCacheBox.delete(songId);
           } else {
             printINFO("Got cached Url ($songId)");
