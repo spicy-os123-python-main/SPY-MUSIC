@@ -93,7 +93,7 @@ class _DiscordLoginDialogState extends State<DiscordLoginDialog> {
           ScaffoldMessenger.of(context).showSnackBar(
             snackbar(
               context,
-              "✅ Erfolgreich bei Discord angemeldet! Status ist live.",
+              "discordLoginSuccess".tr,
               size: SanckBarSize.BIG,
             ),
           );
@@ -126,9 +126,9 @@ class _DiscordLoginDialogState extends State<DiscordLoginDialog> {
               child: const Icon(Icons.discord_rounded, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 10),
-            const Text(
-              "Bei Discord anmelden",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+            Text(
+              "discordLoginTitle".tr,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
             ),
           ],
         ),

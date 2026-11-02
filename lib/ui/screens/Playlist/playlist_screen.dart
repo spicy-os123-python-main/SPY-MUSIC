@@ -779,7 +779,7 @@ class PlaylistScreen extends StatelessWidget {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              atBottom ? "Nach oben" : "Zum Ende",
+                              atBottom ? "scrollToTop".tr : "scrollToBottom".tr,
                               style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,

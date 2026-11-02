@@ -7,6 +7,7 @@ import 'package:hive/hive.dart';
 import '../models/media_Item_builder.dart';
 import '../models/playlist.dart';
 import '../ui/screens/Library/library_controller.dart';
+import '../ui/screens/Settings/settings_screen_controller.dart';
 import '../ui/widgets/snackbar.dart';
 import 'music_service.dart';
 
@@ -17,6 +18,17 @@ class PlaylistImportService {
   PlaylistImportService._internal();
 
   final Dio _dio = Dio();
+
+  bool get _isGerman {
+    try {
+      if (Get.isRegistered<SettingsScreenController>()) {
+        final settings = Get.find<SettingsScreenController>();
+        if (settings.currentAppLanguageCode.value == 'de') return true;
+        if (settings.currentAppLanguageCode.value != 'de') return false;
+      }
+    } catch (_) {}
+    return (Get.locale?.languageCode ?? 'en') == 'de';
+  }
 
   // Observable progress tracking for real-time cyber indicator in library top bar
   final RxBool isImporting = false.obs;
@@ -32,18 +44,24 @@ class PlaylistImportService {
     if (cleanUrl.isEmpty) return;
 
     if (isImporting.value) {
-      _showFeedback('Ein Import läuft bereits im Hintergrund.');
+      _showFeedback(_isGerman
+          ? 'Ein Import läuft bereits im Hintergrund.'
+          : 'An import is already running in background.');
       return;
     }
 
-    _showFeedback('Playlist-Import im Hintergrund gestartet...');
+    _showFeedback(_isGerman
+        ? 'Playlist-Import im Hintergrund gestartet...'
+        : 'Playlist import started in background...');
 
     try {
       final res = await importFromUrl(cleanUrl);
-      final msg = res['message']?.toString() ?? 'Import abgeschlossen';
+      final msg = res['message']?.toString() ??
+          (_isGerman ? 'Import abgeschlossen' : 'Import finished');
       _showFeedback(msg);
     } catch (e) {
-      _showFeedback('Fehler beim Import: $e');
+      _showFeedback(
+          _isGerman ? 'Fehler beim Import: $e' : 'Error importing playlist: $e');
     }
   }
 
@@ -77,7 +95,10 @@ class PlaylistImportService {
   Future<Map<String, dynamic>> importFromUrl(String url) async {
     final cleanUrl = url.trim();
     if (cleanUrl.isEmpty) {
-      return {'success': false, 'message': 'Leere Eingabe'};
+      return {
+        'success': false,
+        'message': _isGerman ? 'Leere Eingabe' : 'Empty input'
+      };
     }
 
     // 1. Direct raw JSON pasted in the input field
@@ -86,7 +107,8 @@ class PlaylistImportService {
       importProgress.value = 0.0;
       currentTrack.value = 0;
       totalTracks.value = 0;
-      importStatus.value = "Initialisiere Import...";
+      importStatus.value =
+          _isGerman ? "Initialisiere Import..." : "Initializing import...";
       try {
         final data = jsonDecode(cleanUrl);
         if (data is Map<String, dynamic>) {
@@ -96,7 +118,12 @@ class PlaylistImportService {
               Map<String, dynamic>.from(data));
         }
       } catch (e) {
-        return {'success': false, 'message': 'Ungültiges JSON-Format: $e'};
+        return {
+          'success': false,
+          'message': _isGerman
+              ? 'Ungültiges JSON-Format: $e'
+              : 'Invalid JSON format: $e'
+        };
       } finally {
         _resetProgress();
       }
@@ -108,7 +135,10 @@ class PlaylistImportService {
     targetUrl = targetUrl.replaceAll(RegExp(r'''[/\.,;\)\]>"']+$'''), '');
     final uri = Uri.tryParse(targetUrl);
     if (uri == null) {
-      return {'success': false, 'message': 'Ungültige URL'};
+      return {
+        'success': false,
+        'message': _isGerman ? 'Ungültige URL' : 'Invalid URL'
+      };
     }
 
     isImporting.value = true;
@@ -116,7 +146,8 @@ class PlaylistImportService {
     currentTrack.value = 0;
     totalTracks.value = 0;
     currentPlaylistTitle.value = "";
-    importStatus.value = "Initialisiere Import...";
+    importStatus.value =
+        _isGerman ? "Initialisiere Import..." : "Initializing import...";
 
     try {
       // 3. SPY MUSIC Cloud Share Link (dpaste.org, direct raw JSON, or spymusic file)
@@ -211,10 +242,17 @@ class PlaylistImportService {
         }
       }
       if (playlistId.isEmpty) {
-        return {'success': false, 'message': 'Keine gültige Spotify Playlist-ID gefunden.'};
+        return {
+          'success': false,
+          'message': _isGerman
+              ? 'Keine gültige Spotify Playlist-ID gefunden.'
+              : 'No valid Spotify playlist ID found.'
+        };
       }
 
-      importStatus.value = "Lade Spotify Metadaten...";
+      importStatus.value = _isGerman
+          ? "Lade Spotify Metadaten..."
+          : "Loading Spotify metadata...";
 
       // 2. Fetch embed page HTML
       final embedUrl = 'https://open.spotify.com/embed/playlist/$playlistId';
@@ -229,19 +267,38 @@ class PlaylistImportService {
       final html = response.data.toString();
       final nextDataMatch = RegExp(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>').firstMatch(html);
       if (nextDataMatch == null) {
-        return {'success': false, 'message': 'Spotify Playlist konnte nicht gelesen werden (privat oder ungültig).'};
+        return {
+          'success': false,
+          'message': _isGerman
+              ? 'Spotify Playlist konnte nicht gelesen werden (privat oder ungültig).'
+              : 'Spotify playlist could not be loaded (private or invalid).'
+        };
       }
 
       final jsonData = jsonDecode(nextDataMatch.group(1)!);
       final entity = jsonData['props']?['pageProps']?['state']?['data']?['entity'];
       if (entity == null) {
-        return {'success': false, 'message': 'Keine Trackdaten in Spotify Playlist gefunden.'};
+        return {
+          'success': false,
+          'message': _isGerman
+              ? 'Keine Trackdaten in Spotify Playlist gefunden.'
+              : 'No track data found in Spotify playlist.'
+        };
       }
 
-      final title = (entity['name'] ?? entity['title'] ?? 'Importierte Spotify Playlist').toString();
+      final title = (entity['name'] ??
+              entity['title'] ??
+              (_isGerman
+                  ? 'Importierte Spotify Playlist'
+                  : 'Imported Spotify Playlist'))
+          .toString();
       final trackList = entity['trackList'] as List? ?? [];
       if (trackList.isEmpty) {
-        return {'success': false, 'message': 'Spotify Playlist ist leer.'};
+        return {
+          'success': false,
+          'message':
+              _isGerman ? 'Spotify Playlist ist leer.' : 'Spotify playlist is empty.'
+        };
       }
 
       currentPlaylistTitle.value = title;
@@ -275,7 +332,10 @@ class PlaylistImportService {
         for (int j = 0; j < batch.length; j++) {
           final t = batch[j];
           final trackCover = covers[j];
-          final trackName = (t['title'] ?? 'Unbekannt').toString().trim();
+          final trackName =
+              (t['title'] ?? (_isGerman ? 'Unbekannt' : 'Unknown'))
+                  .toString()
+                  .trim();
           final rawArtist = (t['subtitle'] ?? '').toString().trim();
           final trackArtist = rawArtist.isNotEmpty ? rawArtist : 'Spotify Artist';
           final durationMs = (t['duration'] is int)
@@ -317,8 +377,9 @@ class PlaylistImportService {
           items.add(targetItem);
           currentTrack.value = items.length;
           importProgress.value = items.length / trackList.length;
-          importStatus.value =
-              'Importiere "$trackName" ($trackArtist) (${items.length}/${trackList.length})';
+          importStatus.value = _isGerman
+              ? 'Importiere "$trackName" ($trackArtist) (${items.length}/${trackList.length})'
+              : 'Importing "$trackName" ($trackArtist) (${items.length}/${trackList.length})';
         }
 
         // Slight deliberate pacing for UI responsiveness
@@ -329,11 +390,18 @@ class PlaylistImportService {
       await _savePlaylistToLibrary(title, items);
       return {
         'success': true,
-        'message': 'Spotify Playlist "$title" (${items.length} Songs) erfolgreich importiert!',
+        'message': _isGerman
+            ? 'Spotify Playlist "$title" (${items.length} Songs) erfolgreich importiert!'
+            : 'Spotify playlist "$title" (${items.length} songs) successfully imported!',
         'count': items.length
       };
     } catch (e) {
-      return {'success': false, 'message': 'Fehler beim Spotify-Import: $e'};
+      return {
+        'success': false,
+        'message': _isGerman
+            ? 'Fehler beim Spotify-Import: $e'
+            : 'Error during Spotify import: $e'
+      };
     }
   }
 
@@ -341,22 +409,33 @@ class PlaylistImportService {
     try {
       final listId = uri.queryParameters['list'];
       if (listId == null) {
-        return {'success': false, 'message': 'Keine YouTube Playlist-ID gefunden.'};
+        return {
+          'success': false,
+          'message': _isGerman
+              ? 'Keine YouTube Playlist-ID gefunden.'
+              : 'No YouTube playlist ID found.'
+        };
       }
 
-      importStatus.value = "Lade YouTube Playlist...";
+      importStatus.value = _isGerman
+          ? "Lade YouTube Playlist..."
+          : "Loading YouTube playlist...";
       final musicServices = Get.find<MusicServices>();
       final result = await musicServices.getPlaylistOrAlbumSongs(
           playlistId: listId, limit: 10000);
-      final title = result['title'] ?? 'Importierte YouTube Playlist';
+      final title = result['title'] ??
+          (_isGerman
+              ? 'Importierte YouTube Playlist'
+              : 'Imported YouTube Playlist');
       final List<MediaItem> rawItems =
           List<MediaItem>.from(result['tracks'] ?? []);
 
       if (rawItems.isEmpty) {
         return {
           'success': false,
-          'message':
-              'YouTube Playlist enthielt keine Titel oder konnte nicht geladen werden.'
+          'message': _isGerman
+              ? 'YouTube Playlist enthielt keine Titel oder konnte nicht geladen werden.'
+              : 'YouTube playlist contains no tracks or could not be loaded.'
         };
       }
 
@@ -372,8 +451,9 @@ class PlaylistImportService {
         currentTrack.value = i + 1;
         importProgress.value = (i + 1) / rawItems.length;
         if (i % 20 == 0 || i == rawItems.length - 1) {
-          importStatus.value =
-              'Importiere "${item.title}" (${i + 1}/${rawItems.length})';
+          importStatus.value = _isGerman
+              ? 'Importiere "${item.title}" (${i + 1}/${rawItems.length})'
+              : 'Importing "${item.title}" (${i + 1}/${rawItems.length})';
           await Future.delayed(const Duration(milliseconds: 2));
         }
       }
@@ -381,17 +461,26 @@ class PlaylistImportService {
       await _savePlaylistToLibrary(title, items);
       return {
         'success': true,
-        'message': 'YouTube Playlist "$title" (${items.length} Songs) erfolgreich importiert!',
+        'message': _isGerman
+            ? 'YouTube Playlist "$title" (${items.length} Songs) erfolgreich importiert!'
+            : 'YouTube playlist "$title" (${items.length} songs) successfully imported!',
         'count': items.length
       };
     } catch (e) {
-      return {'success': false, 'message': 'Fehler beim YouTube-Import: $e'};
+      return {
+        'success': false,
+        'message': _isGerman
+            ? 'Fehler beim YouTube-Import: $e'
+            : 'Error during YouTube import: $e'
+      };
     }
   }
 
   Future<Map<String, dynamic>> _importFromSpyMusicShare(String url) async {
     try {
-      importStatus.value = "Lade Playlist-Daten herunter...";
+      importStatus.value = _isGerman
+          ? "Lade Playlist-Daten herunter..."
+          : "Downloading playlist data...";
       final clean = url.trim().replaceAll(RegExp(r'''[/\.,;\)\]>"']+$'''), '');
       final rawUrl = clean.contains('dpaste.org') && !clean.endsWith('/raw')
           ? '$clean/raw'
@@ -413,7 +502,9 @@ class PlaylistImportService {
       if (response.statusCode != 200 || response.data == null) {
         return {
           'success': false,
-          'message': 'Konnte Playlist nicht vom Share-Link laden (HTTP ${response.statusCode}).'
+          'message': _isGerman
+              ? 'Konnte Playlist nicht vom Share-Link laden (HTTP ${response.statusCode}).'
+              : 'Could not load playlist from share link (HTTP ${response.statusCode}).'
         };
       }
 
@@ -435,7 +526,12 @@ class PlaylistImportService {
       }
 
       if (rawData == null || rawData is! Map) {
-        return {'success': false, 'message': 'Ungültiges Playlist-Format.'};
+        return {
+          'success': false,
+          'message': _isGerman
+              ? 'Ungültiges Playlist-Format.'
+              : 'Invalid playlist format.'
+        };
       }
 
       return await _importFromSpyMusicJsonData(
@@ -443,7 +539,9 @@ class PlaylistImportService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Fehler beim Laden des Share-Links: $e'
+        'message': _isGerman
+            ? 'Fehler beim Laden des Share-Links: $e'
+            : 'Error loading share link: $e'
       };
     }
   }
@@ -455,14 +553,16 @@ class PlaylistImportService {
           data['playlistInfo'] is Map ? data['playlistInfo'] as Map : {};
       final title = (playlistInfo['title']?.toString() ??
               data['title']?.toString() ??
-              'Geteilte Playlist')
+              (_isGerman ? 'Geteilte Playlist' : 'Shared Playlist'))
           .trim();
       final rawSongs = data['songs'] is List ? data['songs'] as List : [];
 
       if (rawSongs.isEmpty) {
         return {
           'success': false,
-          'message': 'Die geteilte Playlist enthält keine Songs.'
+          'message': _isGerman
+              ? 'Die geteilte Playlist enthält keine Songs.'
+              : 'The shared playlist contains no songs.'
         };
       }
 
@@ -470,7 +570,8 @@ class PlaylistImportService {
       totalTracks.value = rawSongs.length;
       currentTrack.value = 0;
       importProgress.value = 0.05;
-      importStatus.value = '$title (${rawSongs.length} Songs)...';
+      importStatus.value =
+          '$title (${rawSongs.length} ${_isGerman ? "Songs" : "songs"})...';
 
       final List<MediaItem> items = [];
       for (int i = 0; i < rawSongs.length; i++) {
@@ -485,8 +586,9 @@ class PlaylistImportService {
         currentTrack.value = i + 1;
         importProgress.value = 0.1 + (0.85 * (i + 1) / rawSongs.length);
         if (i % 30 == 0 || i == rawSongs.length - 1) {
-          importStatus.value =
-              'Importiere ${i + 1}/${rawSongs.length} Songs...';
+          importStatus.value = _isGerman
+              ? 'Importiere ${i + 1}/${rawSongs.length} Songs...'
+              : 'Importing ${i + 1}/${rawSongs.length} songs...';
           await Future.delayed(const Duration(milliseconds: 2));
         }
       }
@@ -494,11 +596,15 @@ class PlaylistImportService {
       if (items.isEmpty) {
         return {
           'success': false,
-          'message': 'Keine gültigen Songs in der Playlist gefunden.'
+          'message': _isGerman
+              ? 'Keine gültigen Songs in der Playlist gefunden.'
+              : 'No valid songs found in playlist.'
         };
       }
 
-      importStatus.value = 'Speichere Playlist in Bibliothek...';
+      importStatus.value = _isGerman
+          ? 'Speichere Playlist in Bibliothek...'
+          : 'Saving playlist to library...';
       final thumb = playlistInfo['thumbnailUrl']?.toString() ??
           (items.isNotEmpty && items.first.artUri != null
               ? items.first.artUri.toString()
@@ -509,20 +615,25 @@ class PlaylistImportService {
         title,
         items,
         customThumbnail: thumb,
-        description: 'Geteilt via SPY MUSIC (${items.length} Songs)',
+        description: _isGerman
+            ? 'Geteilt via SPY MUSIC (${items.length} Songs)'
+            : 'Shared via SPY MUSIC (${items.length} songs)',
       );
 
       importProgress.value = 1.0;
       return {
         'success': true,
-        'message':
-            'Playlist "$title" (${items.length} Songs) erfolgreich importiert!',
+        'message': _isGerman
+            ? 'Playlist "$title" (${items.length} Songs) erfolgreich importiert!'
+            : 'Playlist "$title" (${items.length} songs) successfully imported!',
         'count': items.length,
       };
     } catch (e) {
       return {
         'success': false,
-        'message': 'Fehler beim Importieren der Playlist: $e'
+        'message': _isGerman
+            ? 'Fehler beim Importieren der Playlist: $e'
+            : 'Error importing playlist: $e'
       };
     }
   }
@@ -536,7 +647,8 @@ class PlaylistImportService {
           (songItems.isNotEmpty && songItems.first.artUri != null
               ? songItems.first.artUri.toString()
               : Playlist.thumbPlaceholderUrl),
-      description: description ?? 'Importiert via SPY MUSIC',
+      description: description ??
+          (_isGerman ? 'Importiert via SPY MUSIC' : 'Imported via SPY MUSIC'),
       isCloudPlaylist: false,
     );
 

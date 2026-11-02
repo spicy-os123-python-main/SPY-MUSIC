@@ -3,6 +3,7 @@
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import '../services/discord_webhook_service.dart';
+import '../ui/screens/Settings/settings_screen_controller.dart';
 
 import '/ui/navigator.dart';
 import '/ui/widgets/sort_widget.dart';
@@ -310,10 +311,19 @@ String? extractArtistName(dynamic val) {
 }
 
 String getSafeSongArtist(dynamic song, {String? fallback}) {
-  final defaultFallback = fallback ??
-      (Get.locale?.languageCode == 'de'
-          ? 'Unbekannter Künstler'
-          : 'Unknown Artist');
+  bool isDe = false;
+  try {
+    if (Get.isRegistered<SettingsScreenController>()) {
+      isDe = Get.find<SettingsScreenController>().currentAppLanguageCode.value ==
+          'de';
+    } else {
+      isDe = (Get.locale?.languageCode ?? 'en') == 'de';
+    }
+  } catch (_) {
+    isDe = (Get.locale?.languageCode ?? 'en') == 'de';
+  }
+  final defaultFallback =
+      fallback ?? (isDe ? 'Unbekannter Künstler' : 'Unknown Artist');
 
   if (song == null) return defaultFallback;
 

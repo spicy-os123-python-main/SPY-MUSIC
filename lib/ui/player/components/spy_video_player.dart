@@ -103,7 +103,7 @@ class SpyVideoPlayer extends StatelessWidget {
                       child: IconButton(
                         icon: const Icon(Icons.fullscreen_rounded,
                             color: Colors.white, size: 22),
-                        tooltip: "Vollbildmodus",
+                        tooltip: "fullscreenEnter".tr,
                         onPressed: () {
                           Get.to(() => const FullScreenVideoScreen(),
                               transition: Transition.fadeIn,

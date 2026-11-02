@@ -696,7 +696,7 @@ class PlayerController extends GetxController
     try {
       initVideoPlayer();
       if (videoPlayer == null) {
-        throw Exception("Video-Player konnte nicht initialisiert werden.");
+        throw Exception("videoInitError".tr);
       }
       _audioHandler.pause();
       final vUrl = await StreamProvider.getVideoUrl(song.id);
@@ -761,7 +761,7 @@ class PlayerController extends GetxController
       try {
         initVideoPlayer();
         if (videoPlayer == null) {
-          throw Exception("Video-Player konnte nicht initialisiert werden.");
+          throw Exception("videoInitError".tr);
         }
         final pos = progressBarStatus.value.current;
         _audioHandler.pause();
@@ -789,7 +789,7 @@ class PlayerController extends GetxController
         _audioHandler.play();
         if (Get.context != null) {
           ScaffoldMessenger.of(Get.context!).showSnackBar(
-            snackbar(Get.context!, "Fehler beim Laden des Videos.",
+            snackbar(Get.context!, "videoLoadError".tr,
                 size: SanckBarSize.MEDIUM),
           );
         }

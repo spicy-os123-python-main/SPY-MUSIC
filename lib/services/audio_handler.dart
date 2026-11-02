@@ -68,6 +68,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   bool shuffleModeEnabled = false;
   bool loudnessNormalizationEnabled = false;
   // var networkErrorPause = false;
+
+  bool get _isGerman {
+    try {
+      if (Get.isRegistered<SettingsScreenController>()) {
+        final settings = Get.find<SettingsScreenController>();
+        if (settings.currentAppLanguageCode.value == 'de') return true;
+        if (settings.currentAppLanguageCode.value != 'de') return false;
+      }
+    } catch (_) {}
+    return (Get.locale?.languageCode ?? 'en') == 'de';
+  }
   bool isSongLoading = true;
   int _songErrorRetryCount = 0;
   String? _lastFailedSongId;
@@ -977,7 +988,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             } catch (_) {}
           }
           currentSongUrl = null;
-          final msg = "Fehler beim Laden des Tracks: $e";
+          final msg = _isGerman
+              ? "Fehler beim Laden des Tracks: $e"
+              : "Error loading track: $e";
           try {
             Get.find<PlayerController>().notifyPlayError(msg);
           } catch (_) {}
@@ -1131,7 +1144,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             } catch (_) {}
           }
           currentSongUrl = null;
-          final msg = "Fehler beim Starten des Songs: $e";
+          final msg = _isGerman
+              ? "Fehler beim Starten des Songs: $e"
+              : "Error starting track: $e";
           try {
             Get.find<PlayerController>().notifyPlayError(msg);
           } catch (_) {}
@@ -1423,7 +1438,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   void _normalizeVolume(double currentLoudnessDb) {
-    double loudnessDifference = -5 - currentLoudnessDb;
+    // Boost baseline target from -5 to +0.5 dB so normalized songs remain loud, punchy and clear
+    double loudnessDifference = 0.5 - currentLoudnessDb;
 
     // Converted loudness difference to a volume multiplier
     // We use a factor to convert dB difference to a linear scale
@@ -1431,7 +1447,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     final volumeAdjustment = pow(10.0, loudnessDifference / 20.0);
     printINFO(
         "loudness:$currentLoudnessDb Normalized volume: $volumeAdjustment");
-    _player.setVolume(volumeAdjustment.toDouble().clamp(0, 1.0));
+    _player.setVolume(volumeAdjustment.toDouble().clamp(0.2, 1.0));
   }
 
   Future<void> saveSessionData() async {
@@ -1658,8 +1674,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       SoundCloudService.invalidateStreamCache(songId);
       return HMStreamingData(
         playable: false,
-        statusMSG:
-            "SoundCloud-Stream für '${targetSong?.title ?? songId}' konnte nicht geladen werden.",
+        statusMSG: _isGerman
+            ? "SoundCloud-Stream für '${targetSong?.title ?? songId}' konnte nicht geladen werden."
+            : "Could not load SoundCloud stream for '${targetSong?.title ?? songId}'.",
       );
     }
 
@@ -1731,8 +1748,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       PlatformSearchService.invalidateMatch(songId);
       return HMStreamingData(
         playable: false,
-        statusMSG:
-            "Audio-Stream für '${targetSong?.title ?? songId}' ist derzeit nicht verfügbar.",
+        statusMSG: _isGerman
+            ? "Audio-Stream für '${targetSong?.title ?? songId}' ist derzeit nicht verfügbar."
+            : "Audio stream for '${targetSong?.title ?? songId}' is currently unavailable.",
       );
     }
 
@@ -1934,7 +1952,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
         streamInfo ??= HMStreamingData(
           playable: false,
-          statusMSG: "Kein abspielbarer Stream für diesen Track gefunden.",
+          statusMSG: _isGerman
+              ? "Kein abspielbarer Stream für diesen Track gefunden."
+              : "No playable stream found for this track.",
         );
 
         // 2. Second recovery attempt: Try SoundCloud fallback
@@ -1955,8 +1975,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           if (isAgeGated) {
             streamInfo = HMStreamingData(
               playable: false,
-              statusMSG:
-                  "Dieser Track ist auf YouTube altersbeschränkt (ab 18). YouTube sperrt anonyme Streams hierfür.",
+              statusMSG: _isGerman
+                  ? "Dieser Track ist auf YouTube altersbeschränkt (ab 18). YouTube sperrt anonyme Streams hierfür."
+                  : "This track is age-restricted on YouTube (18+). YouTube blocks anonymous streams for this track.",
             );
           }
         }

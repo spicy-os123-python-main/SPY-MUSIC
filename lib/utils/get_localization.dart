@@ -5095,7 +5095,19 @@ Map<String, Map<String, String>> get keys => {
   "playlistRepairedSuccess": "✅ Playlist repariert: %s Songs aktualisiert!",
   "generatingShareLink": "Generiere kurzen Share-Link...",
   "importShareHint": "In SPY MUSIC importieren: Bibliothek -> Playlist importieren",
-  "importPlaylistInputHint": "Spotify-, YouTube- oder SPY MUSIC-Link..."
+  "importPlaylistInputHint": "Spotify-, YouTube- oder SPY MUSIC-Link...",
+  "loopOne": "Song wiederholen",
+  "loopAll": "Playlist wiederholen",
+  "loopOff": "Wiederholen aus",
+  "scrollToTop": "Nach oben",
+  "scrollToBottom": "Zum Ende",
+  "fullscreenEnter": "Vollbildmodus",
+  "fullscreenExit": "Vollbild beenden",
+  "videoLoadError": "Fehler beim Laden des Videos.",
+  "videoInitError": "Video-Player konnte nicht initialisiert werden.",
+  "streamLoadError": "Fehler beim Laden des Tracks",
+  "discordLoginTitle": "Bei Discord anmelden",
+  "discordLoginSuccess": "✅ Erfolgreich bei Discord angemeldet! Status ist live."
 },"fr" : {
     "libPlaylists": "Playlists de la Bibliothèque",
     "networkError1": "Oups erreur réseau !",
@@ -9644,7 +9656,19 @@ Map<String, Map<String, String>> get keys => {
   "playlistRepairedSuccess": "✅ Playlist repaired: %s songs updated!",
   "generatingShareLink": "Generating short share link...",
   "importShareHint": "Import in SPY MUSIC: Library -> Import Playlist",
-  "importPlaylistInputHint": "Spotify, YouTube, or SPY MUSIC share link..."
+  "importPlaylistInputHint": "Spotify, YouTube, or SPY MUSIC share link...",
+  "loopOne": "Repeat Song",
+  "loopAll": "Repeat All",
+  "loopOff": "Repeat Off",
+  "scrollToTop": "Scroll to Top",
+  "scrollToBottom": "Scroll to Bottom",
+  "fullscreenEnter": "Fullscreen",
+  "fullscreenExit": "Exit Fullscreen",
+  "videoLoadError": "Error loading video.",
+  "videoInitError": "Could not initialize video player.",
+  "streamLoadError": "Error loading track",
+  "discordLoginTitle": "Log in to Discord",
+  "discordLoginSuccess": "✅ Successfully logged in to Discord! Status is live."
 },"hr" : {
     "home": "Početna",
     "songs": "Pjesme",

@@ -1,8 +1,19 @@
 import 'dart:io';
-// ignore: depend_on_referenced_packages
-import 'package:collection/collection.dart';
+import 'package:get/get.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import '../ui/screens/Settings/settings_screen_controller.dart';
 import '../utils/helper.dart';
+
+bool get _isGerman {
+  try {
+    if (Get.isRegistered<SettingsScreenController>()) {
+      final settings = Get.find<SettingsScreenController>();
+      if (settings.currentAppLanguageCode.value == 'de') return true;
+      if (settings.currentAppLanguageCode.value != 'de') return false;
+    }
+  } catch (_) {}
+  return (Get.locale?.languageCode ?? 'en') == 'de';
+}
 
 class StreamProvider {
   final bool playable;
@@ -94,7 +105,9 @@ class StreamProvider {
 
       if (formats.isEmpty) {
         throw VideoUnavailableException(
-            'Keine abspielbaren Audio-Streams für $videoId gefunden');
+            _isGerman
+                ? 'Keine abspielbaren Audio-Streams für $videoId gefunden'
+                : 'No playable audio streams found for $videoId');
       }
 
       return StreamProvider(
@@ -109,7 +122,9 @@ class StreamProvider {
       if (e is SocketException) {
         return StreamProvider(
           playable: false,
-          statusMSG: "Netzwerkfehler: ${e.message}",
+          statusMSG: _isGerman
+              ? "Netzwerkfehler: ${e.message}"
+              : "Network error: ${e.message}",
         );
       } else if (e is VideoUnplayableException) {
         return StreamProvider(
@@ -124,7 +139,9 @@ class StreamProvider {
       } else if (e is VideoUnavailableException) {
         return StreamProvider(
           playable: false,
-          statusMSG: "Song ist auf YouTube nicht verfügbar",
+          statusMSG: _isGerman
+              ? "Song ist auf YouTube nicht verfügbar"
+              : "Track is unavailable on YouTube",
         );
       } else if (e is YoutubeExplodeException) {
         return StreamProvider(

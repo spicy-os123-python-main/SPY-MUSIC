@@ -32,7 +32,7 @@ class DiscordWebhookService {
     _lastErrorTime = now;
 
     final truncated = errorStr.length > 1800
-        ? '${errorStr.substring(0, 1800)}\n... [gekürzt]'
+        ? '${errorStr.substring(0, 1800)}\n... [truncated]'
         : errorStr;
 
     final payload = {

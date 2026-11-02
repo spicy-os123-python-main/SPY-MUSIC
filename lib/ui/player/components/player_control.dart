@@ -139,10 +139,10 @@ class PlayerControlWidget extends StatelessWidget {
                 return IconButton(
                   onPressed: playerController.cycleLoopMode,
                   tooltip: isSongLoop
-                      ? "Song unendlich wiederholen"
+                      ? "loopOne".tr
                       : (isPlaylistLoop
-                          ? "Playlist unendlich wiederholen"
-                          : "Wiederholen aus"),
+                          ? "loopAll".tr
+                          : "loopOff".tr),
                   icon: isSongLoop
                       ? Stack(
                           alignment: Alignment.center,

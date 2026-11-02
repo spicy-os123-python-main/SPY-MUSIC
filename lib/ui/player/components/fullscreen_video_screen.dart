@@ -66,7 +66,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
                           child: IconButton(
                             icon: const Icon(Icons.fullscreen_exit_rounded,
                                 color: Colors.white, size: 26),
-                            tooltip: "Vollbild beenden",
+                            tooltip: "fullscreenExit".tr,
                             onPressed: () => Get.back(),
                           ),
                         ),
