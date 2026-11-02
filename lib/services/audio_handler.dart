@@ -79,6 +79,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   int _currentSongPlayedSeconds = 0;
   bool _currentSongCompletedRecorded = false;
   String? _lastTrackedSongId;
+  int _activePlayRequestId = 0;
 
   // list of shuffled queue songs ids
   List<String> shuffledQueue = [];
@@ -778,7 +779,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _currentSongPlayedSeconds = 0;
     final index = _getNextSongIndex();
     if (index != currentIndex) {
-      if (_player.position != Duration.zero) _player.seek(Duration.zero);
+      try {
+        _player.pause();
+      } catch (_) {}
       await customAction("playByIndex", {'index': index});
     } else {
       _player.seek(Duration.zero);
@@ -795,7 +798,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _checkAndRecordSongCompletion();
     _currentSongCompletedRecorded = false;
     _currentSongPlayedSeconds = 0;
-    _player.seek(Duration.zero);
+    try {
+      _player.pause();
+    } catch (_) {}
     final index = _getPrevSongIndex();
     if (index != currentIndex) {
       await customAction("playByIndex", {'index': index});
@@ -857,11 +862,20 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         }
         final currentSong = queue.value[currentIndex];
         final bool restoreSession = extras['restoreSession'] ?? false;
+        final int reqId = ++_activePlayRequestId;
 
         try {
           isSongLoading = true;
-          playbackState.add(playbackState.value
-              .copyWith(processingState: AudioProcessingState.loading));
+          try {
+            if (_player.playing) {
+              await _player.pause();
+            }
+          } catch (_) {}
+          playbackState.add(playbackState.value.copyWith(
+            playing: false,
+            processingState: AudioProcessingState.loading,
+            queueIndex: currentIndex,
+          ));
 
           mediaItem.add(currentSong);
           final streamInfo = await checkNGetUrl(
@@ -870,7 +884,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             generateNewUrl: isNewUrlReq,
           ).timeout(const Duration(seconds: 30));
 
-          if (songIndex != currentIndex) {
+          if (reqId != _activePlayRequestId || songIndex != currentIndex) {
             return;
           } else if (!streamInfo.playable) {
             currentSongUrl = null;
@@ -901,6 +915,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           playbackState
               .add(playbackState.value.copyWith(queueIndex: currentIndex));
 
+          if (reqId != _activePlayRequestId) return;
+
           final audioSource = _createAudioSource(playableSong);
           final startPos = restoreSession
               ? Duration(milliseconds: extras['position'] ?? 0)
@@ -917,6 +933,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             },
           );
 
+          if (reqId != _activePlayRequestId) return;
+
           isSongLoading = false;
           if (loudnessNormalizationEnabled && GetPlatform.isAndroid) {
             _normalizeVolume(streamInfo.audio!.loudnessDb);
@@ -926,6 +944,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             await _player.play();
           }
         } catch (e, st) {
+          if (reqId != _activePlayRequestId) return;
           printERROR("playByIndex error for ${currentSong.id}: $e\n$st");
           if (!isNewUrlReq && _songErrorRetryCount == 0) {
             _songErrorRetryCount = 1;
@@ -1013,7 +1032,18 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       case 'setSourceNPlay':
         final currMed = (extras!['mediaItem'] as MediaItem);
         _songErrorRetryCount = 0;
+        final int reqId = ++_activePlayRequestId;
         try {
+          try {
+            if (_player.playing) {
+              await _player.pause();
+            }
+          } catch (_) {}
+          playbackState.add(playbackState.value.copyWith(
+            playing: false,
+            processingState: AudioProcessingState.loading,
+            queueIndex: 0,
+          ));
           mediaItem.add(currMed);
           queue.add([currMed]);
           isSongLoading = true;
@@ -1023,6 +1053,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             currMed.id,
             targetMediaItem: currMed,
           ).timeout(const Duration(seconds: 30));
+
+          if (reqId != _activePlayRequestId) return;
 
           if (!streamInfo.playable) {
             currentSongUrl = null;
@@ -1046,6 +1078,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           WatchtimeService.recordSongStart(playableSong);
 
           playbackState.add(playbackState.value.copyWith(queueIndex: 0));
+          if (reqId != _activePlayRequestId) return;
           final audioSource = _createAudioSource(playableSong);
           await _player.setAudioSource(
             audioSource,
@@ -1057,6 +1090,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   "Playback loading timed out after 35 seconds");
             },
           );
+          if (reqId != _activePlayRequestId) return;
           isSongLoading = false;
 
           // Normalize audio
@@ -1066,6 +1100,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
           await _player.play();
         } catch (e, st) {
+          if (reqId != _activePlayRequestId) return;
           printERROR("setSourceNPlay error for ${currMed.id}: $e\n$st");
           if (_songErrorRetryCount == 0) {
             _songErrorRetryCount = 1;

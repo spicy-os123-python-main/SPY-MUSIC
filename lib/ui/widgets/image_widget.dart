@@ -40,9 +40,10 @@ class ImageWidget extends StatelessWidget {
                     ? (artist?.thumbnailUrl ?? "")
                     : "";
 
-    final uri = Uri.tryParse(imageUrl);
-    final bool hasValidNetworkUrl = imageUrl.isNotEmpty &&
-        imageUrl != "null" &&
+    final finalImageUrl = _optimizeThumbnailUrl(imageUrl, isPlayerArtImage);
+    final uri = Uri.tryParse(finalImageUrl);
+    final bool hasValidNetworkUrl = finalImageUrl.isNotEmpty &&
+        finalImageUrl != "null" &&
         uri != null &&
         uri.hasScheme &&
         (uri.scheme == 'http' || uri.scheme == 'https') &&
@@ -99,9 +100,11 @@ class ImageWidget extends StatelessWidget {
               ? CachedNetworkImage(
                   height: size,
                   width: size,
-                  memCacheHeight:
-                      (song != null && !isPlayerArtImage) ? 140 : null,
-                  imageUrl: imageUrl,
+                  maxWidthDiskCache: isPlayerArtImage ? null : 160,
+                  maxHeightDiskCache: isPlayerArtImage ? null : 160,
+                  memCacheWidth: isPlayerArtImage ? null : 140,
+                  memCacheHeight: isPlayerArtImage ? null : 140,
+                  imageUrl: finalImageUrl,
                   fit: BoxFit.cover,
                   errorWidget: (context, url, error) => placeholderWidget,
                   progressIndicatorBuilder: ((_, __, ___) => Shimmer.fromColors(
@@ -122,5 +125,40 @@ class ImageWidget extends StatelessWidget {
                 )
               : placeholderWidget),
     );
+  }
+
+  static String _optimizeThumbnailUrl(String url, bool isHighQuality) {
+    if (isHighQuality || url.isEmpty) return url;
+
+    // YouTube Video thumbnail (save up to 2MB per track!)
+    if (url.contains('i.ytimg.com/vi/') || url.contains('img.youtube.com/vi/')) {
+      return url
+          .replaceAll('/maxresdefault.jpg', '/mqdefault.jpg')
+          .replaceAll('/sddefault.jpg', '/mqdefault.jpg')
+          .replaceAll('/hqdefault.jpg', '/mqdefault.jpg');
+    }
+
+    // Google User Content / YouTube Music thumbnails
+    if (url.contains('googleusercontent.com') || url.contains('ggpht.com')) {
+      final sizeRegex = RegExp(r'=(?:w\d+-h\d+|s\d+)(-[^=]*)?$');
+      if (sizeRegex.hasMatch(url)) {
+        return url.replaceAll(sizeRegex, '=w140-h140-l80-rj');
+      }
+    }
+
+    // SoundCloud track covers
+    if (url.contains('sndcdn.com')) {
+      return url
+          .replaceAll('-t500x500.jpg', '-large.jpg')
+          .replaceAll('-original.jpg', '-large.jpg')
+          .replaceAll('-t300x300.jpg', '-large.jpg');
+    }
+
+    // Spotify image resizing
+    if (url.contains('i.scdn.co/image/ab67616d0000b273')) {
+      return url.replaceAll('ab67616d0000b273', 'ab67616d00001e02');
+    }
+
+    return url;
   }
 }

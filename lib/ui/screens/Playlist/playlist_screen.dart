@@ -195,6 +195,7 @@ class PlaylistScreen extends StatelessWidget {
                         () => ScrollConfiguration(
                           behavior: PlaylistAlbumScrollBehaviour(),
                           child: ListView.builder(
+                            controller: playlistController.scrollController,
                             addRepaintBoundaries: false,
                             padding: EdgeInsets.only(
                               top: playlistController.isSearchingOn.isTrue
@@ -724,6 +725,76 @@ class PlaylistScreen extends StatelessWidget {
                 ),
               ],
             ),
+            Obx(() {
+              if (playlistController.isContentFetched.isFalse ||
+                  playlistController.songList.length < 8) {
+                return const SizedBox.shrink();
+              }
+              final bottomPadding =
+                  playerController.playerPanelMinHeight.value + 16.0;
+              final atBottom = playlistController.isNearBottom.value;
+
+              return Positioned(
+                bottom: bottomPadding,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: playlistController.toggleScrollPosition,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xE80D111D),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: const Color(0xFF00D2FF).withOpacity(0.45),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF00D2FF).withOpacity(0.25),
+                              blurRadius: 14,
+                              offset: const Offset(0, 3),
+                            ),
+                            const BoxShadow(
+                              color: Colors.black54,
+                              blurRadius: 8,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              atBottom
+                                  ? Icons.keyboard_double_arrow_up_rounded
+                                  : Icons.keyboard_double_arrow_down_rounded,
+                              size: 20,
+                              color: const Color(0xFF00D2FF),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              atBottom ? "Nach oben" : "Zum Ende",
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
           ],
         ),
       ),

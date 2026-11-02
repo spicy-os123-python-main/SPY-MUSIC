@@ -17,7 +17,12 @@ const CONTINUATION_ITEMS = [
 ];
 
 String? getContinuationToken(List<dynamic> results) {
-  return nav(results.last, CONTINUATION_TOKEN);
+  for (final item in results.reversed) {
+    if (item is Map && item.containsKey('continuationItemRenderer')) {
+      return nav(item, CONTINUATION_TOKEN);
+    }
+  }
+  return null;
 }
 
 Future<List> getContinuationsPlaylist(Map<String, dynamic> results, int? limit,
@@ -33,9 +38,8 @@ Future<List> getContinuationsPlaylist(Map<String, dynamic> results, int? limit,
       if (continuationItems == null || continuationItems.isEmpty) break;
 
       final contents = parseFunc(continuationItems);
-      if (contents.isEmpty) break;
-
       items.addAll(contents);
+
       continuationToken = getContinuationToken(continuationItems);
     } catch (e) {
       break;

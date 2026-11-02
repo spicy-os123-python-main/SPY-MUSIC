@@ -439,39 +439,62 @@ class MusicServices extends getx.GetxService {
         }
       }
 
-      final int secondSubtitleRunCount =
-          header['secondSubtitle']['runs'].length;
-      final String count = (((header['secondSubtitle']['runs']
-                      [secondSubtitleRunCount % 3]['text'])
-                  .split(' ')[0])
-              .split(',') as List)
-          .join();
-      final int songCount = int.parse(count);
-      if (header['secondSubtitle']['runs'].length > 1) {
-        playlist['duration'] = header['secondSubtitle']['runs']
-            [(secondSubtitleRunCount % 3) + 2]['text'];
-      }
-      playlist['trackCount'] = songCount;
+      int songCount = 0;
+      try {
+        final runs = header['secondSubtitle']?['runs'] as List?;
+        if (runs != null && runs.isNotEmpty) {
+          for (final run in runs) {
+            final t = run['text']?.toString() ?? '';
+            final match = RegExp(r'(\d+[\d,.]*)').firstMatch(t);
+            if (match != null &&
+                (t.toLowerCase().contains('track') ||
+                    t.toLowerCase().contains('song') ||
+                    t.toLowerCase().contains('titel') ||
+                    t.toLowerCase().contains('lieder'))) {
+              songCount = int.tryParse(
+                      match.group(1)!.replaceAll(RegExp(r'[,.]'), '')) ??
+                  0;
+              break;
+            }
+          }
+          if (songCount == 0) {
+            final int secondSubtitleRunCount = runs.length;
+            final String count = (((runs[secondSubtitleRunCount % 3]['text'])
+                        .split(' ')[0])
+                    .split(',') as List)
+                .join();
+            songCount = int.tryParse(count) ?? 0;
+          }
+        }
+      } catch (_) {}
 
-      // requestFunc(additionalParams) async => (await _sendRequest("browse", data,
-      //         additionalParams: additionalParams))
-      //     .data;
+      if (header['secondSubtitle']?['runs'] != null &&
+          (header['secondSubtitle']['runs'] as List).length > 1) {
+        final runs = header['secondSubtitle']['runs'] as List;
+        final idx = (runs.length % 3) + 2;
+        if (idx < runs.length) {
+          playlist['duration'] = runs[idx]['text'];
+        }
+      }
+      playlist['trackCount'] = songCount > 0
+          ? songCount
+          : (results['contents'] as List?)?.length ?? 0;
 
       requestFuncCountinuation(cont) async =>
           (await _sendRequest("browse", {...data, ...cont})).data;
 
-      if (songCount > 0) {
-        playlist['tracks'] = parsePlaylistItems(results['contents']);
-        limit = songCount;
+      playlist['tracks'] = parsePlaylistItems(results['contents']);
+      final targetLimit =
+          limit > 100 ? limit : (songCount > 0 ? songCount : 10000);
 
-        List<dynamic> parseFunc(contents) => parsePlaylistItems(contents);
+      List<dynamic> parseFunc(contents) => parsePlaylistItems(contents);
 
-        playlist['tracks'] = [
-          ...(playlist['tracks']),
-          ...(await getContinuationsPlaylist(
-              results, limit, requestFuncCountinuation, parseFunc))
-        ];
-      }
+      final continuations = await getContinuationsPlaylist(
+          results, targetLimit, requestFuncCountinuation, parseFunc);
+      playlist['tracks'] = [
+        ...(playlist['tracks']),
+        ...continuations,
+      ];
       playlist['duration_seconds'] = sumTotalDuration(playlist);
       return playlist;
     }

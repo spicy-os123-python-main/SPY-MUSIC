@@ -38,6 +38,9 @@ class PlaylistScreenController extends PlaylistAlbumScreenControllerBase
   final isExporting = false.obs;
   final exportProgress = 0.0.obs;
 
+  final ScrollController scrollController = ScrollController();
+  final isNearBottom = false.obs;
+
   String generatedYtmPlaylistUrl = '';
 
   // Title animation
@@ -49,9 +52,37 @@ class PlaylistScreenController extends PlaylistAlbumScreenControllerBase
   AnimationController get animationController => _animationController;
   Animation<double> get scaleAnimation => _scaleAnimation;
   Animation<double> get heightAnimation => _heightAnimation;
+
+  void toggleScrollPosition() {
+    if (!scrollController.hasClients) return;
+    if (isNearBottom.value) {
+      scrollController.animateTo(
+        0.0,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      scrollController.animateTo(
+        scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
   @override
   void onInit() {
     super.onInit();
+    scrollController.addListener(() {
+      if (!scrollController.hasClients) return;
+      final max = scrollController.position.maxScrollExtent;
+      final current = scrollController.offset;
+      final nearBottom = current >= (max - 280);
+      if (isNearBottom.value != nearBottom) {
+        isNearBottom.value = nearBottom;
+      }
+    });
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -292,6 +323,7 @@ class PlaylistScreenController extends PlaylistAlbumScreenControllerBase
 
   @override
   void onClose() {
+    scrollController.dispose();
     tempListContainer.clear();
     _animationController.dispose();
     Get.find<HomeScreenController>().whenHomeScreenOnTop();

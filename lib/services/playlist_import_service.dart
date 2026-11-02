@@ -346,12 +346,18 @@ class PlaylistImportService {
 
       importStatus.value = "Lade YouTube Playlist...";
       final musicServices = Get.find<MusicServices>();
-      final result = await musicServices.getPlaylistOrAlbumSongs(playlistId: listId);
+      final result = await musicServices.getPlaylistOrAlbumSongs(
+          playlistId: listId, limit: 10000);
       final title = result['title'] ?? 'Importierte YouTube Playlist';
-      final List<MediaItem> rawItems = List<MediaItem>.from(result['tracks'] ?? []);
+      final List<MediaItem> rawItems =
+          List<MediaItem>.from(result['tracks'] ?? []);
 
       if (rawItems.isEmpty) {
-        return {'success': false, 'message': 'YouTube Playlist enthielt keine Titel oder konnte nicht geladen werden.'};
+        return {
+          'success': false,
+          'message':
+              'YouTube Playlist enthielt keine Titel oder konnte nicht geladen werden.'
+        };
       }
 
       currentPlaylistTitle.value = title;
@@ -365,8 +371,11 @@ class PlaylistImportService {
         items.add(item);
         currentTrack.value = i + 1;
         importProgress.value = (i + 1) / rawItems.length;
-        importStatus.value = 'Importiere "${item.title}" (${i + 1}/${rawItems.length})';
-        await Future.delayed(const Duration(milliseconds: 30));
+        if (i % 20 == 0 || i == rawItems.length - 1) {
+          importStatus.value =
+              'Importiere "${item.title}" (${i + 1}/${rawItems.length})';
+          await Future.delayed(const Duration(milliseconds: 2));
+        }
       }
 
       await _savePlaylistToLibrary(title, items);
