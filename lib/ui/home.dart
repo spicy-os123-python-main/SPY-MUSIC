@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -58,8 +57,12 @@ class Home extends StatelessWidget {
                 PlayButtonState.playing) {
               SystemNavigator.pop();
             } else {
-              await Get.find<AudioHandler>().customAction("saveSession");
-              exit(0);
+              try {
+                if (Get.isRegistered<AudioHandler>()) {
+                  await Get.find<AudioHandler>().customAction("saveSession");
+                }
+              } catch (_) {}
+              SystemNavigator.pop();
             }
           }
         }

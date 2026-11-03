@@ -41,6 +41,11 @@ class WatchtimeService {
   /// Ticks whenever playtime is recorded so UI widgets can update in real-time
   static final ValueNotifier<int> watchtimeNotifier = ValueNotifier<int>(0);
 
+  // In-memory buffer to avoid excessive synchronous disk I/O in background play
+  static int _bufferedPlaytimeSec = 0;
+  static MediaItem? _lastBufferedSong;
+  static DateTime _lastFlushTime = DateTime.now();
+
   static Box _getBox() {
     if (!Hive.isBoxOpen(boxName)) {
       throw StateError("WatchtimeStats box is not open");
@@ -78,7 +83,30 @@ class WatchtimeService {
 
   /// Records active playback duration for the currently playing song
   static void recordPlaytime(MediaItem song, {int seconds = 5}) {
+    _bufferedPlaytimeSec += seconds;
+    _lastBufferedSong = song;
+
+    // Immediately update UI notifier so UI widgets tick live
+    watchtimeNotifier.value = watchtimeNotifier.value + seconds;
+
+    // Batch flush to Hive every 30 seconds to minimize background disk writes
+    final now = DateTime.now();
+    if (_bufferedPlaytimeSec >= 30 ||
+        now.difference(_lastFlushTime).inSeconds >= 30) {
+      flushBufferedPlaytime();
+    }
+  }
+
+  /// Flushes in-memory buffered playtime to Hive safely
+  static void flushBufferedPlaytime() {
+    if (_bufferedPlaytimeSec <= 0 || _lastBufferedSong == null) return;
+    final song = _lastBufferedSong!;
+    final seconds = _bufferedPlaytimeSec;
+    _bufferedPlaytimeSec = 0;
+    _lastFlushTime = DateTime.now();
+
     try {
+      if (!Hive.isBoxOpen(boxName)) return;
       final box = _getBox();
       final today = _todayKey();
       final month = _monthKey();
@@ -143,18 +171,17 @@ class WatchtimeService {
         songList.add(song.id);
         box.put('all_songs', songList);
       }
-
-      // Notify UI
-      watchtimeNotifier.value = watchtimeNotifier.value + seconds;
     } catch (e) {
-      printERROR("WatchtimeService.recordPlaytime error: $e");
+      printERROR("WatchtimeService.flushBufferedPlaytime error: $e");
     }
   }
 
   /// Record song start: stores metadata only, does NOT increment play count!
   /// Play count is ONLY counted when a song is listened to from beginning to end!
   static void recordSongStart(MediaItem song) {
+    flushBufferedPlaytime();
     try {
+      if (!Hive.isBoxOpen(boxName)) return;
       final box = _getBox();
       final rawArtist = (song.artist ?? 'unknownArtist'.tr).trim();
       final artist = rawArtist.isEmpty ? 'unknownArtist'.tr : rawArtist;
@@ -173,7 +200,9 @@ class WatchtimeService {
 
   /// Records a verified completed play when a song has been listened to from beginning to end
   static void recordSongCompleted(MediaItem song) {
+    flushBufferedPlaytime();
     try {
+      if (!Hive.isBoxOpen(boxName)) return;
       final box = _getBox();
       final rawArtist = (song.artist ?? 'unknownArtist'.tr).trim();
       final artist = rawArtist.isEmpty ? 'unknownArtist'.tr : rawArtist;

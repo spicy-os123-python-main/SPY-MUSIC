@@ -54,9 +54,13 @@ Future<void> main() async {
     debugPrint('Services init: $e');
   }
   try {
-    Get.put<AudioHandler>(await initAudioService(), permanent: true);
+    final audioHandler = await initAudioService();
+    Get.put<AudioHandler>(audioHandler, permanent: true);
   } catch (e) {
     debugPrint('AudioService init: $e');
+    try {
+      Get.put<AudioHandler>(MyAudioHandler(), permanent: true);
+    } catch (_) {}
   }
   try {
     WidgetsBinding.instance.addObserver(LifecycleHandler());
@@ -67,6 +71,9 @@ Future<void> main() async {
   }
   runApp(const MyApp());
   Future.microtask(() async {
+    try {
+      DiscordService().init();
+    } catch (_) {}
     try {
       await PlaylistRepairService().autoRepairOnLaunch();
     } catch (e) {
@@ -103,8 +110,11 @@ class MyApp extends StatelessWidget {
         defaultTransition: Transition.fadeIn,
         transitionDuration: const Duration(milliseconds: 260),
         translations: Languages(),
-        locale:
-            Locale(Hive.box("AppPrefs").get('currentAppLanguageCode') ?? "en"),
+        locale: Locale(
+          Hive.isBoxOpen("AppPrefs")
+              ? (Hive.box("AppPrefs").get('currentAppLanguageCode') ?? "en")
+              : "en",
+        ),
         fallbackLocale: const Locale("en"),
         builder: (context, child) {
           final mQuery = MediaQuery.of(context);
@@ -150,55 +160,86 @@ Future<void> startApplicationServices() async {
   Get.lazyPut(() => SettingsScreenController(), fenix: true);
   Get.lazyPut(() => Downloader(), fenix: true);
   Get.lazyPut(() => DiscordService(), fenix: true);
-  DiscordService().init();
   if (GetPlatform.isDesktop) {
     Get.lazyPut(() => SearchScreenController(), fenix: true);
     Get.put(DesktopSystemTray());
   }
 }
 
-initHive() async {
-  String applicationDataDirectoryPath;
-  if (GetPlatform.isDesktop) {
-    applicationDataDirectoryPath =
-        "${(await getApplicationSupportDirectory()).path}/db";
-  } else {
-    applicationDataDirectoryPath =
-        (await getApplicationDocumentsDirectory()).path;
+Future<void> _safeOpenBox(String name) async {
+  try {
+    if (!Hive.isBoxOpen(name)) {
+      await Hive.openBox(name).timeout(const Duration(seconds: 3));
+    }
+  } catch (e) {
+    printERROR("Failed to open Hive box '$name': $e. Repairing...");
+    try {
+      await Hive.deleteBoxFromDisk(name);
+      await Hive.openBox(name).timeout(const Duration(seconds: 2));
+    } catch (err) {
+      printERROR("Fatal error opening box '$name': $err");
+    }
   }
-  await Hive.initFlutter(applicationDataDirectoryPath);
-  await Hive.openBox("SongsCache");
-  await Hive.openBox("SongDownloads");
-  await Hive.openBox('SongsUrlCache');
-  await Hive.openBox("AppPrefs");
-  await Hive.openBox("appPrefs");
-  await Hive.openBox("WatchtimeStats");
+}
+
+Future<void> initHive() async {
+  try {
+    String applicationDataDirectoryPath;
+    if (GetPlatform.isDesktop) {
+      applicationDataDirectoryPath =
+          "${(await getApplicationSupportDirectory().timeout(const Duration(seconds: 2))).path}/db";
+    } else {
+      applicationDataDirectoryPath =
+          (await getApplicationDocumentsDirectory().timeout(const Duration(seconds: 2))).path;
+    }
+    await Hive.initFlutter(applicationDataDirectoryPath);
+  } catch (e) {
+    printERROR("Hive.initFlutter error: $e");
+  }
+
+  await Future.wait([
+    _safeOpenBox("SongsCache"),
+    _safeOpenBox("SongDownloads"),
+    _safeOpenBox('SongsUrlCache'),
+    _safeOpenBox("AppPrefs"),
+    _safeOpenBox("appPrefs"),
+    _safeOpenBox("WatchtimeStats"),
+  ]);
 }
 
 void _setAppInitPrefs() {
-  final appPrefs = Hive.box("AppPrefs");
-  if (appPrefs.isEmpty) {
-    appPrefs.putAll({
-      'themeModeType': 0,
-      "cacheSongs": false,
-      "skipSilenceEnabled": false,
-      'streamingQuality': 0,
-      'dataSaverMode': 0,
-      'themePrimaryColor': 4278199603,
-      'discoverContentType': "QP",
-      'newVersionVisibility': updateCheckFlag,
-      "cacheHomeScreenData": true
-    });
+  try {
+    if (!Hive.isBoxOpen("AppPrefs")) return;
+    final appPrefs = Hive.box("AppPrefs");
+    if (appPrefs.isEmpty) {
+      appPrefs.putAll({
+        'themeModeType': 0,
+        "cacheSongs": false,
+        "skipSilenceEnabled": false,
+        'streamingQuality': 0,
+        'dataSaverMode': 0,
+        'themePrimaryColor': 4278199603,
+        'discoverContentType': "QP",
+        'newVersionVisibility': updateCheckFlag,
+        "cacheHomeScreenData": true
+      });
+    }
+  } catch (e) {
+    printERROR("Error setting initial app prefs: $e");
   }
 }
 
 class LifecycleHandler extends WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
-    if (state == AppLifecycleState.resumed) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    } else if (state == AppLifecycleState.detached) {
-      await Get.find<AudioHandler>().customAction("saveSession");
-    }
+    try {
+      if (state == AppLifecycleState.resumed) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      } else if (state == AppLifecycleState.detached) {
+        if (Get.isRegistered<AudioHandler>()) {
+          await Get.find<AudioHandler>().customAction("saveSession");
+        }
+      }
+    } catch (_) {}
   }
 }

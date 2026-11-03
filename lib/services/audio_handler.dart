@@ -39,16 +39,21 @@ import '../ui/screens/Library/library_controller.dart';
 import "package:media_kit/src/player/platform_player.dart" show MPVLogLevel;
 
 Future<AudioHandler> initAudioService() async {
-  return await AudioService.init(
-    builder: () => MyAudioHandler(),
-    config: const AudioServiceConfig(
-      androidNotificationIcon: 'mipmap/ic_launcher_monochrome',
-      androidNotificationChannelId: 'com.spymusic.app.audio',
-      androidNotificationChannelName: 'SPY MUSIC Player',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true,
-    ),
-  );
+  try {
+    return await AudioService.init(
+      builder: () => MyAudioHandler(),
+      config: const AudioServiceConfig(
+        androidNotificationIcon: 'mipmap/ic_launcher_monochrome',
+        androidNotificationChannelId: 'com.spymusic.app.audio',
+        androidNotificationChannelName: 'SPY MUSIC Player',
+        androidNotificationOngoing: true,
+        androidStopForegroundOnPause: true,
+      ),
+    ).timeout(const Duration(seconds: 4));
+  } catch (e) {
+    printERROR("AudioService.init timeout or error: $e");
+    return MyAudioHandler();
+  }
 }
 
 class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
@@ -91,6 +96,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   bool _currentSongCompletedRecorded = false;
   String? _lastTrackedSongId;
   int _activePlayRequestId = 0;
+  bool _isTriggeringNext = false;
 
   // list of shuffled queue songs ids
   List<String> shuffledQueue = [];
@@ -503,17 +509,28 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   Future<void> _triggerNext() async {
-    _checkAndRecordSongCompletion();
-    if (loopModeEnabled) {
-      _currentSongCompletedRecorded = false;
-      _currentSongPlayedSeconds = 0;
-      await _player.seek(Duration.zero);
-      if (!_player.playing) {
-        _player.play();
+    if (_isTriggeringNext) return;
+    _isTriggeringNext = true;
+    try {
+      _checkAndRecordSongCompletion();
+      WatchtimeService.flushBufferedPlaytime();
+      if (loopModeEnabled) {
+        _currentSongCompletedRecorded = false;
+        _currentSongPlayedSeconds = 0;
+        await _player.seek(Duration.zero);
+        if (!_player.playing) {
+          await _player.play();
+        }
+        return;
       }
-      return;
+      await skipToNext();
+    } catch (e) {
+      printERROR("Error in _triggerNext: $e");
+    } finally {
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        _isTriggeringNext = false;
+      });
     }
-    skipToNext();
   }
 
   void _listenForSequenceStateChanges() {
@@ -722,6 +739,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   @override
   Future<void> pause() {
     _wasPlayingBeforeInterruption = false;
+    WatchtimeService.flushBufferedPlaytime();
     return _player.pause();
   }
 
@@ -927,6 +945,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               .add(playbackState.value.copyWith(queueIndex: currentIndex));
 
           if (reqId != _activePlayRequestId) return;
+          _isTriggeringNext = false;
 
           final audioSource = _createAudioSource(playableSong);
           final startPos = restoreSession
@@ -945,6 +964,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           );
 
           if (reqId != _activePlayRequestId) return;
+          _isTriggeringNext = false;
 
           isSongLoading = false;
           if (loudnessNormalizationEnabled && GetPlatform.isAndroid) {
@@ -956,6 +976,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
         } catch (e, st) {
           if (reqId != _activePlayRequestId) return;
+          _isTriggeringNext = false;
           printERROR("playByIndex error for ${currentSong.id}: $e\n$st");
           if (!isNewUrlReq && _songErrorRetryCount == 0) {
             _songErrorRetryCount = 1;
@@ -1068,6 +1089,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           ).timeout(const Duration(seconds: 30));
 
           if (reqId != _activePlayRequestId) return;
+          _isTriggeringNext = false;
 
           if (!streamInfo.playable) {
             currentSongUrl = null;
@@ -1092,6 +1114,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
           playbackState.add(playbackState.value.copyWith(queueIndex: 0));
           if (reqId != _activePlayRequestId) return;
+          _isTriggeringNext = false;
           final audioSource = _createAudioSource(playableSong);
           await _player.setAudioSource(
             audioSource,
@@ -1104,6 +1127,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             },
           );
           if (reqId != _activePlayRequestId) return;
+          _isTriggeringNext = false;
           isSongLoading = false;
 
           // Normalize audio
@@ -1114,6 +1138,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           await _player.play();
         } catch (e, st) {
           if (reqId != _activePlayRequestId) return;
+          _isTriggeringNext = false;
           printERROR("setSourceNPlay error for ${currMed.id}: $e\n$st");
           if (_songErrorRetryCount == 0) {
             _songErrorRetryCount = 1;
@@ -1508,6 +1533,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   @override
   Future<void> stop() async {
+    WatchtimeService.flushBufferedPlaytime();
     _pausedByDeviceDisconnect = false;
     _wasPlayingBeforeInterruption = false;
     DiscordService().clearPresence();
