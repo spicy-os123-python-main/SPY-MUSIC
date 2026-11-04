@@ -15,6 +15,7 @@ class CombinedLibrary extends StatelessWidget {
     final tabCon = Get.put(CombinedLibraryController());
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         toolbarHeight: 85,
         backgroundColor: Theme.of(context).canvasColor,

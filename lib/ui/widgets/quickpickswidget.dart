@@ -269,7 +269,10 @@ class _QuickPickItemState extends State<_QuickPickItem> {
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w600,
                               fontSize: 13,
-                              color: isCurrent ? const Color(0xFF00D2FF) : null,
+                              color: isCurrent
+                                  ? (customTheme?.accent ??
+                                      const Color(0xFF00D2FF))
+                                  : (customTheme?.fg),
                             ),
                       ),
                     ),
@@ -284,7 +287,9 @@ class _QuickPickItemState extends State<_QuickPickItem> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Colors.white60,
+                        color: customTheme?.muted ??
+                            Theme.of(context).textTheme.bodyMedium?.color ??
+                            Colors.white60,
                         fontSize: 11,
                       ),
                 ),

@@ -57,7 +57,7 @@ class MiniPlayer extends StatelessWidget {
               if (customTheme != null) {
                 if (customTheme.isGlass) {
                   decoration = BoxDecoration(
-                    color: customTheme.glassFill ?? const Color(0x1AFFFFFF),
+                    color: customTheme.cardColor ?? customTheme.bg,
                     border: Border(
                       top: BorderSide(
                         color: customTheme.glassBorder ?? const Color(0x4DFFFFFF),

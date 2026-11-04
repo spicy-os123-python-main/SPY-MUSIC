@@ -17,6 +17,7 @@ class SearchScreen extends StatelessWidget {
     final settingsScreenController = Get.find<SettingsScreenController>();
     final topPadding = context.isLandscape ? 50.0 : 80.0;
     return Scaffold(
+      backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
       body: Obx(
         () => Row(

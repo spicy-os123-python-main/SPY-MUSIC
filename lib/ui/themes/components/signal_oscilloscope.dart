@@ -85,7 +85,7 @@ class _OscilloscopePainter extends CustomPainter {
 
     // Background teal sine wave
     final pathTeal = Path();
-    final phaseTeal = progress * 2 * math.pi * 1.5;
+    final phaseTeal = progress * 2 * math.pi * 2.0;
     for (double x = 0; x <= size.width; x += 2.0) {
       final y = midY + math.sin((x / 25.0) + phaseTeal) * (size.height * 0.32);
       if (x == 0) {
@@ -102,7 +102,7 @@ class _OscilloscopePainter extends CustomPainter {
 
     // Foreground lime sine wave
     final pathLime = Path();
-    final phaseLime = progress * 2 * math.pi * 2.2;
+    final phaseLime = progress * 2 * math.pi * 3.0;
     for (double x = 0; x <= size.width; x += 2.0) {
       final y = midY + math.sin((x / 35.0) - phaseLime) * (size.height * 0.38);
       if (x == 0) {

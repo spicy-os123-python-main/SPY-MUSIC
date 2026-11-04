@@ -21,6 +21,7 @@ import '/ui/player/player_controller.dart';
 import '../Home/home_screen_controller.dart';
 import '/ui/utils/theme_controller.dart';
 import '../../widgets/app_update_dialog.dart';
+import '../../themes/custom_animations/custom_animation_painters.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 enum DataSaverMode {
@@ -34,6 +35,7 @@ class SettingsScreenController extends GetxController {
   final cacheSongs = false.obs;
   final setBox = Hive.box("AppPrefs");
   final themeModetype = ThemeType.dynamic.obs;
+  final customAnimationType = CustomAnimationType.none.obs;
   final reduceEffects = false.obs;
   final skipSilenceEnabled = false.obs;
   final loudnessNormalizationEnabled = false.obs;
@@ -179,6 +181,14 @@ class SettingsScreenController extends GetxController {
       themeModetype.value = ThemeType.values[savedThemeIndex];
     } else {
       themeModetype.value = ThemeType.dynamic;
+    }
+    final savedAnimIndex = setBox.get('customAnimationType') ?? 0;
+    if (savedAnimIndex is int &&
+        savedAnimIndex >= 0 &&
+        savedAnimIndex < CustomAnimationType.values.length) {
+      customAnimationType.value = CustomAnimationType.values[savedAnimIndex];
+    } else {
+      customAnimationType.value = CustomAnimationType.none;
     }
     skipSilenceEnabled.value =
         isDesktop ? false : setBox.get("skipSilenceEnabled");
@@ -412,6 +422,13 @@ class SettingsScreenController extends GetxController {
     setBox.put('themeModeType', ThemeType.values.indexOf(val));
     themeModetype.value = val;
     Get.find<ThemeController>().changeThemeModeType(val);
+  }
+
+  void onCustomAnimationChange(dynamic val) {
+    if (val is CustomAnimationType) {
+      setBox.put('customAnimationType', val.index);
+      customAnimationType.value = val;
+    }
   }
 
   void toggleReduceEffects(bool val) {

@@ -12,6 +12,7 @@ import '/services/music_service.dart';
 import '/services/discord_service.dart';
 import '../../widgets/discord_login_dialog.dart';
 import '/ui/utils/theme_controller.dart';
+import '../../themes/custom_animations/custom_animation_painters.dart';
 import 'components/custom_expansion_tile.dart';
 import 'components/auto_backup_settings_widget.dart';
 import 'settings_screen_controller.dart';
@@ -92,6 +93,24 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () => showDialog(
                       context: context,
                       builder: (context) => const ThemeSelectorDialog(),
+                    ),
+                  ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.only(left: 5, right: 10),
+                    title: const Text("Custom Animationen"),
+                    subtitle: Obx(
+                      () => Text(
+                        getCustomAnimationName(
+                            settingsController.customAnimationType.value),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                        size: 16, color: Colors.white54),
+                    onTap: () => showDialog(
+                      context: context,
+                      builder: (context) =>
+                          const CustomAnimationSelectorDialog(),
                     ),
                   ),
                   ListTile(
@@ -884,6 +903,107 @@ class ThemeSelectorDialog extends StatelessWidget {
                       value: ThemeType.signal,
                     ),
                   ],
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: InkWell(
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text("cancel".tr),
+                ),
+                onTap: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class CustomAnimationSelectorDialog extends StatelessWidget {
+  const CustomAnimationSelectorDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final settingsController = Get.find<SettingsScreenController>();
+    return CommonDialog(
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.82,
+        ),
+        padding: const EdgeInsets.only(top: 24, left: 5, right: 15, bottom: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 20.0, bottom: 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Custom Animationen",
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      "Visuelle Live-Effekte (funktionieren mit jedem Theme)",
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: CustomAnimationType.values.map((type) {
+                    return Obx(() {
+                      final isSelected =
+                          settingsController.customAnimationType.value == type;
+                      return ListTile(
+                        visualDensity: const VisualDensity(vertical: -2),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 10),
+                        onTap: () {
+                          settingsController.onCustomAnimationChange(type);
+                          Navigator.of(context).pop();
+                        },
+                        leading: Radio<CustomAnimationType>(
+                          value: type,
+                          groupValue:
+                              settingsController.customAnimationType.value,
+                          onChanged: (val) {
+                            if (val != null) {
+                              settingsController.onCustomAnimationChange(val);
+                              Navigator.of(context).pop();
+                            }
+                          },
+                        ),
+                        title: Text(
+                          getCustomAnimationName(type),
+                          style: TextStyle(
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.w600,
+                            color: isSelected
+                                ? (Theme.of(context).colorScheme.primary)
+                                : null,
+                          ),
+                        ),
+                        subtitle: Text(
+                          getCustomAnimationDescription(type),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      );
+                    });
+                  }).toList(),
                 ),
               ),
             ),

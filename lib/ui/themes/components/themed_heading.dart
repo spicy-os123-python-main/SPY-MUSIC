@@ -82,31 +82,22 @@ class _ThemedHeadingState extends State<ThemedHeading>
   }
 
   Widget _buildFlameHeading(SpyThemeConfig config, TextStyle baseStyle) {
-    final f1 = config.flameOuter ?? config.accent;
-    final f3 = config.flameCore ?? config.accent;
-    final f4 = config.flameHot ?? Colors.white;
-
-    return ShaderMask(
-      shaderCallback: (bounds) {
-        return LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [f4, f3, f1],
-          stops: const [0.0, 0.45, 0.9],
-        ).createShader(bounds);
-      },
-      blendMode: BlendMode.srcIn,
-      child: Text(
-        config.type == ThemeType.emberGlass ? widget.text : widget.text.toUpperCase(),
-        style: baseStyle.copyWith(
-          color: Colors.white,
-          shadows: [
-            Shadow(
-              color: (config.flameMid ?? config.accent).withOpacity(0.7),
-              blurRadius: 14,
-            ),
-          ],
-        ),
+    return Text(
+      config.type == ThemeType.emberGlass
+          ? widget.text
+          : widget.text.toUpperCase(),
+      style: baseStyle.copyWith(
+        color: config.fg,
+        shadows: [
+          Shadow(
+            color: (config.flameMid ?? config.accent).withOpacity(0.7),
+            blurRadius: 14,
+          ),
+          Shadow(
+            color: (config.flameOuter ?? config.accent).withOpacity(0.4),
+            blurRadius: 24,
+          ),
+        ],
       ),
     );
   }

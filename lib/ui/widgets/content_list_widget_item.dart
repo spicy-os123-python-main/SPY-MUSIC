@@ -259,6 +259,7 @@ class _ContentListItemState extends State<ContentListItem> {
                       maxLines: 2,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
+                            color: Theme.of(context).textTheme.titleLarge?.color,
                           ),
                     ),
                     Text(
@@ -271,7 +272,8 @@ class _ContentListItemState extends State<ContentListItem> {
                               : widget.content.description ?? "",
                       maxLines: 1,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: Colors.white60,
+                            color: Theme.of(context).textTheme.bodyMedium?.color ??
+                                Colors.white60,
                           ),
                     ),
                   ],

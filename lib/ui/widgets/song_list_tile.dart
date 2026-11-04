@@ -407,8 +407,9 @@ class _SongListTileState extends State<SongListTile>
                                       ? FontWeight.w700
                                       : FontWeight.w500,
                                   color: isCurrent
-                                      ? const Color(0xFF00D2FF)
-                                      : null,
+                                      ? (customTheme?.accent ??
+                                          const Color(0xFF00D2FF))
+                                      : (customTheme?.fg),
                                 ),
                           ),
                         ),
@@ -429,7 +430,12 @@ class _SongListTileState extends State<SongListTile>
                           overflow: TextOverflow.ellipsis,
                           style:
                               Theme.of(context).textTheme.titleSmall?.copyWith(
-                                    color: Colors.white60,
+                                    color: customTheme?.muted ??
+                                        Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color ??
+                                        Colors.white60,
                                   ),
                         ),
                       ),
@@ -449,7 +455,12 @@ class _SongListTileState extends State<SongListTile>
                                 .titleSmall
                                 ?.copyWith(
                                   fontSize: 11,
-                                  color: Colors.white54,
+                                  color: customTheme?.muted ??
+                                      Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.color ??
+                                      Colors.white54,
                                 ),
                           ),
                         if (isDesktop)

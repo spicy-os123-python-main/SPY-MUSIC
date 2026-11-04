@@ -1,10 +1,12 @@
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import '../../screens/Settings/settings_screen_controller.dart';
 import '../../utils/theme_controller.dart';
 import '../app_themes.dart';
+import '../custom_animations/custom_animation_painters.dart';
 
 class ThemeBackground extends StatefulWidget {
   final Widget child;
@@ -15,30 +17,28 @@ class ThemeBackground extends StatefulWidget {
 }
 
 class _ThemeBackgroundState extends State<ThemeBackground>
-    with TickerProviderStateMixin {
-  late AnimationController _animController;
-  late AnimationController _sweepController;
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  double _elapsedTime = 0.0;
   FragmentProgram? _flameProgram;
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 12),
-    )..repeat();
-
-    _sweepController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    )..repeat();
+    _ticker = createTicker((elapsed) {
+      if (!mounted) return;
+      setState(() {
+        _elapsedTime = elapsed.inMicroseconds / 1000000.0;
+      });
+    })..start();
 
     _loadShader();
   }
 
   Future<void> _loadShader() async {
     try {
-      final program = await FragmentProgram.fromAsset('assets/shaders/flame.frag');
+      final program =
+          await FragmentProgram.fromAsset('assets/shaders/flame.frag');
       if (mounted) {
         setState(() {
           _flameProgram = program;
@@ -49,8 +49,7 @@ class _ThemeBackgroundState extends State<ThemeBackground>
 
   @override
   void dispose() {
-    _animController.dispose();
-    _sweepController.dispose();
+    _ticker.dispose();
     super.dispose();
   }
 
@@ -62,20 +61,48 @@ class _ThemeBackgroundState extends State<ThemeBackground>
     return Obx(() {
       final config = themeController.activeCustomTheme.value;
       final reduceEffects = settingsController.reduceEffects.value;
-
-      if (config == null) {
-        return _buildDefaultBackground();
-      }
+      final customAnim = settingsController.customAnimationType.value;
+      final accentColor = config?.accent ?? const Color(0xFF00D2FF);
+      final bgColor = config?.bg ?? const Color(0xFF07080D);
 
       if (reduceEffects) {
         return Container(
-          color: config.bg,
+          color: bgColor,
           child: widget.child,
         );
       }
 
       Widget bgVisual;
-      if (config.isFlame) {
+
+      if (customAnim != CustomAnimationType.none) {
+        // Custom animation runs on top of the active theme base!
+        bgVisual = Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(color: bgColor),
+            if (config?.bgGlow != null)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(0.0, 1.05),
+                      radius: 0.9,
+                      colors: [
+                        config!.bgGlow!.withOpacity(0.35),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            Positioned.fill(
+              child: _buildCustomAnimation(customAnim, accentColor, bgColor),
+            ),
+          ],
+        );
+      } else if (config == null) {
+        bgVisual = _buildDefaultBackground();
+      } else if (config.isFlame) {
         bgVisual = _buildFlameBackground(config);
       } else if (config.isGlass) {
         bgVisual = _buildGlassBackground(config);
@@ -97,61 +124,112 @@ class _ThemeBackgroundState extends State<ThemeBackground>
     });
   }
 
-  Widget _buildDefaultBackground() {
-    return AnimatedBuilder(
-      animation: _animController,
-      builder: (context, _) {
-        final progress = _animController.value;
-        final angle = progress * 2 * math.pi;
-        final alignX1 = math.cos(angle) * 0.7;
-        final alignY1 = math.sin(angle) * 0.7;
-        final alignX2 = math.cos(angle + math.pi) * 0.7;
-        final alignY2 = math.sin(angle + math.pi) * 0.7;
+  Widget _buildCustomAnimation(
+      CustomAnimationType type, Color accent, Color bg) {
+    CustomPainter painter;
+    switch (type) {
+      case CustomAnimationType.fireAndEmbers:
+        painter = FireAndEmbersPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.neonMatrix:
+        painter = NeonMatrixPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.starfieldWarp:
+        painter = StarfieldWarpPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.auroraBorealis:
+        painter = AuroraBorealisPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.cosmicNebula:
+        painter = CosmicNebulaPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.audioWaves:
+        painter = AudioWavesPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.electricStorm:
+        painter = ElectricStormPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.cyberEqualizer:
+        painter = CyberEqualizerPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.hexPlasmaGrid:
+        painter = HexPlasmaGridPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.meteorShower:
+        painter = MeteorShowerPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.liquidCaustics:
+        painter = LiquidCausticsPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.sakuraBlossom:
+        painter = SakuraBlossomPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.synthwaveSunset:
+        painter = SynthwaveSunsetPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.cyberGlitchPulse:
+        painter = CyberGlitchPulsePainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.goldenStardust:
+        painter = GoldenStardustPainter(time: _elapsedTime, accent: accent);
+        break;
+      case CustomAnimationType.none:
+        return const SizedBox.shrink();
+    }
+    return CustomPaint(
+      painter: painter,
+      size: Size.infinite,
+    );
+  }
 
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            Container(color: const Color(0xFF07080D)),
-            Positioned(
-              left: -80 + (alignX1 * 50),
-              top: -80 + (alignY1 * 50),
-              width: 320,
-              height: 320,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      const Color(0xFF00D2FF).withOpacity(0.22),
-                      const Color(0xFF0051FF).withOpacity(0.12),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
+  Widget _buildDefaultBackground() {
+    final angle = _elapsedTime * 0.45;
+    final alignX1 = math.cos(angle) * 0.7;
+    final alignY1 = math.sin(angle) * 0.7;
+    final alignX2 = math.cos(angle + math.pi) * 0.7;
+    final alignY2 = math.sin(angle + math.pi) * 0.7;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(color: const Color(0xFF07080D)),
+        Positioned(
+          left: -80 + (alignX1 * 50),
+          top: -80 + (alignY1 * 50),
+          width: 320,
+          height: 320,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFF00D2FF).withOpacity(0.22),
+                  const Color(0xFF0051FF).withOpacity(0.12),
+                  Colors.transparent,
+                ],
               ),
             ),
-            Positioned(
-              right: -80 + (alignX2 * 50),
-              bottom: 40 + (alignY2 * 50),
-              width: 340,
-              height: 340,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      const Color(0xFFFF0055).withOpacity(0.25),
-                      const Color(0xFFFF3D00).withOpacity(0.12),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
+          ),
+        ),
+        Positioned(
+          right: -80 + (alignX2 * 50),
+          bottom: 40 + (alignY2 * 50),
+          width: 340,
+          height: 340,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFFFF0055).withOpacity(0.25),
+                  const Color(0xFFFF3D00).withOpacity(0.12),
+                  Colors.transparent,
+                ],
               ),
             ),
-            widget.child,
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 
@@ -159,7 +237,6 @@ class _ThemeBackgroundState extends State<ThemeBackground>
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Solid base color
         Container(color: config.bg),
 
         // Deep warm or blue glow behind flame
@@ -179,46 +256,34 @@ class _ThemeBackgroundState extends State<ThemeBackground>
           ),
         ),
 
-        // Flame layer at bottom edge
+        // Flame layer at bottom edge with seamless continuous time
         Positioned(
           left: 0,
           right: 0,
           bottom: 0,
           height: 190,
-          child: AnimatedBuilder(
-            animation: _animController,
-            builder: (context, _) {
-              if (_flameProgram != null) {
-                return CustomPaint(
+          child: _flameProgram != null
+              ? CustomPaint(
                   painter: _FlameShaderPainter(
                     program: _flameProgram!,
-                    time: _animController.value * 12.0,
+                    time: _elapsedTime,
                     c1: config.flameOuter ?? const Color(0xFFFF3D00),
                     c2: config.flameMid ?? const Color(0xFFFF8A00),
                     c3: config.flameCore ?? const Color(0xFFFFD000),
                     c4: config.flameHot ?? const Color(0xFFFFFBD0),
                   ),
-                );
-              } else {
-                return _buildFlameFallback(config);
-              }
-            },
-          ),
+                )
+              : _buildFlameFallback(config),
         ),
 
-        // Rising glowing embers
+        // Rising glowing embers with continuous flow
         Positioned.fill(
-          child: AnimatedBuilder(
-            animation: _animController,
-            builder: (context, _) {
-              return CustomPaint(
-                painter: _EmbersPainter(
-                  progress: _animController.value,
-                  coreColor: config.flameCore ?? const Color(0xFFFFD000),
-                  midColor: config.flameMid ?? const Color(0xFFFF8A00),
-                ),
-              );
-            },
+          child: CustomPaint(
+            painter: _EmbersPainter(
+              time: _elapsedTime,
+              coreColor: config.flameCore ?? const Color(0xFFFFD000),
+              midColor: config.flameMid ?? const Color(0xFFFF8A00),
+            ),
           ),
         ),
       ],
@@ -226,8 +291,8 @@ class _ThemeBackgroundState extends State<ThemeBackground>
   }
 
   Widget _buildFlameFallback(SpyThemeConfig config) {
-    final t = _animController.value * 2 * math.pi;
-    final scaleY = 0.95 + 0.08 * math.sin(t * 3);
+    final t = _elapsedTime * 2.5;
+    final scaleY = 0.95 + 0.08 * math.sin(t);
     return Transform.scale(
       scaleY: scaleY,
       alignment: Alignment.bottomCenter,
@@ -252,153 +317,144 @@ class _ThemeBackgroundState extends State<ThemeBackground>
 
   Widget _buildGlassBackground(SpyThemeConfig config) {
     final blobs = config.glassBlobs ??
-        [const Color(0xFF2A5BFF), const Color(0xFF00C2C7), const Color(0xFFC13CFF)];
+        [
+          const Color(0xFF2A5BFF),
+          const Color(0xFF00C2C7),
+          const Color(0xFFC13CFF)
+        ];
 
-    return AnimatedBuilder(
-      animation: _animController,
-      builder: (context, _) {
-        final t = _animController.value * 2 * math.pi;
-        final dx1 = math.cos(t) * 70;
-        final dy1 = math.sin(t) * 90;
-        final dx2 = math.cos(t * 0.7 + 1.5) * 80;
-        final dy2 = math.sin(t * 0.7 + 1.5) * 70;
-        final dx3 = math.cos(t * 0.5 + 3.0) * 60;
-        final dy3 = math.sin(t * 0.5 + 3.0) * 80;
+    final t = _elapsedTime * 0.4;
+    final dx1 = math.cos(t) * 70;
+    final dy1 = math.sin(t) * 90;
+    final dx2 = math.cos(t * 0.7 + 1.5) * 80;
+    final dy2 = math.sin(t * 0.7 + 1.5) * 70;
+    final dx3 = math.cos(t * 0.5 + 3.0) * 60;
+    final dy3 = math.sin(t * 0.5 + 3.0) * 80;
 
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            Container(color: config.bg),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(color: config.bg),
 
-            // Drifting blurred blob 1
-            Positioned(
-              left: -70 + dx1,
-              top: 30 + dy1,
-              width: 300,
-              height: 300,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: blobs[0].withOpacity(config.isLight ? 0.45 : 0.28),
-                ),
-              ),
+        // Drifting blurred blob 1
+        Positioned(
+          left: -70 + dx1,
+          top: 30 + dy1,
+          width: 300,
+          height: 300,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: blobs[0].withOpacity(config.isLight ? 0.45 : 0.28),
             ),
+          ),
+        ),
 
-            // Drifting blurred blob 2
-            Positioned(
-              right: -110 + dx2,
-              top: 290 + dy2,
-              width: 320,
-              height: 320,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: blobs[1 % blobs.length].withOpacity(config.isLight ? 0.45 : 0.28),
-                ),
-              ),
+        // Drifting blurred blob 2
+        Positioned(
+          right: -110 + dx2,
+          top: 290 + dy2,
+          width: 320,
+          height: 320,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: blobs[1 % blobs.length]
+                  .withOpacity(config.isLight ? 0.45 : 0.28),
             ),
+          ),
+        ),
 
-            // Drifting blurred blob 3
-            Positioned(
-              left: 20 + dx3,
-              bottom: -60 + dy3,
-              width: 280,
-              height: 280,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: blobs[2 % blobs.length].withOpacity(config.isLight ? 0.40 : 0.25),
-                ),
-              ),
+        // Drifting blurred blob 3
+        Positioned(
+          left: 20 + dx3,
+          bottom: -60 + dy3,
+          width: 280,
+          height: 280,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: blobs[2 % blobs.length]
+                  .withOpacity(config.isLight ? 0.40 : 0.25),
             ),
+          ),
+        ),
 
-            // Backdrop blur to blend blobs
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
-                child: const SizedBox.expand(),
-              ),
-            ),
+        // Backdrop blur to blend blobs
+        Positioned.fill(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
+            child: const SizedBox.expand(),
+          ),
+        ),
 
-            // Translucent rising glass spheres
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _GlassSpheresPainter(
-                  progress: _animController.value,
-                  isLight: config.isLight,
-                ),
-              ),
+        // Translucent rising glass spheres with continuous flow
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _GlassSpheresPainter(
+              time: _elapsedTime,
+              isLight: config.isLight,
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildWarpBackground(SpyThemeConfig config) {
-    return AnimatedBuilder(
-      animation: _animController,
-      builder: (context, _) {
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            Container(color: config.bg),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(color: config.bg),
 
-            // Radial tunnel streaks
-            CustomPaint(
-              painter: _WarpTunnelPainter(progress: _animController.value),
-            ),
+        // Radial tunnel streaks with continuous rotation
+        CustomPaint(
+          painter: _WarpTunnelPainter(time: _elapsedTime),
+        ),
 
-            // Pulsing center magenta glow
-            Center(
-              child: Container(
-                width: 340 + math.sin(_animController.value * 2 * math.pi) * 40,
-                height: 340 + math.sin(_animController.value * 2 * math.pi) * 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      const Color(0xFFFF2E93).withOpacity(0.35),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
+        // Pulsing center magenta glow
+        Center(
+          child: Container(
+            width: 340 + math.sin(_elapsedTime * 1.5) * 40,
+            height: 340 + math.sin(_elapsedTime * 1.5) * 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFFFF2E93).withOpacity(0.35),
+                  Colors.transparent,
+                ],
               ),
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildSignalBackground(SpyThemeConfig config) {
-    return AnimatedBuilder(
-      animation: _sweepController,
-      builder: (context, _) {
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            Container(color: config.bg),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(color: config.bg),
 
-            // 28px grid lines
-            CustomPaint(
-              painter: _SignalGridPainter(
-                lineColor: config.lineColor ?? const Color(0x29B8FF3C),
-              ),
-            ),
+        // 28px grid lines
+        CustomPaint(
+          painter: _SignalGridPainter(
+            lineColor: config.lineColor ?? const Color(0x29B8FF3C),
+          ),
+        ),
 
-            // 6-second sweeping light band
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _SignalSweepPainter(
-                  progress: _sweepController.value,
-                  glowColor: config.accent.withOpacity(0.12),
-                ),
-              ),
+        // Continuous sweeping light band
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _SignalSweepPainter(
+              time: _elapsedTime,
+              glowColor: config.accent.withOpacity(0.12),
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -451,26 +507,25 @@ class _FlameShaderPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _FlameShaderPainter oldDelegate) =>
-      oldDelegate.time != time || oldDelegate.c1 != c1;
+  bool shouldRepaint(covariant _FlameShaderPainter oldDelegate) => true;
 }
 
 class _EmbersPainter extends CustomPainter {
-  final double progress;
+  final double time;
   final Color coreColor;
   final Color midColor;
 
   _EmbersPainter({
-    required this.progress,
+    required this.time,
     required this.coreColor,
     required this.midColor,
   });
 
-  static final List<_EmberSeed> _seeds = List.generate(18, (i) {
+  static final List<_EmberSeed> _seeds = List.generate(24, (i) {
     final rand = math.Random(i * 137);
     return _EmberSeed(
       xRatio: rand.nextDouble(),
-      speed: 0.6 + rand.nextDouble() * 0.9,
+      speed: 0.12 + rand.nextDouble() * 0.22,
       size: 2.0 + rand.nextDouble() * 3.5,
       drift: (rand.nextDouble() - 0.5) * 80.0,
       phase: rand.nextDouble(),
@@ -480,7 +535,7 @@ class _EmbersPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     for (final seed in _seeds) {
-      final t = (progress * seed.speed + seed.phase) % 1.0;
+      final t = (time * seed.speed + seed.phase) % 1.0;
       final y = size.height - (t * size.height * 0.95);
       final x = (seed.xRatio * size.width) + math.sin(t * 6.0) * seed.drift;
 
@@ -514,17 +569,17 @@ class _EmberSeed {
 }
 
 class _GlassSpheresPainter extends CustomPainter {
-  final double progress;
+  final double time;
   final bool isLight;
 
-  _GlassSpheresPainter({required this.progress, required this.isLight});
+  _GlassSpheresPainter({required this.time, required this.isLight});
 
-  static final List<_SphereSeed> _spheres = List.generate(8, (i) {
+  static final List<_SphereSeed> _spheres = List.generate(10, (i) {
     final rand = math.Random(i * 311);
     return _SphereSeed(
       xRatio: rand.nextDouble(),
       radius: 20.0 + rand.nextDouble() * 30.0,
-      speed: 0.3 + rand.nextDouble() * 0.5,
+      speed: 0.08 + rand.nextDouble() * 0.14,
       phase: rand.nextDouble(),
     );
   });
@@ -532,7 +587,7 @@ class _GlassSpheresPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     for (final s in _spheres) {
-      final t = (progress * s.speed + s.phase) % 1.0;
+      final t = (time * s.speed + s.phase) % 1.0;
       final y = size.height + s.radius - t * (size.height + s.radius * 2);
       final x = s.xRatio * size.width + math.sin(t * 3.0) * 20.0;
       final center = Offset(x, y);
@@ -549,8 +604,7 @@ class _GlassSpheresPainter extends CustomPainter {
         stops: const [0.0, 0.6, 1.0],
       );
 
-      final paint = Paint()
-        ..shader = gradient.createShader(rect);
+      final paint = Paint()..shader = gradient.createShader(rect);
 
       canvas.drawCircle(center, s.radius, paint);
     }
@@ -575,8 +629,8 @@ class _SphereSeed {
 }
 
 class _WarpTunnelPainter extends CustomPainter {
-  final double progress;
-  _WarpTunnelPainter({required this.progress});
+  final double time;
+  _WarpTunnelPainter({required this.time});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -584,18 +638,19 @@ class _WarpTunnelPainter extends CustomPainter {
     final maxRadius = math.max(size.width, size.height);
     const int numStreaks = 48;
 
-    final baseAngle = progress * 2 * math.pi * 0.3;
+    final baseAngle = time * 0.2;
     final streakPaint = Paint()
       ..color = const Color(0x3800F0FF)
       ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke;
+
+    final startDist = 30.0 + ((time * 25.0) % 50.0);
 
     for (int i = 0; i < numStreaks; i++) {
       final angle = baseAngle + (i / numStreaks) * 2 * math.pi;
       final cosA = math.cos(angle);
       final sinA = math.sin(angle);
 
-      final startDist = 30.0 + (progress * 50.0) % 50.0;
       final p1 = center + Offset(cosA * startDist, sinA * startDist);
       final p2 = center + Offset(cosA * maxRadius, sinA * maxRadius);
 
@@ -632,12 +687,13 @@ class _SignalGridPainter extends CustomPainter {
 }
 
 class _SignalSweepPainter extends CustomPainter {
-  final double progress;
+  final double time;
   final Color glowColor;
-  _SignalSweepPainter({required this.progress, required this.glowColor});
+  _SignalSweepPainter({required this.time, required this.glowColor});
 
   @override
   void paint(Canvas canvas, Size size) {
+    final progress = (time * 0.2) % 1.0;
     final y = -90.0 + progress * (size.height + 180.0);
     const bandHeight = 90.0;
 

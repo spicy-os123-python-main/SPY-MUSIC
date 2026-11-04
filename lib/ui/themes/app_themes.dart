@@ -73,21 +73,41 @@ class SpyThemeConfig {
 
   TextTheme createTextTheme(BuildContext? context) {
     TextTheme base = TextTheme(
-      titleLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: fg),
-      titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: fg),
-      titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: muted),
+      displayLarge:
+          TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: fg),
+      displayMedium:
+          TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: fg),
+      displaySmall:
+          TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: fg),
+      headlineLarge:
+          TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: fg),
+      headlineMedium:
+          TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: fg),
+      headlineSmall:
+          TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: fg),
+      titleLarge:
+          TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: fg),
+      titleMedium:
+          TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: fg),
+      titleSmall:
+          TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: muted),
       bodyLarge: TextStyle(fontSize: 16, color: fg),
       bodyMedium: TextStyle(fontSize: 14, color: muted),
       bodySmall: TextStyle(fontSize: 12, color: muted),
-      labelMedium: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg),
-      labelSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: muted),
+      labelLarge:
+          TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: fg),
+      labelMedium:
+          TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: fg),
+      labelSmall:
+          TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: muted),
     );
 
+    TextTheme result;
     if (isSignal) {
-      return GoogleFonts.spaceMonoTextTheme(base);
+      result = GoogleFonts.spaceMonoTextTheme(base);
     } else if (isWarp) {
       final bodyTheme = GoogleFonts.spaceGroteskTextTheme(base);
-      return bodyTheme.copyWith(
+      result = bodyTheme.copyWith(
         titleLarge: GoogleFonts.unbounded(
           textStyle: bodyTheme.titleLarge?.copyWith(letterSpacing: 0.8),
         ),
@@ -99,8 +119,14 @@ class SpyThemeConfig {
         ),
       );
     } else {
-      return GoogleFonts.bricolageGrotesqueTextTheme(base);
+      result = GoogleFonts.bricolageGrotesqueTextTheme(base);
     }
+
+    return result.apply(
+      bodyColor: fg,
+      displayColor: fg,
+      decorationColor: fg,
+    );
   }
 
   ThemeData createThemeData() {
@@ -111,9 +137,10 @@ class SpyThemeConfig {
       useMaterial3: false,
       brightness: brightness,
       primaryColor: accent,
-      scaffoldBackgroundColor: Colors.transparent,
+      scaffoldBackgroundColor: bg,
       canvasColor: bg,
-      cardColor: cardColor ?? glassFill ?? bg,
+      cardColor: cardColor ?? bg,
+      dialogBackgroundColor: cardColor ?? bg,
       colorScheme: ColorScheme(
         brightness: brightness,
         primary: accent,
@@ -126,6 +153,38 @@ class SpyThemeConfig {
         onSurface: fg,
       ),
       textTheme: textTheme,
+      primaryTextTheme: textTheme,
+      cardTheme: CardTheme(
+        color: cardColor ?? bg,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radius),
+          side: BorderSide(
+              color: lineColor ?? muted.withOpacity(0.2), width: 1.0),
+        ),
+      ),
+      dialogTheme: DialogTheme(
+        backgroundColor: cardColor ?? bg,
+        titleTextStyle:
+            TextStyle(color: fg, fontSize: 18, fontWeight: FontWeight.bold),
+        contentTextStyle: TextStyle(color: fg, fontSize: 14),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: cardColor ?? bg,
+        modalBarrierColor: Colors.black.withOpacity(0.6),
+      ),
+      listTileTheme: ListTileThemeData(
+        textColor: fg,
+        iconColor: accent,
+      ),
+      iconTheme: IconThemeData(
+        color: fg,
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: bg,
+        foregroundColor: fg,
+        elevation: 0,
+      ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: accent,
         linearTrackColor: lineColor ?? muted.withOpacity(0.3),
@@ -136,15 +195,12 @@ class SpyThemeConfig {
         thumbColor: accent,
         valueIndicatorColor: cardColor ?? bg,
       ),
-      bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: cardColor ?? bg,
-        modalBarrierColor: Colors.black.withOpacity(0.6),
-      ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: bg,
         selectedIconTheme: IconThemeData(color: accent),
         unselectedIconTheme: IconThemeData(color: muted),
-        selectedLabelTextStyle: TextStyle(color: fg, fontWeight: FontWeight.bold),
+        selectedLabelTextStyle:
+            TextStyle(color: fg, fontWeight: FontWeight.bold),
         unselectedLabelTextStyle: TextStyle(color: muted),
       ),
       dividerColor: lineColor ?? muted.withOpacity(0.2),
@@ -180,7 +236,7 @@ class AppThemes {
     glassDropShadow: Color(0x73000000),
     glassActiveTab: Color(0x3DFFFFFF),
     lineColor: Color(0x29FFFFFF),
-    cardColor: Color(0x1AFFFFFF),
+    cardColor: Color(0xF2160704),
     enterAnimation: 'ignite',
   );
 
@@ -203,7 +259,7 @@ class AppThemes {
     flameCore: Color(0xFFFFD000),
     flameHot: Color(0xFFFFFBD0),
     bgGlow: Color(0xFF5A0F00),
-    cardColor: Color(0xCC1E0A06),
+    cardColor: Color(0xF51A0702),
     lineColor: Color(0x4DFF6A00),
     enterAnimation: 'ignite',
   );
@@ -227,7 +283,7 @@ class AppThemes {
     flameCore: Color(0xFF7FE3FF),
     flameHot: Color(0xFFFFFFFF),
     bgGlow: Color(0xFF00225E),
-    cardColor: Color(0xCC061024),
+    cardColor: Color(0xF5061226),
     lineColor: Color(0x573C8CFF),
     enterAnimation: 'ignite',
   );
@@ -247,7 +303,7 @@ class AppThemes {
     radius: 30.0,
     isGlass: true,
     isLight: true,
-    glassFill: Color(0x66FFFFFF),
+    glassFill: Color(0x80FFFFFF),
     glassBorder: Color(0xE6FFFFFF),
     glassHighlight: Color(0xFFFFFFFF),
     glassInnerShade: Color(0x2978A0FF),
@@ -255,7 +311,7 @@ class AppThemes {
     glassActiveTab: Color(0xE6FFFFFF),
     glassBlobs: [Color(0xFFFF7AB6), Color(0xFF5AB0FF), Color(0xFFFFB36B)],
     lineColor: Color(0x1F0F1F3D),
-    cardColor: Color(0x66FFFFFF),
+    cardColor: Color(0xF5F0F5FF),
     enterAnimation: 'surf',
   );
 
@@ -273,7 +329,7 @@ class AppThemes {
     c3: Color(0xFFC13CFF),
     radius: 30.0,
     isGlass: true,
-    glassFill: Color(0x12FFFFFF),
+    glassFill: Color(0x33FFFFFF),
     glassBorder: Color(0x4DFFFFFF),
     glassHighlight: Color(0x73FFFFFF),
     glassInnerShade: Color(0x1A788CFF),
@@ -281,7 +337,7 @@ class AppThemes {
     glassActiveTab: Color(0x38FFFFFF),
     glassBlobs: [Color(0xFF2A5BFF), Color(0xFF00C2C7), Color(0xFFC13CFF)],
     lineColor: Color(0x1FFFFFFF),
-    cardColor: Color(0x12FFFFFF),
+    cardColor: Color(0xF50A0E1C),
     enterAnimation: 'surf',
   );
 
@@ -299,7 +355,7 @@ class AppThemes {
     c3: Color(0xFFFFFFFF),
     radius: 14.0,
     isWarp: true,
-    cardColor: Color(0xB3081026),
+    cardColor: Color(0xF5081026),
     lineColor: Color(0x3800F0FF),
     enterAnimation: 'warpin',
   );

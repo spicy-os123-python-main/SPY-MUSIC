@@ -33,6 +33,7 @@ class HomeScreen extends StatelessWidget {
         Get.find<SettingsScreenController>();
 
     return Scaffold(
+        backgroundColor: Colors.transparent,
         floatingActionButton: Obx(
           () => ((homeScreenController.tabIndex.value == 0 &&
                           !GetPlatform.isDesktop) ||

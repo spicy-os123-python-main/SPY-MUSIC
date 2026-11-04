@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -165,8 +166,8 @@ class _GlassCardState extends State<GlassCard> with SingleTickerProviderStateMix
                     ((_pointerPos!.dy / h) * 2.0 - 1.0).clamp(-1.0, 1.0),
                   );
                 } else {
-                  final progress = _sweepController.value;
-                  centerAlign = Alignment(-1.6 + progress * 3.2, -0.4);
+                  final wave = math.sin(_sweepController.value * 2 * math.pi);
+                  centerAlign = Alignment(wave * 1.2, -0.4);
                 }
 
                 return ClipRRect(

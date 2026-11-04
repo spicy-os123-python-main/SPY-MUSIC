@@ -155,7 +155,8 @@ class BottomNavBar extends StatelessWidget {
     bool reduceEffects,
   ) {
     final borderColor = config.glassBorder ?? const Color(0x4DFFFFFF);
-    final fillColor = config.glassFill ?? const Color(0x1AFFFFFF);
+    final fillColor =
+        config.cardColor ?? config.glassFill ?? const Color(0xF2160704);
     final bubbleColor = config.glassActiveTab ?? const Color(0x3DFFFFFF);
     final highlightColor = config.glassHighlight ?? Colors.white70;
 
