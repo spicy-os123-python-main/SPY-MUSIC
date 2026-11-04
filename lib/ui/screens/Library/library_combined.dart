@@ -87,24 +87,6 @@ class CombinedLibrary extends StatelessWidget {
               width: 50,
               child: FittedBox(
                 child: FloatingActionButton(
-                    heroTag: 'watchtimeStatsBtn',
-                    elevation: 0,
-                    tooltip: 'watchtimeTracking'.tr,
-                    backgroundColor: const Color(0xFF1B2338),
-                    onPressed: () {
-                      tabCon.tabController.animateTo(4);
-                    },
-                    child: const Icon(Icons.timer_rounded, color: Color(0xFF00D2FF))),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 50.0, right: 10),
-            child: SizedBox(
-              height: 40,
-              width: 50,
-              child: FittedBox(
-                child: FloatingActionButton(
                     heroTag: 'importPlaylistBtn',
                     elevation: 0,
                     tooltip: 'importPlaylistTitle'.tr,
@@ -151,7 +133,6 @@ class CombinedLibrary extends StatelessWidget {
           splashFactory: NoSplash.splashFactory,
           controller: tabCon.tabController,
           tabs: [
-            Tab(text: "songs".tr),
             Tab(text: "playlists".tr),
             Tab(text: "albums".tr),
             Tab(text: "artists".tr),
@@ -177,9 +158,6 @@ class CombinedLibrary extends StatelessWidget {
       body: TabBarView(
         controller: tabCon.tabController,
         children: const [
-          SongsLibraryWidget(
-            isBottomNavActive: true,
-          ),
           PlaylistNAlbumLibraryWidget(
               isAlbumContent: false, isBottomNavActive: true),
           PlaylistNAlbumLibraryWidget(isBottomNavActive: true),
@@ -198,7 +176,7 @@ class CombinedLibraryController extends GetxController
   @override
   void onInit() {
     super.onInit();
-    tabController = TabController(vsync: this, length: 5);
+    tabController = TabController(vsync: this, length: 4);
   }
 
   @override

@@ -28,19 +28,78 @@ String? getContinuationToken(List<dynamic> results) {
 Future<List> getContinuationsPlaylist(Map<String, dynamic> results, int? limit,
     Function requestFunc, Function parseFunc) async {
   List<dynamic> items = [];
-  String? continuationToken = getContinuationToken(results['contents']);
+  String? continuationToken = getContinuationToken(results['contents'] ?? []);
+  if (continuationToken == null &&
+      results['continuations'] is List &&
+      (results['continuations'] as List).isNotEmpty) {
+    continuationToken = nav(results,
+        ['continuations', 0, 'nextContinuationData', 'continuation']);
+  }
 
   while (continuationToken != null && (limit == null || items.length < limit)) {
     try {
       final response = await requestFunc({"continuation": continuationToken});
-      final continuationItems = nav(response, CONTINUATION_ITEMS);
+      dynamic continuationItems;
 
-      if (continuationItems == null || continuationItems.isEmpty) break;
+      if (response != null && response is Map) {
+        continuationItems = nav(response, CONTINUATION_ITEMS);
+        if (continuationItems == null &&
+            response['onResponseReceivedActions'] is List) {
+          for (final action in response['onResponseReceivedActions']) {
+            if (action is Map &&
+                action.containsKey('appendContinuationItemsAction')) {
+              continuationItems = action['appendContinuationItemsAction']
+                  ['continuationItems'];
+              if (continuationItems != null) break;
+            }
+          }
+        }
+        if (continuationItems == null &&
+            response['continuationContents'] != null) {
+          final contContents = response['continuationContents'];
+          continuationItems = contContents['musicPlaylistShelfContinuation']
+                  ?['contents'] ??
+              contContents['musicShelfContinuation']?['contents'] ??
+              contContents['sectionListContinuation']?['contents'];
+        }
+      }
+
+      if (continuationItems == null ||
+          (continuationItems is List && continuationItems.isEmpty)) {
+        break;
+      }
 
       final contents = parseFunc(continuationItems);
-      items.addAll(contents);
+      if (contents is List) {
+        items.addAll(contents);
+      }
 
-      continuationToken = getContinuationToken(continuationItems);
+      if (continuationItems is List) {
+        continuationToken = getContinuationToken(continuationItems);
+      } else {
+        continuationToken = null;
+      }
+
+      if (continuationToken == null &&
+          response != null &&
+          response is Map &&
+          response['continuationContents'] != null) {
+        final cont = response['continuationContents'];
+        continuationToken = nav(cont, [
+              'musicPlaylistShelfContinuation',
+              'continuations',
+              0,
+              'nextContinuationData',
+              'continuation'
+            ]) ??
+            nav(cont, [
+              'sectionListContinuation',
+              'continuations',
+              0,
+              'nextContinuationData',
+              'continuation'
+            ]);
+      }
     } catch (e) {
       break;
     }

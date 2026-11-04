@@ -9,7 +9,9 @@ import '../models/playlist.dart';
 import '../ui/screens/Library/library_controller.dart';
 import '../ui/screens/Settings/settings_screen_controller.dart';
 import '../ui/widgets/snackbar.dart';
+import '../utils/helper.dart';
 import 'music_service.dart';
+import 'piped_service.dart';
 
 class PlaylistImportService {
   static final PlaylistImportService _instance = PlaylistImportService._internal();
@@ -254,13 +256,13 @@ class PlaylistImportService {
           ? "Lade Spotify Metadaten..."
           : "Loading Spotify metadata...";
 
-      // 2. Fetch embed page HTML
+      // 2. Fetch embed page HTML to extract initial metadata and anonymous access token
       final embedUrl = 'https://open.spotify.com/embed/playlist/$playlistId';
       final response = await _dio.get(
         embedUrl,
         options: Options(headers: {
           'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         }),
       );
 
@@ -292,19 +294,6 @@ class PlaylistImportService {
                   ? 'Importierte Spotify Playlist'
                   : 'Imported Spotify Playlist'))
           .toString();
-      final trackList = entity['trackList'] as List? ?? [];
-      if (trackList.isEmpty) {
-        return {
-          'success': false,
-          'message':
-              _isGerman ? 'Spotify Playlist ist leer.' : 'Spotify playlist is empty.'
-        };
-      }
-
-      currentPlaylistTitle.value = title;
-      totalTracks.value = trackList.length;
-      currentTrack.value = 0;
-      importProgress.value = 0.0;
 
       String? coverArtUrl;
       try {
@@ -314,79 +303,241 @@ class PlaylistImportService {
         }
       } catch (_) {}
 
-      // 3. Process each track strictly as 1:1 Spotify track with individual official cover art
+      // Extract anonymous access token for full playlist pagination without 100-track limit
+      final accessToken = jsonData['props']?['pageProps']?['state']?['settings']?['session']?['accessToken']?.toString() ?? '';
+
       final List<MediaItem> items = [];
-      const int batchSize = 4;
+      currentPlaylistTitle.value = title;
 
-      for (int i = 0; i < trackList.length; i += batchSize) {
-        final end = (i + batchSize < trackList.length) ? i + batchSize : trackList.length;
-        final batch = trackList.sublist(i, end);
+      // 3. Attempt full pagination via Spotify Pathfinder GraphQL API (bypasses 100-track limit and preserves 1:1 original order)
+      bool pathfinderSucceeded = false;
+      if (accessToken.isNotEmpty) {
+        try {
+          int offset = 0;
+          int? totalCount;
+          const String queryHash = '91d4c2bc3e0cd1bc672281c4f1f59f43ff55ba726ca04a45810d99bd091f3f0e';
 
-        // Fetch official covers concurrently for this batch to ensure fast import with 100% accurate artwork
-        final covers = await Future.wait(batch.map((t) {
-          final uri = t['uri']?.toString() ?? '';
-          final trackId = uri.contains(':') ? uri.split(':').last : uri;
-          return _fetchSpotifyTrackCover(trackId);
-        }));
+          while (totalCount == null || offset < totalCount) {
+            final variables = jsonEncode({
+              'uri': 'spotify:playlist:$playlistId',
+              'offset': offset,
+              'limit': 100,
+            });
+            final extensions = jsonEncode({
+              'persistedQuery': {
+                'version': 1,
+                'sha256Hash': queryHash,
+              }
+            });
 
-        for (int j = 0; j < batch.length; j++) {
-          final t = batch[j];
-          final trackCover = covers[j];
-          final trackName =
-              (t['title'] ?? (_isGerman ? 'Unbekannt' : 'Unknown'))
-                  .toString()
-                  .trim();
-          final rawArtist = (t['subtitle'] ?? '').toString().trim();
-          final trackArtist = rawArtist.isNotEmpty ? rawArtist : 'Spotify Artist';
-          final durationMs = (t['duration'] is int)
-              ? t['duration'] as int
-              : (int.tryParse(t['duration']?.toString() ?? '180000') ?? 180000);
-          final uri = t['uri']?.toString() ?? 'spotify:track:${items.length}';
-          final trackId = uri.contains(':') ? uri.split(':').last : uri;
-          final previewUrl = t['audioPreview']?['url']?.toString();
+            final queryUrl = 'https://api-partner.spotify.com/pathfinder/v1/query?operationName=fetchPlaylist'
+                '&variables=${Uri.encodeComponent(variables)}'
+                '&extensions=${Uri.encodeComponent(extensions)}';
 
-          final finalCover = trackCover ?? coverArtUrl ?? Playlist.thumbPlaceholderUrl;
+            final qResp = await _dio.get(
+              queryUrl,
+              options: Options(
+                headers: {
+                  'Authorization': 'Bearer $accessToken',
+                  'User-Agent':
+                      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                },
+                sendTimeout: const Duration(seconds: 10),
+                receiveTimeout: const Duration(seconds: 15),
+              ),
+            );
 
-          final targetItem = MediaItem(
-            id: 'sp_$trackId',
-            title: trackName,
-            artist: trackArtist,
-            album: title,
-            duration: Duration(milliseconds: durationMs),
-            artUri: Uri.tryParse(finalCover),
-            extras: {
-              'searchQuery': '$trackName $trackArtist',
-              'artist': trackArtist,
-              'artists': [
-                {'name': trackArtist, 'id': ''}
-              ],
-              'isSpotify': true,
-              'platform': 'Spotify',
-              'spotifyUri': uri,
-              'audioPreviewUrl': previewUrl,
-              'duration': durationMs ~/ 1000,
-              'length':
-                  "${(durationMs ~/ 1000) ~/ 60}:${((durationMs ~/ 1000) % 60).toString().padLeft(2, '0')}",
-              'thumbnails': [
-                {'url': finalCover}
-              ],
-              'artworkUrl': finalCover,
-            },
-          );
+            if (qResp.statusCode == 200 && qResp.data != null) {
+              final Map<String, dynamic> qData = qResp.data is Map
+                  ? Map<String, dynamic>.from(qResp.data)
+                  : jsonDecode(qResp.data.toString());
 
-          items.add(targetItem);
-          currentTrack.value = items.length;
-          importProgress.value = items.length / trackList.length;
-          importStatus.value = _isGerman
-              ? 'Importiere "$trackName" ($trackArtist) (${items.length}/${trackList.length})'
-              : 'Importing "$trackName" ($trackArtist) (${items.length}/${trackList.length})';
+              final pl = qData['data']?['playlistV2'];
+              if (pl == null) break;
+
+              final content = pl['content'];
+              if (content == null) break;
+
+              if (totalCount == null) {
+                totalCount = (content['totalCount'] is int)
+                    ? content['totalCount'] as int
+                    : int.tryParse(content['totalCount']?.toString() ?? '0') ?? 0;
+                totalTracks.value = totalCount;
+              }
+
+              final batchItems = content['items'] as List? ?? [];
+              if (batchItems.isEmpty) break;
+
+              for (var it in batchItems) {
+                final trackData = it['itemV2']?['data'];
+                if (trackData == null) continue;
+
+                final trackName = (trackData['name'] ?? (_isGerman ? 'Unbekannt' : 'Unknown')).toString().trim();
+                final artistItems = trackData['artists']?['items'] as List? ?? [];
+                final artistNames = artistItems
+                    .map((a) => a['profile']?['name']?.toString() ?? '')
+                    .where((s) => s.isNotEmpty)
+                    .toList();
+                final trackArtist = artistNames.isNotEmpty ? artistNames.join(', ') : 'Spotify Artist';
+
+                final albumName = trackData['albumOfTrack']?['name']?.toString() ?? title;
+
+                // Extract high-resolution cover art directly from albumOfTrack coverArt sources
+                String? trackCover;
+                try {
+                  final covSources = trackData['albumOfTrack']?['coverArt']?['sources'] as List?;
+                  if (covSources != null && covSources.isNotEmpty) {
+                    trackCover = covSources[0]['url']?.toString();
+                  }
+                } catch (_) {}
+
+                final durationMs = (trackData['trackDuration']?['totalMilliseconds'] is int)
+                    ? trackData['trackDuration']['totalMilliseconds'] as int
+                    : 180000;
+
+                final uriStr = trackData['uri']?.toString() ?? 'spotify:track:${items.length}';
+                final trackId = uriStr.contains(':') ? uriStr.split(':').last : uriStr;
+
+                final finalCover = trackCover ?? coverArtUrl ?? Playlist.thumbPlaceholderUrl;
+
+                final targetItem = MediaItem(
+                  id: 'sp_$trackId',
+                  title: trackName,
+                  artist: trackArtist,
+                  album: albumName,
+                  duration: Duration(milliseconds: durationMs),
+                  artUri: Uri.tryParse(finalCover),
+                  extras: {
+                    'searchQuery': '$trackName $trackArtist',
+                    'artist': trackArtist,
+                    'artists': artistNames.isNotEmpty
+                        ? artistNames.map((name) => {'name': name, 'id': ''}).toList()
+                        : [{'name': trackArtist, 'id': ''}],
+                    'isSpotify': true,
+                    'platform': 'Spotify',
+                    'spotifyUri': uriStr,
+                    'duration': durationMs ~/ 1000,
+                    'length':
+                        "${(durationMs ~/ 1000) ~/ 60}:${((durationMs ~/ 1000) % 60).toString().padLeft(2, '0')}",
+                    'thumbnails': [
+                      {'url': finalCover}
+                    ],
+                    'artworkUrl': finalCover,
+                  },
+                );
+
+                items.add(targetItem);
+                currentTrack.value = items.length;
+                if (totalCount > 0) {
+                  importProgress.value = items.length / totalCount;
+                }
+                importStatus.value = _isGerman
+                    ? 'Importiere "$trackName" ($trackArtist) (${items.length}/$totalCount)'
+                    : 'Importing "$trackName" ($trackArtist) (${items.length}/$totalCount)';
+              }
+
+              offset += batchItems.length;
+              if (batchItems.length < 100) break;
+            } else {
+              break;
+            }
+          }
+
+          if (items.isNotEmpty) {
+            pathfinderSucceeded = true;
+          }
+        } catch (e) {
+          printERROR("Spotify Pathfinder pagination error: $e");
         }
-
-        // Slight deliberate pacing for UI responsiveness
-        await Future.delayed(const Duration(milliseconds: 30));
       }
 
-      // 4. Save to local library
+      // 4. Fallback to embed page trackList if Pathfinder didn't succeed
+      if (!pathfinderSucceeded || items.isEmpty) {
+        items.clear();
+        final trackList = entity['trackList'] as List? ?? [];
+        if (trackList.isEmpty) {
+          return {
+            'success': false,
+            'message':
+                _isGerman ? 'Spotify Playlist ist leer.' : 'Spotify playlist is empty.'
+          };
+        }
+
+        totalTracks.value = trackList.length;
+        currentTrack.value = 0;
+        importProgress.value = 0.0;
+
+        const int batchSize = 4;
+        for (int i = 0; i < trackList.length; i += batchSize) {
+          final end = (i + batchSize < trackList.length) ? i + batchSize : trackList.length;
+          final batch = trackList.sublist(i, end);
+
+          // Fetch official covers concurrently for this batch to ensure fast import with 100% accurate artwork
+          final covers = await Future.wait(batch.map((t) {
+            final uri = t['uri']?.toString() ?? '';
+            final trackId = uri.contains(':') ? uri.split(':').last : uri;
+            return _fetchSpotifyTrackCover(trackId);
+          }));
+
+          for (int j = 0; j < batch.length; j++) {
+            final t = batch[j];
+            final trackCover = covers[j];
+            final trackName =
+                (t['title'] ?? (_isGerman ? 'Unbekannt' : 'Unknown'))
+                    .toString()
+                    .trim();
+            final rawArtist = (t['subtitle'] ?? '').toString().trim();
+            final trackArtist = rawArtist.isNotEmpty ? rawArtist : 'Spotify Artist';
+            final durationMs = (t['duration'] is int)
+                ? t['duration'] as int
+                : (int.tryParse(t['duration']?.toString() ?? '180000') ?? 180000);
+            final uri = t['uri']?.toString() ?? 'spotify:track:${items.length}';
+            final trackId = uri.contains(':') ? uri.split(':').last : uri;
+            final previewUrl = t['audioPreview']?['url']?.toString();
+
+            final finalCover = trackCover ?? coverArtUrl ?? Playlist.thumbPlaceholderUrl;
+
+            final targetItem = MediaItem(
+              id: 'sp_$trackId',
+              title: trackName,
+              artist: trackArtist,
+              album: title,
+              duration: Duration(milliseconds: durationMs),
+              artUri: Uri.tryParse(finalCover),
+              extras: {
+                'searchQuery': '$trackName $trackArtist',
+                'artist': trackArtist,
+                'artists': [
+                  {'name': trackArtist, 'id': ''}
+                ],
+                'isSpotify': true,
+                'platform': 'Spotify',
+                'spotifyUri': uri,
+                'audioPreviewUrl': previewUrl,
+                'duration': durationMs ~/ 1000,
+                'length':
+                    "${(durationMs ~/ 1000) ~/ 60}:${((durationMs ~/ 1000) % 60).toString().padLeft(2, '0')}",
+                'thumbnails': [
+                  {'url': finalCover}
+                ],
+                'artworkUrl': finalCover,
+              },
+            );
+
+            items.add(targetItem);
+            currentTrack.value = items.length;
+            importProgress.value = items.length / trackList.length;
+            importStatus.value = _isGerman
+                ? 'Importiere "$trackName" ($trackArtist) (${items.length}/${trackList.length})'
+                : 'Importing "$trackName" ($trackArtist) (${items.length}/${trackList.length})';
+          }
+
+          // Slight deliberate pacing for UI responsiveness
+          await Future.delayed(const Duration(milliseconds: 30));
+        }
+      }
+
+      // 5. Save to local library with guaranteed numerical key ordering
       await _savePlaylistToLibrary(title, items);
       return {
         'success': true,
@@ -429,6 +580,18 @@ class PlaylistImportService {
               : 'Imported YouTube Playlist');
       final List<MediaItem> rawItems =
           List<MediaItem>.from(result['tracks'] ?? []);
+
+      if (rawItems.isEmpty) {
+        try {
+          if (Get.isRegistered<PipedServices>()) {
+            final pipedSongs =
+                await Get.find<PipedServices>().getPlaylistSongs(listId);
+            if (pipedSongs.isNotEmpty) {
+              rawItems.addAll(pipedSongs);
+            }
+          }
+        } catch (_) {}
+      }
 
       if (rawItems.isEmpty) {
         return {
@@ -657,8 +820,9 @@ class PlaylistImportService {
     await box.close();
 
     final plastbox = await Hive.openBox(newPlaylist.playlistId);
-    for (MediaItem item in songItems) {
-      await plastbox.add(MediaItemBuilder.toJson(item));
+    await plastbox.clear();
+    for (int i = 0; i < songItems.length; i++) {
+      await plastbox.put(i, MediaItemBuilder.toJson(songItems[i]));
     }
     await plastbox.close();
 

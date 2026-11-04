@@ -62,10 +62,19 @@ abstract class PlaylistAlbumScreenControllerBase extends GetxController {
   /// [id] - The unique identifier of the album/playlist.
   void fetchSongsfromDatabase(String id) async {
     final box = await Hive.openBox(id);
-    songList.value = box.values
-        .map<MediaItem?>((item) => MediaItemBuilder.fromJson(item))
-        .whereType<MediaItem>()
-        .toList();
+    final sortedKeys = box.keys.toList();
+    if (sortedKeys.isNotEmpty && sortedKeys.every((k) => k is int)) {
+      sortedKeys.sort((a, b) => (a as int).compareTo(b as int));
+      songList.value = sortedKeys
+          .map((k) => MediaItemBuilder.fromJson(box.get(k)))
+          .whereType<MediaItem>()
+          .toList();
+    } else {
+      songList.value = box.values
+          .map<MediaItem?>((item) => MediaItemBuilder.fromJson(item))
+          .whereType<MediaItem>()
+          .toList();
+    }
     if (id != "SongDownloads") await box.close();
     songList.value =
         id == "LIBRP" ? songList.reversed.toList() : songList.toList();
