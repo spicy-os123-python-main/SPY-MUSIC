@@ -27,13 +27,20 @@ class NewVersionDialog extends StatelessWidget {
                   dimension: 100,
                   child: FittedBox(
                     child: FloatingActionButton(
-                      onPressed: () {
-                        launchUrl(
-                          Uri.parse(
+                      onPressed: () async {
+                        try {
+                          final uri = Uri.parse(
                             'https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest',
-                          ),
-                          mode: LaunchMode.externalApplication,
-                        );
+                          );
+                          final launched = await launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          );
+                          if (!launched) {
+                            await launchUrl(uri,
+                                mode: LaunchMode.platformDefault);
+                          }
+                        } catch (_) {}
                       },
                       child: const Icon(
                         Icons.download,

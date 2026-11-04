@@ -52,14 +52,8 @@ class SettingsScreen extends StatelessWidget {
                         child: Material(
                           type: MaterialType.transparency,
                           child: ListTile(
-                            onTap: () {
-                              launchUrl(
-                                Uri.parse(
-                                  'https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest',
-                                ),
-                                mode: LaunchMode.externalApplication,
-                              );
-                            },
+                            onTap: () =>
+                                settingsController.checkForUpdatesManually(context),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10)),
                             tileColor: Theme.of(context).colorScheme.secondary,

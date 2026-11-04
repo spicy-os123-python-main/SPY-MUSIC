@@ -82,13 +82,15 @@ class SettingsScreenController extends GetxController {
   }
 
   Future<void> checkForUpdatesManually(BuildContext context) async {
-    // Show loading dialog
+    bool dialogShown = true;
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (ctx) => Center(
         child: Card(
           color: const Color(0xFF16161F),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: Row(
@@ -105,12 +107,40 @@ class SettingsScreenController extends GetxController {
           ),
         ),
       ),
-    );
+    ).then((_) {
+      dialogShown = false;
+    });
 
-    final details = await checkAppUpdateDetails(currentVer: currentVersion);
+    Map<String, dynamic> details;
+    try {
+      details = await checkAppUpdateDetails(currentVer: currentVersion);
+      if (details['hasUpdate'] == true) {
+        isNewVersionAvailable.value = true;
+      }
+    } catch (e) {
+      details = {
+        'hasUpdate': false,
+        'success': false,
+        'error': e.toString(),
+        'latest': currentVersion,
+        'current': currentVersion,
+        'downloadUrl':
+            "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk",
+        'universalUrl':
+            "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic.apk",
+        'ipaUrl':
+            "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/SPY-MUSIC.ipa",
+        'htmlUrl':
+            "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest",
+      };
+    } finally {
+      if (dialogShown && context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        dialogShown = false;
+      }
+    }
 
     if (context.mounted) {
-      Navigator.of(context).pop(); // Dismiss loading dialog
       showDialog(
         context: context,
         builder: (ctx) => AppUpdateDialog(updateDetails: details),
