@@ -7,6 +7,7 @@ import '../../screens/Settings/settings_screen_controller.dart';
 import '../../utils/theme_controller.dart';
 import '../app_themes.dart';
 import '../custom_animations/custom_animation_painters.dart';
+import '../custom_animations/dino_stalker_widget.dart';
 
 class ThemeBackground extends StatefulWidget {
   final Widget child;
@@ -173,6 +174,8 @@ class _ThemeBackgroundState extends State<ThemeBackground>
       case CustomAnimationType.goldenStardust:
         painter = GoldenStardustPainter(time: _elapsedTime, accent: accent);
         break;
+      case CustomAnimationType.indoraptorHunt:
+        return DinoStalkerWidget(time: _elapsedTime, accent: accent);
       case CustomAnimationType.none:
         return const SizedBox.shrink();
     }

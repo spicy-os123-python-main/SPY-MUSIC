@@ -18,6 +18,7 @@ enum CustomAnimationType {
   synthwaveSunset,
   cyberGlitchPulse,
   goldenStardust,
+  indoraptorHunt,
 }
 
 String getCustomAnimationName(CustomAnimationType type) {
@@ -54,6 +55,8 @@ String getCustomAnimationName(CustomAnimationType type) {
       return "14. Hacker Glitch & Scanlines";
     case CustomAnimationType.goldenStardust:
       return "15. Goldstaub & Bokeh";
+    case CustomAnimationType.indoraptorHunt:
+      return "16. Indoraptor Jagd (Dino)";
   }
 }
 
@@ -91,6 +94,8 @@ String getCustomAnimationDescription(CustomAnimationType type) {
       return "High-Tech Scanlines mit Farbverzerrungen und Signalimpulsen";
     case CustomAnimationType.goldenStardust:
       return "Schwebender Luxus-Goldstaub mit funkelnden Sternen";
+    case CustomAnimationType.indoraptorHunt:
+      return "Der Indoraptor schleicht durch den Hintergrund, verharrt 2 Sekunden in der Mitte, fixiert den User und pirscht weiter";
   }
 }
 

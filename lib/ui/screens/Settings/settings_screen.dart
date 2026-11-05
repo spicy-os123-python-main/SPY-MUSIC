@@ -12,6 +12,7 @@ import '/services/music_service.dart';
 import '/services/discord_service.dart';
 import '../../widgets/discord_login_dialog.dart';
 import '/ui/utils/theme_controller.dart';
+import '../../widgets/animated_screen_transition.dart';
 import '../../themes/custom_animations/custom_animation_painters.dart';
 import '../../themes/interaction_animations/interaction_animation_types.dart';
 import '../../themes/components/spy_button_animation.dart';
@@ -1054,8 +1055,17 @@ class CustomAnimationSelectorDialog extends StatelessWidget {
   }
 }
 
-class InteractionAnimationSelectorDialog extends StatelessWidget {
+class InteractionAnimationSelectorDialog extends StatefulWidget {
   const InteractionAnimationSelectorDialog({super.key});
+
+  @override
+  State<InteractionAnimationSelectorDialog> createState() =>
+      _InteractionAnimationSelectorDialogState();
+}
+
+class _InteractionAnimationSelectorDialogState
+    extends State<InteractionAnimationSelectorDialog> {
+  int _previewPage = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -1063,9 +1073,9 @@ class InteractionAnimationSelectorDialog extends StatelessWidget {
     return CommonDialog(
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
+          maxHeight: MediaQuery.of(context).size.height * 0.88,
         ),
-        padding: const EdgeInsets.only(top: 22, left: 8, right: 14, bottom: 10),
+        padding: const EdgeInsets.only(top: 20, left: 8, right: 14, bottom: 10),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1085,15 +1095,14 @@ class InteractionAnimationSelectorDialog extends StatelessWidget {
                       "Wähle wie sich Seiten wechseln und Buttons beim Klick verhalten",
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    const SizedBox(height: 12),
-                    // Interactive Test Button Box
+                    const SizedBox(height: 10),
+                    // Interactive Test & Preview Box
                     Obx(() {
                       final currentType =
                           settingsController.interactionAnimationType.value;
                       return Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 10, horizontal: 14),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: const Color(0xFF141928),
                           borderRadius: BorderRadius.circular(14),
@@ -1101,65 +1110,194 @@ class InteractionAnimationSelectorDialog extends StatelessWidget {
                             color: const Color(0xFF00D2FF).withOpacity(0.35),
                           ),
                         ),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Vorschau: ${getInteractionAnimationName(currentType)}",
+                            Row(
+                              children: [
+                                const Icon(Icons.auto_awesome,
+                                    size: 16, color: Color(0xFF00D2FF)),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    "Aktiv: ${getInteractionAnimationName(currentType)}",
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
                                       color: Color(0xFF00D2FF),
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 2),
-                                  const Text(
-                                    "Tippe auf den Button zum Testen:",
-                                    style: TextStyle(
-                                        fontSize: 11, color: Colors.white70),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            SpyButtonAnimation(
-                              onTap: () {},
-                              borderRadius: BorderRadius.circular(10),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF00D2FF), Color(0xFF0055FF)],
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF00D2FF)
-                                          .withOpacity(0.3),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
                                 ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.touch_app_rounded,
-                                        size: 16, color: Colors.white),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      "Klick mich!",
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            // Mini Page Switch Preview (Demonstrates Page Transitions like Book Flip, 3D Cube, etc.)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _previewPage = (_previewPage == 0) ? 1 : 0;
+                                  });
+                                },
+                                child: Container(
+                                  height: 60,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black26,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: Colors.white12,
+                                    ),
+                                  ),
+                                  child: AnimatedScreenTransition(
+                                    enabled: true,
+                                    child: Container(
+                                      key: ValueKey<int>(_previewPage),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        gradient: _previewPage == 0
+                                            ? const LinearGradient(
+                                                colors: [
+                                                  Color(0xFF1F2B48),
+                                                  Color(0xFF101726)
+                                                ],
+                                              )
+                                            : const LinearGradient(
+                                                colors: [
+                                                  Color(0xFF2C1945),
+                                                  Color(0xFF150C26)
+                                                ],
+                                              ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(7),
+                                            decoration: BoxDecoration(
+                                              color: _previewPage == 0
+                                                  ? const Color(0xFF00D2FF)
+                                                      .withOpacity(0.2)
+                                                  : Colors.purpleAccent
+                                                      .withOpacity(0.2),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(
+                                              _previewPage == 0
+                                                  ? Icons.menu_book_rounded
+                                                  : Icons.queue_music_rounded,
+                                              size: 18,
+                                              color: _previewPage == 0
+                                                  ? const Color(0xFF00D2FF)
+                                                  : Colors.purpleAccent,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  _previewPage == 0
+                                                      ? "📖 Seite 1: Bibliothek"
+                                                      : "🎵 Seite 2: Song-Wiedergabe",
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  "Tippe hier für Seiten-Wechsel (Book Flip)",
+                                                  style: TextStyle(
+                                                    color: Colors.white
+                                                        .withOpacity(0.65),
+                                                    fontSize: 10,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const Icon(Icons.touch_app_rounded,
+                                              size: 16, color: Colors.white38),
+                                        ],
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
+                            ),
+                            const SizedBox(height: 10),
+                            // Action Row: Button click test + Page turn test
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SpyButtonAnimation(
+                                    onTap: () {},
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 7),
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: Colors.white24),
+                                      ),
+                                      child: const Text(
+                                        "🔘 Button-Klick",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: SpyButtonAnimation(
+                                    onTap: () {
+                                      setState(() {
+                                        _previewPage =
+                                            (_previewPage == 0) ? 1 : 0;
+                                      });
+                                    },
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 7),
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [
+                                            Color(0xFF00D2FF),
+                                            Color(0xFF0055FF)
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Text(
+                                        "📖 Seite umblättern",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
