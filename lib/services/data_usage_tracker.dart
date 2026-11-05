@@ -110,7 +110,23 @@ class DataUsageTracker extends GetxService {
     required int sizeBytes,
     int durationSeconds = 0,
     String source = 'YouTube',
+    bool isCached = false,
   }) {
+    if (isCached) {
+      sessionAudioCount.value += 1;
+      totalAudioCount.value += 1;
+      lastTrackTitle.value = title;
+      lastTrackArtist.value = artist;
+      lastTrackCodec.value = codec;
+      lastTrackBitrate.value = bitrate;
+      lastTrackItag.value = itag;
+      lastTrackBytes.value = 0;
+      lastTrackSource.value = 'Offline Cache (0 MB)';
+      _savePersistedStats();
+      refreshDiskCaches();
+      return;
+    }
+
     int effectiveBytes = sizeBytes;
     if (effectiveBytes <= 0 && bitrate > 0) {
       final dur = durationSeconds > 0 ? durationSeconds : 210;

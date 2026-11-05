@@ -143,6 +143,123 @@ class DeveloperModeSheet extends StatelessWidget {
                   controller: scrollController,
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 30),
                   children: [
+                    // One-Tap 85% Data Saver Toggle Card
+                    Obx(() {
+                      final isUltra = settingsCon.streamingQuality.value ==
+                          AudioQuality.Ultra;
+                      final isCacheOn = settingsCon.cacheSongs.value;
+                      final isAllActive = isUltra && isCacheOn;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isAllActive
+                              ? const Color(0xFF10B981).withOpacity(0.14)
+                              : Colors.amber.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isAllActive
+                                ? const Color(0xFF10B981)
+                                : Colors.amber.withOpacity(0.5),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isAllActive
+                                    ? const Color(0xFF10B981).withOpacity(0.2)
+                                    : Colors.amber.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                isAllActive
+                                    ? Icons.bolt_rounded
+                                    : Icons.offline_bolt_outlined,
+                                color: isAllActive
+                                    ? const Color(0xFF10B981)
+                                    : Colors.amber,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        "85% Datensparmodus",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: isAllActive
+                                              ? const Color(0xFF10B981)
+                                              : Colors.amber,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: (isAllActive
+                                                  ? const Color(0xFF10B981)
+                                                  : Colors.amber)
+                                              .withOpacity(0.2),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          isAllActive ? "AKTIV" : "-85%",
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            color: isAllActive
+                                                ? const Color(0xFF10B981)
+                                                : Colors.amber,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    isAllActive
+                                        ? "Ultra-Bitrate (~1.2 MB/Song) & Song-Cache aktiv (0 MB bei Wiederholung)"
+                                        : "Tippen, um Datenverbrauch sofort um ~85% zu senken",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.75),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch.adaptive(
+                              value: isAllActive,
+                              activeColor: const Color(0xFF10B981),
+                              onChanged: (val) {
+                                if (val) {
+                                  settingsCon.setStreamingQuality(
+                                      AudioQuality.Ultra);
+                                  settingsCon.toggleCachingSongsValue(true);
+                                } else {
+                                  settingsCon.setStreamingQuality(
+                                      AudioQuality.Normal);
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+
                     // Mode Banner
                     Obx(() {
                       final quality = settingsCon.streamingQuality.value;

@@ -17,7 +17,6 @@ import '../../themes/interaction_animations/interaction_animation_types.dart';
 import '../../themes/components/spy_button_animation.dart';
 import 'components/custom_expansion_tile.dart';
 import 'components/auto_backup_settings_widget.dart';
-import 'developer_mode_sheet.dart';
 import 'settings_screen_controller.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -783,58 +782,21 @@ class SettingsScreen extends StatelessWidget {
                   const Divider(),
                   InkWell(
                     borderRadius: BorderRadius.circular(14),
-                    onTap: () => DeveloperModeSheet.show(context),
+                    onTap: () =>
+                        settingsController.handleDevModeTap(context),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                           vertical: 12.0, horizontal: 16.0),
                       child: Column(
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                "SPY MUSIC",
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.withOpacity(0.18),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: Colors.amber.withOpacity(0.5),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: const Text(
-                                  "DEV",
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.amber,
-                                  ),
-                                ),
-                              ),
-                            ],
+                          Text(
+                            "SPY MUSIC",
+                            style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 2),
                           Text(
                             settingsController.currentVersion,
                             style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "devTapToOpenHint".tr,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.color
-                                  ?.withOpacity(0.65),
-                            ),
                           ),
                         ],
                       ),
@@ -846,12 +808,9 @@ class SettingsScreen extends StatelessWidget {
           )),
           Padding(
             padding: const EdgeInsets.only(bottom: 20.0),
-            child: InkWell(
-              onTap: () => DeveloperModeSheet.show(context),
-              child: Text(
-                "${settingsController.currentVersion} by SPY",
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+            child: Text(
+              "${settingsController.currentVersion} by SPY",
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
         ],

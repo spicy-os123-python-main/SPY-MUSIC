@@ -23,7 +23,9 @@ import '/ui/utils/theme_controller.dart';
 import '../../widgets/app_update_dialog.dart';
 import '../../themes/custom_animations/custom_animation_painters.dart';
 import '../../themes/interaction_animations/interaction_animation_types.dart';
+import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'developer_mode_sheet.dart';
 
 enum DataSaverMode {
   normal,
@@ -66,6 +68,47 @@ class SettingsScreenController extends GetxController {
   final restorePlaybackSession = false.obs;
   final cacheHomeScreenData = true.obs;
   final currentVersion = "v1.0.0";
+
+  int _devTapCount = 0;
+  DateTime? _lastDevTapTime;
+
+  void handleDevModeTap(BuildContext context) {
+    final now = DateTime.now();
+    if (_lastDevTapTime == null ||
+        now.difference(_lastDevTapTime!) > const Duration(seconds: 2)) {
+      _devTapCount = 1;
+    } else {
+      _devTapCount++;
+    }
+    _lastDevTapTime = now;
+
+    if (_devTapCount >= 2 && _devTapCount < 5) {
+      final remaining = 5 - _devTapCount;
+      final isGerman = currentAppLanguageCode.value == 'de' ||
+          (Get.locale?.languageCode ?? 'en') == 'de';
+      final msg = isGerman
+          ? (remaining == 1
+              ? "Noch 1 Klick bis zum Developer-Menü"
+              : "Noch $remaining Klicks bis zum Developer-Menü")
+          : (remaining == 1
+              ? "1 more tap to open Developer Menu"
+              : "$remaining more taps to open Developer Menu");
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          duration: const Duration(milliseconds: 900),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else if (_devTapCount >= 5) {
+      _devTapCount = 0;
+      HapticFeedback.mediumImpact();
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      DeveloperModeSheet.show(context);
+    }
+  }
 
   @override
   void onInit() {

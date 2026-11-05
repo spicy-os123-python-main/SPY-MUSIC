@@ -441,7 +441,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     if (queue.value.isEmpty) return;
     final dataSaver =
         Hive.box('AppPrefs').get('dataSaverMode', defaultValue: 0);
-    if (dataSaver is int && dataSaver > 0) {
+    final streamingQuality =
+        Hive.box('AppPrefs').get('streamingQuality', defaultValue: 0);
+    if ((dataSaver is int && dataSaver > 0) ||
+        (streamingQuality is int && streamingQuality > 0)) {
       // In Data Saver Mode (Mid or Ultra), do NOT preload next song in background to save mobile data!
       return;
     }
@@ -664,6 +667,56 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       );
     }
 
+    final cacheFile = File("$_cacheDir/cachedSongs/${mediaItem.id}.mp3");
+
+    // 1. Check if the song is already cached on disk (0 KB network usage!)
+    if (cacheFile.existsSync() && cacheFile.lengthSync() >= 1024) {
+      printINFO(
+          "Playing offline cached song from disk (0 network data!): ${cacheFile.path}");
+      isPlayingUsingLockCachingSource = false;
+      return AudioSource.file(
+        cacheFile.path,
+        tag: mediaItem,
+      );
+    }
+
+    const ytHeaders = {
+      'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
+      'Origin': 'https://www.youtube.com',
+      'Referer': 'https://www.youtube.com/',
+    };
+
+    bool isCacheEnabled = false;
+    try {
+      if (Get.isRegistered<SettingsScreenController>()) {
+        isCacheEnabled = Get.find<SettingsScreenController>().cacheSongs.isTrue;
+      } else {
+        isCacheEnabled =
+            Hive.box("AppPrefs").get('cacheSongs', defaultValue: false) == true;
+      }
+    } catch (_) {}
+
+    // Stream and cache to disk when caching is enabled
+    if (isCacheEnabled &&
+        (url.startsWith('http://') || url.startsWith('https://'))) {
+      final cacheDir = Directory("$_cacheDir/cachedSongs");
+      if (!cacheDir.existsSync()) {
+        try {
+          cacheDir.createSync(recursive: true);
+        } catch (_) {}
+      }
+      printINFO(
+          "Playing and caching song via LockCachingAudioSource: ${mediaItem.id}");
+      isPlayingUsingLockCachingSource = true;
+      return LockCachingAudioSource(
+        Uri.parse(url),
+        cacheFile: cacheFile,
+        headers: url.contains('googlevideo.com') ? ytHeaders : null,
+        tag: mediaItem,
+      );
+    }
+
     // Direct YouTube streams (authenticated with standard YouTube headers to prevent HTTP 403 Source error)
     if (url.contains('googlevideo.com')) {
       printINFO(
@@ -671,36 +724,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       isPlayingUsingLockCachingSource = false;
       return AudioSource.uri(
         Uri.parse(url),
-        headers: const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
-          'Origin': 'https://www.youtube.com',
-          'Referer': 'https://www.youtube.com/',
-        },
-        tag: mediaItem,
-      );
-    }
-
-    if (url.contains('/cache') ||
-        (Get.find<SettingsScreenController>().cacheSongs.isTrue &&
-            url.contains("http") &&
-            !url.contains('googlevideo.com'))) {
-      final cacheDir = Directory("$_cacheDir/cachedSongs");
-      if (!cacheDir.existsSync()) {
-        try {
-          cacheDir.createSync(recursive: true);
-        } catch (_) {}
-      }
-      final cacheFile = File("$_cacheDir/cachedSongs/${mediaItem.id}.mp3");
-      if (cacheFile.existsSync() && cacheFile.lengthSync() < 1024) {
-        try {
-          cacheFile.deleteSync();
-        } catch (_) {}
-      }
-      printINFO("Playing Using LockCaching");
-      isPlayingUsingLockCachingSource = true;
-      return LockCachingAudioSource(
-        Uri.parse(url),
-        cacheFile: cacheFile,
+        headers: ytHeaders,
         tag: mediaItem,
       );
     }
@@ -711,14 +735,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
     return AudioSource.uri(
       uri,
-      headers: url.contains('googlevideo.com')
-          ? const {
-              'User-Agent':
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
-              'Origin': 'https://www.youtube.com',
-              'Referer': 'https://www.youtube.com/',
-            }
-          : null,
+      headers: url.contains('googlevideo.com') ? ytHeaders : null,
       tag: mediaItem,
     );
   }
@@ -976,19 +993,25 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
           mediaItem.add(playableSong);
           WatchtimeService.recordSongStart(playableSong);
+          final isFromDiskCache =
+              File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").existsSync() &&
+                  (File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").lengthSync() >= 1024);
           DataUsageTracker.instance.recordAudioStream(
             title: playableSong.title,
             artist: playableSong.artist ?? '',
             itag: streamInfo.audio?.itag ?? 0,
             codec: streamInfo.audio?.audioCodec.name ?? 'aac',
             bitrate: streamInfo.audio?.bitrate ?? 0,
-            sizeBytes: streamInfo.audio?.size ?? 0,
+            sizeBytes: isFromDiskCache ? 0 : (streamInfo.audio?.size ?? 0),
             durationSeconds: playableSong.duration?.inSeconds ?? 0,
-            source: streamAudioUrl.contains('googlevideo.com')
-                ? 'YouTube (Pure Audio)'
-                : (streamAudioUrl.contains('sndcdn')
-                    ? 'SoundCloud'
-                    : 'Direct Audio'),
+            source: isFromDiskCache
+                ? 'Device Cache (0 MB)'
+                : (streamAudioUrl.contains('googlevideo.com')
+                    ? 'YouTube (Pure Audio)'
+                    : (streamAudioUrl.contains('sndcdn')
+                        ? 'SoundCloud'
+                        : 'Direct Audio')),
+            isCached: isFromDiskCache,
           );
           playbackState
               .add(playbackState.value.copyWith(queueIndex: currentIndex));
@@ -1168,19 +1191,25 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           queue.add([playableSong]);
           mediaItem.add(playableSong);
           WatchtimeService.recordSongStart(playableSong);
+          final isFromDiskCache =
+              File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").existsSync() &&
+                  (File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").lengthSync() >= 1024);
           DataUsageTracker.instance.recordAudioStream(
             title: playableSong.title,
             artist: playableSong.artist ?? '',
             itag: streamInfo.audio?.itag ?? 0,
             codec: streamInfo.audio?.audioCodec.name ?? 'aac',
             bitrate: streamInfo.audio?.bitrate ?? 0,
-            sizeBytes: streamInfo.audio?.size ?? 0,
+            sizeBytes: isFromDiskCache ? 0 : (streamInfo.audio?.size ?? 0),
             durationSeconds: playableSong.duration?.inSeconds ?? 0,
-            source: currentSongUrl!.contains('googlevideo.com')
-                ? 'YouTube (Pure Audio)'
-                : (currentSongUrl!.contains('sndcdn')
-                    ? 'SoundCloud'
-                    : 'Direct Audio'),
+            source: isFromDiskCache
+                ? 'Device Cache (0 MB)'
+                : (currentSongUrl!.contains('googlevideo.com')
+                    ? 'YouTube (Pure Audio)'
+                    : (currentSongUrl!.contains('sndcdn')
+                        ? 'SoundCloud'
+                        : 'Direct Audio')),
+            isCached: isFromDiskCache,
           );
 
           playbackState.add(playbackState.value.copyWith(queueIndex: 0));
@@ -1868,32 +1897,35 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     final cachedFilePath = "$_cacheDir/cachedSongs/$songId.mp3";
     final cachedFile = File(cachedFilePath);
 
-    if (!offlineReplacementUrl && songsCacheBox.containsKey(songId)) {
-      if (cachedFile.existsSync() && cachedFile.lengthSync() >= 800 * 1024) {
-        printINFO("Got Song from cachedbox ($songId) with verified file (${cachedFile.lengthSync()} bytes)");
-        final streamInfo = songsCacheBox.get(songId)["streamInfo"];
+    if (!offlineReplacementUrl) {
+      if (cachedFile.existsSync() && cachedFile.lengthSync() >= 250 * 1024) {
+        printINFO(
+            "Got Song from cachedbox ($songId) with verified file (${cachedFile.lengthSync()} bytes)");
         Audio? cacheAudioPlaceholder;
-        if (streamInfo != null && streamInfo.isNotEmpty) {
-          streamInfo[1]['url'] = "file://$cachedFilePath";
-          cacheAudioPlaceholder = Audio.fromJson(streamInfo[1]);
-        } else {
-          cacheAudioPlaceholder = Audio(
-              audioCodec: Codec.mp4a,
-              bitrate: 0,
-              loudnessDb: 0,
-              duration: targetSong?.duration?.inMilliseconds ?? 0,
-              size: cachedFile.lengthSync(),
-              url: "file://$cachedFilePath",
-              itag: 0);
+        if (songsCacheBox.containsKey(songId)) {
+          final streamInfo = songsCacheBox.get(songId)["streamInfo"];
+          if (streamInfo != null && streamInfo.isNotEmpty) {
+            streamInfo[1]['url'] = "file://$cachedFilePath";
+            cacheAudioPlaceholder = Audio.fromJson(streamInfo[1]);
+          }
         }
+        cacheAudioPlaceholder ??= Audio(
+            audioCodec: Codec.mp4a,
+            bitrate: 0,
+            loudnessDb: 0,
+            duration: targetSong?.duration?.inMilliseconds ?? 0,
+            size: cachedFile.lengthSync(),
+            url: "file://$cachedFilePath",
+            itag: 0);
 
         return HMStreamingData(
             playable: true,
             statusMSG: "OK",
             lowQualityAudio: cacheAudioPlaceholder,
+            midQualityAudio: cacheAudioPlaceholder,
             highQualityAudio: cacheAudioPlaceholder);
-      } else {
-        // Cache file was deleted, corrupted, or incomplete (<800KB) -> Evict stale DB entry so fresh stream is fetched
+      } else if (songsCacheBox.containsKey(songId)) {
+        // Cache file was deleted, corrupted, or incomplete (<250KB) -> Evict stale DB entry so fresh stream is fetched
         printINFO(
             "Cached song file missing or incomplete for ($songId). Evicting from SongsCache and fetching fresh stream.");
         if (cachedFile.existsSync()) {
