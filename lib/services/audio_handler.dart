@@ -664,13 +664,18 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       );
     }
 
-    // Direct YouTube streams (ultra-low data, zero chunk drops, clean native streaming)
+    // Direct YouTube streams (authenticated with standard YouTube headers to prevent HTTP 403 Source error)
     if (url.contains('googlevideo.com')) {
       printINFO(
           "Playing YouTube stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
       isPlayingUsingLockCachingSource = false;
       return AudioSource.uri(
         Uri.parse(url),
+        headers: const {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
+          'Origin': 'https://www.youtube.com',
+          'Referer': 'https://www.youtube.com/',
+        },
         tag: mediaItem,
       );
     }
@@ -706,6 +711,14 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
     return AudioSource.uri(
       uri,
+      headers: url.contains('googlevideo.com')
+          ? const {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
+              'Origin': 'https://www.youtube.com',
+              'Referer': 'https://www.youtube.com/',
+            }
+          : null,
       tag: mediaItem,
     );
   }
@@ -1968,13 +1981,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         if (testUrl != null && !isExpired(url: testUrl)) {
           final lowItag = streamInfoJson['lowQualityAudio']?['itag'];
           final highItag = streamInfoJson['highQualityAudio']?['itag'];
-          // Evict heavy video streams (itag 18 / 22) so we strictly save mobile data
+          // Only evict old high-res 720p/1080p video streams (itag 22), preserve itag 18 and pure audio
           if (testUrl.contains('googlevideo.com') &&
-              (highItag == 18 || lowItag == 18 || highItag == 22 || lowItag == 22)) {
-            printINFO("Evicting heavy video stream for ($songId) to save mobile data");
+              (highItag == 22 || lowItag == 22)) {
+            printINFO("Evicting heavy HD video stream for ($songId)");
             songsUrlCacheBox.delete(songId);
           } else {
-            printINFO("Got cached pure audio Url ($songId)");
+            printINFO("Got cached stream Url ($songId)");
             streamInfo = HMStreamingData.fromJson(streamInfoJson);
           }
         } else {

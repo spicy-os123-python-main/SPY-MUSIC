@@ -29,8 +29,8 @@ class MusicServices extends getx.GetxService {
     'accept-encoding': 'gzip, deflate',
     'content-type': 'application/json',
     'origin': domain,
-    'cookie': 'CONSENT=YES+1',
     'X-YouTube-Client-Name': '67',
+    'X-YouTube-Client-Version': '1.20241028.01.00',
   };
 
   final Map<String, dynamic> _context = {
@@ -146,8 +146,28 @@ class MusicServices extends getx.GetxService {
       final trunc = errBody.length > 150 ? '${errBody.substring(0, 150)}...' : errBody;
       printERROR("YTMusic API [$action] error [HTTP $sCode]: ${e.message}, body: $trunc");
       if ((sCode == 401 || sCode == 403) && retryCount < 2) {
-        await init(forceRefresh: true);
-        return _sendRequest(action, data,
+        _headers.remove('cookie');
+        _headers.remove('X-Goog-Visitor-Id');
+        final requestData = Map<dynamic, dynamic>.from(data);
+        if (retryCount == 1) {
+          // Fallback to ANDROID_MUSIC client if WEB_REMIX triggers bot detection
+          _headers['User-Agent'] =
+              'com.google.android.apps.youtube.music/6.41.52 (Linux; U; Android 14; de_DE)';
+          _headers['X-YouTube-Client-Name'] = '21';
+          _headers['X-YouTube-Client-Version'] = '6.41.52';
+          if (requestData.containsKey('context') &&
+              requestData['context'] is Map &&
+              requestData['context']['client'] is Map) {
+            final clientMap = Map<String, dynamic>.from(requestData['context']['client']);
+            clientMap['clientName'] = 'ANDROID_MUSIC';
+            clientMap['clientVersion'] = '6.41.52';
+            clientMap['androidSdkVersion'] = 34;
+            final contextMap = Map<String, dynamic>.from(requestData['context']);
+            contextMap['client'] = clientMap;
+            requestData['context'] = contextMap;
+          }
+        }
+        return _sendRequest(action, requestData,
             additionalParams: additionalParams, retryCount: retryCount + 1);
       }
       throw NetworkError();
