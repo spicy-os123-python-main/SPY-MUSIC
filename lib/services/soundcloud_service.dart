@@ -24,7 +24,7 @@ class SoundCloudService {
     },
   ));
 
-  static String _clientId = '3GKD969NJWD1eB6gvQJN0GnueYbcWszv';
+  static String _clientId = 'N5nHxilyZaG4XKY57pV0M6qx6JysgIFW';
   static Future<void>? _refreshFuture;
   static DateTime? _lastRefreshAttempt;
   static const Duration _refreshCooldown = Duration(minutes: 10);

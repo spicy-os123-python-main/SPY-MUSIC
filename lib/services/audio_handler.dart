@@ -22,8 +22,6 @@ import 'watchtime_service.dart';
 import 'data_usage_tracker.dart';
 import '/models/album.dart';
 import '../models/playlist.dart';
-import '../models/music_source.dart';
-import '../ui/widgets/platform_selector_widget.dart';
 import '/services/equalizer.dart';
 import '/services/stream_service.dart';
 import '/models/hm_streaming_data.dart';
@@ -470,6 +468,90 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     });
   }
 
+  bool _currentSongCachedToDisk = false;
+
+  void _saveCurrentSongToDiskIfEnabled() {
+    final currentSong = mediaItem.value;
+    if (currentSong == null) return;
+    final url = (currentSong.extras?['url'] ?? '') as String;
+    if (url.isEmpty || !url.startsWith('http')) return;
+
+    bool isCacheEnabled = false;
+    try {
+      if (Get.isRegistered<SettingsScreenController>()) {
+        isCacheEnabled = Get.find<SettingsScreenController>().cacheSongs.isTrue;
+      } else {
+        isCacheEnabled =
+            Hive.box("AppPrefs").get('cacheSongs', defaultValue: false) == true;
+      }
+    } catch (_) {}
+
+    if (!isCacheEnabled) return;
+
+    final songId = currentSong.id;
+    final cacheFile = File("$_cacheDir/cachedSongs/$songId.mp3");
+    if (cacheFile.existsSync() && cacheFile.lengthSync() >= 250 * 1024) return;
+
+    _downloadSongToCache(songId, url, currentSong);
+  }
+
+  void _downloadSongToCache(String songId, String url, MediaItem song) async {
+    try {
+      final cacheDir = Directory("$_cacheDir/cachedSongs");
+      if (!cacheDir.existsSync()) {
+        cacheDir.createSync(recursive: true);
+      }
+      final tempFile = File("$_cacheDir/cachedSongs/${songId}_temp.mp3");
+      final targetFile = File("$_cacheDir/cachedSongs/$songId.mp3");
+
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 15);
+      final req = await client.getUrl(Uri.parse(url));
+      if (url.contains('c=ANDROID')) {
+        req.headers.set('User-Agent',
+            'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip');
+      } else if (url.contains('c=IOS')) {
+        req.headers.set('User-Agent',
+            'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)');
+      }
+      final resp = await req.close();
+      if (resp.statusCode == 200 || resp.statusCode == 206) {
+        final sink = tempFile.openWrite();
+        await resp.pipe(sink);
+        await sink.close();
+
+        if (tempFile.existsSync() && tempFile.lengthSync() >= 250 * 1024) {
+          if (targetFile.existsSync()) targetFile.deleteSync();
+          tempFile.renameSync(targetFile.path);
+          printINFO(
+              "Successfully cached 1-2MB pure audio song after 10s listening: $songId (${(targetFile.lengthSync() / (1024 * 1024)).toStringAsFixed(2)} MB)");
+          final box = await Hive.openBox("SongsCache");
+          box.put(songId, {
+            "streamInfo": [
+              null,
+              {
+                "url": "file://${targetFile.path}",
+                "audioCodec": "mp4a",
+                "itag": 140,
+                "size": targetFile.lengthSync(),
+                "bitrate": 0,
+                "duration": song.duration?.inMilliseconds ?? 0,
+                "loudnessDb": 0.0,
+              }
+            ]
+          });
+        } else if (tempFile.existsSync()) {
+          tempFile.deleteSync();
+        }
+      } else {
+        await resp.drain();
+      }
+      client.close();
+    } catch (e) {
+      printINFO("Background cache download encountered: $e");
+    }
+  }
+
   void _listenToPlaybackForNextSong() {
     final playerDurationOffset = GetPlatform.isWindows
         ? 200
@@ -480,6 +562,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       if (_player.duration != null && _player.duration?.inSeconds != 0) {
         final totalMs = _player.duration!.inMilliseconds;
         final currentMs = value.inMilliseconds;
+
+        // User requirement: Only cache/preload song after at least 10 seconds of verified listening
+        if (currentMs >= 10000 && !_currentSongCachedToDisk) {
+          _currentSongCachedToDisk = true;
+          _saveCurrentSongToDiskIfEnabled();
+        }
 
         // Preload next track's stream 25 seconds before the current song ends for seamless playback
         if (totalMs > 30000 &&
@@ -670,7 +758,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     final cacheFile = File("$_cacheDir/cachedSongs/${mediaItem.id}.mp3");
 
     // 1. Check if the song is already cached on disk (0 KB network usage!)
-    if (cacheFile.existsSync() && cacheFile.lengthSync() >= 1024) {
+    if (cacheFile.existsSync() && cacheFile.lengthSync() >= 250 * 1024) {
       printINFO(
           "Playing offline cached song from disk (0 network data!): ${cacheFile.path}");
       isPlayingUsingLockCachingSource = false;
@@ -680,62 +768,30 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       );
     }
 
-    const ytHeaders = {
-      'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
-      'Origin': 'https://www.youtube.com',
-      'Referer': 'https://www.youtube.com/',
-    };
-
-    bool isCacheEnabled = false;
-    try {
-      if (Get.isRegistered<SettingsScreenController>()) {
-        isCacheEnabled = Get.find<SettingsScreenController>().cacheSongs.isTrue;
-      } else {
-        isCacheEnabled =
-            Hive.box("AppPrefs").get('cacheSongs', defaultValue: false) == true;
-      }
-    } catch (_) {}
-
-    // Stream and cache to disk when caching is enabled
-    if (isCacheEnabled &&
-        (url.startsWith('http://') || url.startsWith('https://'))) {
-      final cacheDir = Directory("$_cacheDir/cachedSongs");
-      if (!cacheDir.existsSync()) {
-        try {
-          cacheDir.createSync(recursive: true);
-        } catch (_) {}
-      }
-      printINFO(
-          "Playing and caching song via LockCachingAudioSource: ${mediaItem.id}");
-      isPlayingUsingLockCachingSource = true;
-      return LockCachingAudioSource(
-        Uri.parse(url),
-        cacheFile: cacheFile,
-        headers: url.contains('googlevideo.com') ? ytHeaders : null,
-        tag: mediaItem,
-      );
-    }
-
-    // Direct YouTube streams (authenticated with standard YouTube headers to prevent HTTP 403 Source error)
+    // 2. Direct on-demand streaming (does NOT buffer the whole 20MB song upfront!)
+    // Headers matched to YouTube client type to eliminate HTTP 403 Forbidden
+    Map<String, String>? streamHeaders;
     if (url.contains('googlevideo.com')) {
-      printINFO(
-          "Playing YouTube stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
-      isPlayingUsingLockCachingSource = false;
-      return AudioSource.uri(
-        Uri.parse(url),
-        headers: ytHeaders,
-        tag: mediaItem,
-      );
+      if (url.contains('c=ANDROID')) {
+        streamHeaders = {
+          'User-Agent':
+              'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+        };
+      } else if (url.contains('c=IOS')) {
+        streamHeaders = {
+          'User-Agent':
+              'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
+        };
+      }
     }
 
-    printINFO("Playing Using AudioSource.uri: $url");
+    printINFO("Playing stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
     isPlayingUsingLockCachingSource = false;
     final uri =
         isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
     return AudioSource.uri(
       uri,
-      headers: url.contains('googlevideo.com') ? ytHeaders : null,
+      headers: streamHeaders,
       tag: mediaItem,
     );
   }
@@ -995,7 +1051,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           WatchtimeService.recordSongStart(playableSong);
           final isFromDiskCache =
               File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").existsSync() &&
-                  (File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").lengthSync() >= 1024);
+                  (File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").lengthSync() >= 250 * 1024);
+          _currentSongCachedToDisk = isFromDiskCache;
           DataUsageTracker.instance.recordAudioStream(
             title: playableSong.title,
             artist: playableSong.artist ?? '',
@@ -1054,6 +1111,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           if (reqId != _activePlayRequestId) return;
           _isTriggeringNext = false;
           printERROR("playByIndex error for ${currentSong.id}: $e\n$st");
+          _failedYouTubeSongs.add(currentSong.id);
           if (!isNewUrlReq && _songErrorRetryCount == 0) {
             _songErrorRetryCount = 1;
             Hive.box("SongsUrlCache").delete(currentSong.id);
@@ -1062,6 +1120,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 currentSong.id,
                 targetMediaItem: currentSong,
                 generateNewUrl: true,
+                allowFallback: true,
               ).timeout(const Duration(seconds: 30));
               if (freshInfo.playable && freshInfo.audio?.url != null) {
                 final playableSong = currentSong.copyWith(extras: {
@@ -1193,7 +1252,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           WatchtimeService.recordSongStart(playableSong);
           final isFromDiskCache =
               File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").existsSync() &&
-                  (File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").lengthSync() >= 1024);
+                  (File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").lengthSync() >= 250 * 1024);
+          _currentSongCachedToDisk = isFromDiskCache;
           DataUsageTracker.instance.recordAudioStream(
             title: playableSong.title,
             artist: playableSong.artist ?? '',
@@ -1244,6 +1304,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           if (reqId != _activePlayRequestId) return;
           _isTriggeringNext = false;
           printERROR("setSourceNPlay error for ${currMed.id}: $e\n$st");
+          _failedYouTubeSongs.add(currMed.id);
           if (_songErrorRetryCount == 0) {
             _songErrorRetryCount = 1;
             Hive.box("SongsUrlCache").delete(currMed.id);
@@ -1252,6 +1313,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 currMed.id,
                 targetMediaItem: currMed,
                 generateNewUrl: true,
+                allowFallback: true,
               ).timeout(const Duration(seconds: 30));
               if (freshInfo.playable && freshInfo.audio?.url != null) {
                 final playableSong = currMed.copyWith(extras: {
@@ -1977,27 +2039,39 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             .clamp(0, 2);
     HMStreamingData? streamInfo;
 
-    bool isAllInOne = false;
-    try {
-      if (Get.isRegistered<PlatformSelectorController>()) {
-        isAllInOne =
-            Get.find<PlatformSelectorController>().selectedSource.value ==
-                MusicSource.all;
-      }
-    } catch (_) {}
-
-    // Fallback to SoundCloud is ONLY allowed in All-In-One mode or when matching Spotify/Amazon tracks.
-    // For YouTube tracks in YouTube mode, YouTube = YouTube, errors must be reported directly!
-    final bool shouldFallbackToSoundCloud = allowFallback && isAllInOne;
-
-    // If YouTube failed previously for this song, attempt SoundCloud fallback immediately (only in All-In-One mode)
-    if (_failedYouTubeSongs.contains(songId) && shouldFallbackToSoundCloud) {
+    // If YouTube failed previously for this song or is blocked, attempt unblocked alternative or SoundCloud fallback immediately
+    if (_failedYouTubeSongs.contains(songId) && allowFallback) {
       printINFO(
-          "Song $songId previously failed on YouTube, attempting direct SoundCloud fallback (All-In-One mode)...");
+          "Song $songId previously failed on YouTube, attempting direct unblocked alternative or SoundCloud fallback...");
+      // 1. Try SoundCloud fallback
       final fallback = await _trySoundCloudFallback(songId, targetSong);
       if (fallback != null && fallback.playable) {
         fallback.setQualityIndex(qualityIndex);
         return fallback;
+      }
+      // 2. Try searching YouTube for unblocked alternative upload
+      final rawTitle = targetSong?.title ?? '';
+      final rawArtist = targetSong?.artist ?? '';
+      if (rawTitle.isNotEmpty) {
+        final query = '$rawTitle $rawArtist'.trim();
+        final yt = YoutubeExplode();
+        try {
+          final searchResults =
+              await yt.search.search(query).timeout(const Duration(seconds: 7));
+          for (final candidate in searchResults.take(6)) {
+            final candidateId = candidate.id.value;
+            if (candidateId == songId || _failedYouTubeSongs.contains(candidateId)) continue;
+            final candStream = await StreamProvider.fetch(candidateId);
+            if (candStream.playable && candStream.highestQualityAudio != null) {
+              songsUrlCacheBox.put(songId, candStream.hmStreamingData);
+              final res = HMStreamingData.fromJson(candStream.hmStreamingData);
+              res.setQualityIndex(qualityIndex);
+              return res;
+            }
+          }
+        } catch (_) {} finally {
+          yt.close();
+        }
       }
     }
 
