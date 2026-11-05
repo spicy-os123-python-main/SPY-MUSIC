@@ -204,53 +204,50 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         if (event.begin) {
           switch (event.type) {
             case AudioInterruptionType.duck:
-              if (!playDuringCalls) {
+              if (!playDuringCalls && _player.playing) {
                 await _player.setVolume(0.3);
-              } else {
-                await _player.setVolume(1.0);
               }
               break;
             case AudioInterruptionType.pause:
             case AudioInterruptionType.unknown:
-              if (!playDuringCalls) {
-                _wasPlayingBeforeInterruption = _player.playing;
-                if (_player.playing) {
-                  await _player.pause();
-                }
-              } else {
+              // If SPY MUSIC is not playing, NEVER steal or touch audio focus!
+              if (!_player.playing) {
+                _wasPlayingBeforeInterruption = false;
                 try {
-                  await session.setActive(true);
+                  await session.setActive(false);
                 } catch (_) {}
-                if (!loudnessNormalizationEnabled && _player.volume < 1.0) {
-                  await _player.setVolume(1.0);
-                }
+                return;
               }
+
+              // SPY MUSIC was actively playing: pause cleanly and yield audio focus
+              _wasPlayingBeforeInterruption = true;
+              await _player.pause();
+              try {
+                await session.setActive(false);
+              } catch (_) {}
               break;
           }
         } else {
-          // Interruption ended (call ended, WhatsApp voice message finished):
+          // Interruption ended (call ended, WhatsApp voice message finished, etc.):
           switch (event.type) {
             case AudioInterruptionType.duck:
-              // Unduck: Restore full volume immediately!
-              await _player.setVolume(1.0);
+              if (_player.playing) {
+                await _player.setVolume(1.0);
+              }
               break;
             case AudioInterruptionType.pause:
             case AudioInterruptionType.unknown:
-              if (!playDuringCalls &&
-                  _wasPlayingBeforeInterruption &&
-                  !_pausedByDeviceDisconnect) {
+              // Only auto-resume if WE WERE ACTIVELY PLAYING before the interruption
+              if (_wasPlayingBeforeInterruption &&
+                  !_pausedByDeviceDisconnect &&
+                  !_player.playing) {
                 try {
-                  await session.setActive(true);
+                  final active = await session.setActive(true);
+                  if (active) {
+                    await _player.setVolume(1.0);
+                    await _player.play();
+                  }
                 } catch (_) {}
-                await _player.setVolume(1.0);
-                await _player.play();
-              } else if (playDuringCalls && _player.playing) {
-                try {
-                  await session.setActive(true);
-                } catch (_) {}
-                if (!loudnessNormalizationEnabled && _player.volume < 1.0) {
-                  await _player.setVolume(1.0);
-                }
               }
               _wasPlayingBeforeInterruption = false;
               break;
@@ -266,6 +263,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         _wasPlayingBeforeInterruption = false;
         if (_player.playing) {
           await _player.pause();
+          try {
+            await session.setActive(false);
+          } catch (_) {}
         }
       });
 
@@ -288,6 +288,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           _wasPlayingBeforeInterruption = false;
           if (_player.playing) {
             await _player.pause();
+            try {
+              await session.setActive(false);
+            } catch (_) {}
           }
         }
       });
@@ -403,6 +406,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             e.toString().contains("Connection closed while receiving data")) {
           Duration curPos = _player.position;
           await _player.seek(curPos, index: 0);
+          try {
+            final session = await AudioSession.instance;
+            await session.setActive(true);
+          } catch (_) {}
           await _player.play();
           return;
         }
@@ -526,6 +533,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         _currentSongPlayedSeconds = 0;
         await _player.seek(Duration.zero);
         if (!_player.playing) {
+          try {
+            final session = await AudioSession.instance;
+            await session.setActive(true);
+          } catch (_) {}
           await _player.play();
         }
         return;
@@ -744,10 +755,14 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   @override
-  Future<void> pause() {
+  Future<void> pause() async {
     _wasPlayingBeforeInterruption = false;
     WatchtimeService.flushBufferedPlaytime();
-    return _player.pause();
+    await _player.pause();
+    try {
+      final session = await AudioSession.instance;
+      await session.setActive(false);
+    } catch (_) {}
   }
 
   @override
@@ -993,6 +1008,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
 
           if (!restoreSession || GetPlatform.isDesktop) {
+            try {
+              final session = await AudioSession.instance;
+              await session.setActive(true);
+            } catch (_) {}
             await _player.play();
           }
         } catch (e, st) {
@@ -1024,6 +1043,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   initialPosition: Duration.zero,
                 ).timeout(const Duration(seconds: 35));
                 isSongLoading = false;
+                try {
+                  final session = await AudioSession.instance;
+                  await session.setActive(true);
+                } catch (_) {}
                 await _player.play();
                 return;
               }
@@ -1170,6 +1193,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             _normalizeVolume(streamInfo.audio!.loudnessDb);
           }
 
+          try {
+            final session = await AudioSession.instance;
+            await session.setActive(true);
+          } catch (_) {}
           await _player.play();
         } catch (e, st) {
           if (reqId != _activePlayRequestId) return;
@@ -1198,6 +1225,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   initialPosition: Duration.zero,
                 ).timeout(const Duration(seconds: 35));
                 isSongLoading = false;
+                try {
+                  final session = await AudioSession.instance;
+                  await session.setActive(true);
+                } catch (_) {}
                 await _player.play();
                 return;
               }
@@ -1573,6 +1604,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _wasPlayingBeforeInterruption = false;
     DiscordService().clearPresence();
     await _player.stop();
+    try {
+      final session = await AudioSession.instance;
+      await session.setActive(false);
+    } catch (_) {}
     return super.stop();
   }
 

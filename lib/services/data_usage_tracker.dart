@@ -221,3 +221,4 @@ class DataUsageTracker extends GetxService {
     return "${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB";
   }
 }
+
