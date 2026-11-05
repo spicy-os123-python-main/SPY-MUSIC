@@ -27,10 +27,10 @@ class StreamProvider {
   static Future<StreamProvider> fetch(String videoId) async {
     final yt = YoutubeExplode();
     final clients = <String, YoutubeApiClient>{
-      'android': YoutubeApiClient.android,
       'androidSdkless': YoutubeApiClient.androidSdkless,
-      'tv': YoutubeApiClient.tv,
+      'android': YoutubeApiClient.android,
       'ios': YoutubeApiClient.ios,
+      'tv': YoutubeApiClient.tv,
       'androidVr': YoutubeApiClient.androidVr,
     };
 
@@ -51,7 +51,7 @@ class StreamProvider {
 
           final List<Audio> formats = [];
 
-          // 1. Add pure standalone audio streams (STRICTLY NO VIDEO DATA!)
+          // 1. Add pure standalone audio streams (1-3 MB per song, ultra-low mobile data!)
           for (final a in res.audioOnly) {
             formats.add(Audio(
               itag: a.tag,
@@ -65,41 +65,32 @@ class StreamProvider {
             ));
           }
 
-          // 2. Only add itag 18 muxed stream as extreme fallback if audioOnly is completely empty
-          if (formats.isEmpty) {
-            for (final m in res.muxed) {
-              if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
-                formats.add(Audio(
-                  itag: m.tag,
-                  audioCodec: Codec.mp4a,
-                  bitrate: 128000,
-                  duration: 0,
-                  loudnessDb: 0.0,
-                  url: m.url.toString(),
-                  size: m.size.totalBytes,
-                ));
-              }
+          // 2. Add itag 18 muxed stream as reliable fallback stream
+          for (final m in res.muxed) {
+            if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+              formats.add(Audio(
+                itag: m.tag,
+                audioCodec: Codec.mp4a,
+                bitrate: 128000,
+                duration: 0,
+                loudnessDb: 0.0,
+                url: m.url.toString(),
+                size: m.size.totalBytes,
+              ));
             }
           }
 
           if (formats.isEmpty) continue;
 
-          // 3. Fast playability & 403 probe: check if YouTube CDN blocks this video with HTTP 403
+          // 3. Fast playability & 403 probe: check if YouTube CDN blocks this stream with HTTP 403
           bool isStreamBlocked = false;
           try {
             final testUrl = formats.first.url;
             final client = HttpClient();
-            client.connectionTimeout = const Duration(seconds: 3);
+            client.connectionTimeout = const Duration(seconds: 4);
             final req = await client.getUrl(Uri.parse(testUrl));
             req.headers.set('Range', 'bytes=0-1024');
-            if (testUrl.toLowerCase().contains('c=android')) {
-              req.headers.set('User-Agent',
-                  'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip');
-            } else if (testUrl.toLowerCase().contains('c=ios')) {
-              req.headers.set('User-Agent',
-                  'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)');
-            }
-            final resp = await req.close().timeout(const Duration(seconds: 3));
+            final resp = await req.close().timeout(const Duration(seconds: 4));
             if (resp.statusCode == 403 || resp.statusCode == 410) {
               isStreamBlocked = true;
             }
@@ -109,7 +100,7 @@ class StreamProvider {
 
           if (!isStreamBlocked) {
             printINFO(
-                "YouTube client ${entry.key} successfully verified with unblocked pure audio for $videoId");
+                "YouTube client ${entry.key} successfully verified with pure audio for $videoId");
             return StreamProvider(
               playable: true,
               statusMSG: "OK",
@@ -228,9 +219,20 @@ class StreamProvider {
     final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
     if (lowAac != null) return lowAac;
 
+    // 5. Fallback ratebypass stream (itag 18)
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
+
     final sorted = List<Audio>.from(audioFormats!)
       ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
     return sorted.first;
+  }
+
+  Audio? get fallbackAudio {
+    if (audioFormats == null || audioFormats!.isEmpty) return null;
+    return audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
   }
 
   Audio? get highestBitrateMp4aAudio {
@@ -312,7 +314,8 @@ class StreamProvider {
       "statusMSG": statusMSG,
       "lowQualityAudio": lowQualityAudio?.toJson(),
       "midQualityAudio": midQualityAudio?.toJson(),
-      "highQualityAudio": highestQualityAudio?.toJson()
+      "highQualityAudio": highestQualityAudio?.toJson(),
+      "fallbackAudio": fallbackAudio?.toJson(),
     };
   }
 }

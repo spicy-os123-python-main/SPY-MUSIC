@@ -6,6 +6,7 @@ class HMStreamingData {
   final Audio? lowQualityAudio;
   final Audio? midQualityAudio;
   final Audio? highQualityAudio;
+  final Audio? fallbackAudio;
   int qualityIndex = 0; // 0: Normal, 1: Mid, 2: Ultra
 
   HMStreamingData({
@@ -14,6 +15,7 @@ class HMStreamingData {
     this.lowQualityAudio,
     this.midQualityAudio,
     this.highQualityAudio,
+    this.fallbackAudio,
   });
 
   setQualityIndex(int index) {
@@ -23,13 +25,13 @@ class HMStreamingData {
   Audio? get audio {
     if (qualityIndex == 2) {
       // Ultra Data Saver
-      return lowQualityAudio ?? midQualityAudio ?? highQualityAudio;
+      return lowQualityAudio ?? midQualityAudio ?? highQualityAudio ?? fallbackAudio;
     } else if (qualityIndex == 1) {
       // Mid Data Saver
-      return midQualityAudio ?? highQualityAudio ?? lowQualityAudio;
+      return midQualityAudio ?? highQualityAudio ?? lowQualityAudio ?? fallbackAudio;
     } else {
       // Normal: Highest Quality (Default)
-      return highQualityAudio ?? midQualityAudio ?? lowQualityAudio;
+      return highQualityAudio ?? midQualityAudio ?? lowQualityAudio ?? fallbackAudio;
     }
   }
 
@@ -49,13 +51,17 @@ class HMStreamingData {
     final highQualityAudio = json['highQualityAudio'] != null
         ? Audio.fromJson(json['highQualityAudio'])
         : null;
+    final fallbackAudio = json['fallbackAudio'] != null
+        ? Audio.fromJson(json['fallbackAudio'])
+        : null;
 
     return HMStreamingData(
         playable: json['playable'],
         statusMSG: json['statusMSG'],
         lowQualityAudio: lowQualityAudio,
         midQualityAudio: midQualityAudio,
-        highQualityAudio: highQualityAudio);
+        highQualityAudio: highQualityAudio,
+        fallbackAudio: fallbackAudio);
   }
 
   Map<String, dynamic> toJson() => {
@@ -64,5 +70,6 @@ class HMStreamingData {
         "lowQualityAudio": lowQualityAudio?.toJson(),
         "midQualityAudio": midQualityAudio?.toJson(),
         "highQualityAudio": highQualityAudio?.toJson(),
+        "fallbackAudio": fallbackAudio?.toJson(),
       };
 }

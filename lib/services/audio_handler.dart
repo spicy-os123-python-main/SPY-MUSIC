@@ -86,7 +86,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   bool isSongLoading = true;
   int _songErrorRetryCount = 0;
   String? _lastFailedSongId;
-  static final Set<String> _failedYouTubeSongs = {};
   bool _pausedByDeviceDisconnect = false;
   bool _wasPlayingBeforeInterruption = false;
 
@@ -382,7 +381,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               : null);
 
       if (currentId != null) {
-        _failedYouTubeSongs.add(currentId);
         try {
           Hive.box("SongsUrlCache").delete(currentId);
         } catch (_) {}
@@ -769,29 +767,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     }
 
     // 2. Direct on-demand streaming (does NOT buffer the whole song upfront!)
-    // Headers matched to YouTube client type to eliminate HTTP 403 Forbidden
-    Map<String, String>? streamHeaders;
-    if (url.contains('googlevideo.com')) {
-      if (url.toLowerCase().contains('c=ios')) {
-        streamHeaders = {
-          'User-Agent':
-              'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
-        };
-      } else {
-        streamHeaders = {
-          'User-Agent':
-              'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
-        };
-      }
-    }
-
     printINFO("Playing stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
     isPlayingUsingLockCachingSource = false;
     final uri =
         isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
     return AudioSource.uri(
       uri,
-      headers: streamHeaders,
       tag: mediaItem,
     );
   }
@@ -1081,16 +1062,46 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               ? Duration(milliseconds: extras['position'] ?? 0)
               : Duration.zero;
 
-          await _player.setAudioSource(
-            audioSource,
-            initialPosition: startPos,
-          ).timeout(
-            const Duration(seconds: 35),
-            onTimeout: () {
-              throw TimeoutException(
-                  "Playback loading timed out after 35 seconds");
-            },
-          );
+          try {
+            await _player.setAudioSource(
+              audioSource,
+              initialPosition: startPos,
+            ).timeout(
+              const Duration(seconds: 25),
+              onTimeout: () {
+                throw TimeoutException(
+                    "Playback loading timed out after 25 seconds");
+              },
+            );
+          } catch (loadErr) {
+            if (reqId != _activePlayRequestId ||
+                loadErr.toString().contains("Loading interrupted") ||
+                loadErr.toString().contains("abort")) {
+              return;
+            }
+            final fallback = streamInfo.fallbackAudio;
+            if (fallback != null && fallback.url != streamAudioUrl) {
+              printINFO(
+                  "Primary audio failed with $loadErr, switching to fallback ratebypass stream for ${currentSong.id}");
+              final fallbackSong = playableSong.copyWith(extras: {
+                ...Map<String, dynamic>.from(playableSong.extras ?? {}),
+                'url': fallback.url,
+                'size': fallback.size,
+                'codec': fallback.audioCodec.name,
+              });
+              currentSongUrl = fallback.url;
+              if (songIndex < queue.value.length) {
+                queue.value[songIndex] = fallbackSong;
+              }
+              mediaItem.add(fallbackSong);
+              await _player.setAudioSource(
+                _createAudioSource(fallbackSong),
+                initialPosition: startPos,
+              ).timeout(const Duration(seconds: 25));
+            } else {
+              rethrow;
+            }
+          }
 
           if (reqId != _activePlayRequestId) return;
           _isTriggeringNext = false;
@@ -1108,10 +1119,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             await _player.play();
           }
         } catch (e, st) {
-          if (reqId != _activePlayRequestId) return;
+          if (reqId != _activePlayRequestId ||
+              e.toString().contains("Loading interrupted") ||
+              e.toString().contains("abort")) {
+            return;
+          }
           _isTriggeringNext = false;
           printERROR("playByIndex error for ${currentSong.id}: $e\n$st");
-          _failedYouTubeSongs.add(currentSong.id);
           if (!isNewUrlReq && _songErrorRetryCount == 0) {
             _songErrorRetryCount = 1;
             Hive.box("SongsUrlCache").delete(currentSong.id);
@@ -1121,7 +1135,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 targetMediaItem: currentSong,
                 generateNewUrl: true,
                 allowFallback: true,
-              ).timeout(const Duration(seconds: 30));
+              ).timeout(const Duration(seconds: 25));
               if (freshInfo.playable && freshInfo.audio?.url != null) {
                 final playableSong = currentSong.copyWith(extras: {
                   ...Map<String, dynamic>.from(currentSong.extras ?? {}),
@@ -1136,7 +1150,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 await _player.setAudioSource(
                   _createAudioSource(playableSong),
                   initialPosition: Duration.zero,
-                ).timeout(const Duration(seconds: 35));
+                ).timeout(const Duration(seconds: 25));
                 isSongLoading = false;
                 try {
                   final session = await AudioSession.instance;
@@ -1276,16 +1290,44 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           if (reqId != _activePlayRequestId) return;
           _isTriggeringNext = false;
           final audioSource = _createAudioSource(playableSong);
-          await _player.setAudioSource(
-            audioSource,
-            initialPosition: Duration.zero,
-          ).timeout(
-            const Duration(seconds: 35),
-            onTimeout: () {
-              throw TimeoutException(
-                  "Playback loading timed out after 35 seconds");
-            },
-          );
+          try {
+            await _player.setAudioSource(
+              audioSource,
+              initialPosition: Duration.zero,
+            ).timeout(
+              const Duration(seconds: 25),
+              onTimeout: () {
+                throw TimeoutException(
+                    "Playback loading timed out after 25 seconds");
+              },
+            );
+          } catch (loadErr) {
+            if (reqId != _activePlayRequestId ||
+                loadErr.toString().contains("Loading interrupted") ||
+                loadErr.toString().contains("abort")) {
+              return;
+            }
+            final fallback = streamInfo.fallbackAudio;
+            if (fallback != null && fallback.url != currentSongUrl) {
+              printINFO(
+                  "Primary audio failed with $loadErr, switching to fallback ratebypass stream for ${currMed.id}");
+              final fallbackSong = playableSong.copyWith(extras: {
+                ...Map<String, dynamic>.from(playableSong.extras ?? {}),
+                'url': fallback.url,
+                'size': fallback.size,
+                'codec': fallback.audioCodec.name,
+              });
+              currentSongUrl = fallback.url;
+              queue.add([fallbackSong]);
+              mediaItem.add(fallbackSong);
+              await _player.setAudioSource(
+                _createAudioSource(fallbackSong),
+                initialPosition: Duration.zero,
+              ).timeout(const Duration(seconds: 25));
+            } else {
+              rethrow;
+            }
+          }
           if (reqId != _activePlayRequestId) return;
           _isTriggeringNext = false;
           isSongLoading = false;
@@ -1301,10 +1343,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           } catch (_) {}
           await _player.play();
         } catch (e, st) {
-          if (reqId != _activePlayRequestId) return;
+          if (reqId != _activePlayRequestId ||
+              e.toString().contains("Loading interrupted") ||
+              e.toString().contains("abort")) {
+            return;
+          }
           _isTriggeringNext = false;
           printERROR("setSourceNPlay error for ${currMed.id}: $e\n$st");
-          _failedYouTubeSongs.add(currMed.id);
           if (_songErrorRetryCount == 0) {
             _songErrorRetryCount = 1;
             Hive.box("SongsUrlCache").delete(currMed.id);
@@ -1314,7 +1359,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 targetMediaItem: currMed,
                 generateNewUrl: true,
                 allowFallback: true,
-              ).timeout(const Duration(seconds: 30));
+              ).timeout(const Duration(seconds: 25));
               if (freshInfo.playable && freshInfo.audio?.url != null) {
                 final playableSong = currMed.copyWith(extras: {
                   ...Map<String, dynamic>.from(currMed.extras ?? {}),
@@ -1327,7 +1372,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 await _player.setAudioSource(
                   _createAudioSource(playableSong),
                   initialPosition: Duration.zero,
-                ).timeout(const Duration(seconds: 35));
+                ).timeout(const Duration(seconds: 25));
                 isSongLoading = false;
                 try {
                   final session = await AudioSession.instance;
@@ -1963,43 +2008,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         : (streamingQuality is int ? streamingQuality : 0).clamp(0, 2);
     HMStreamingData? streamInfo;
 
-    // If YouTube failed previously for this song or is blocked, attempt alternative unblocked YouTube upload immediately (NEVER leaving YouTube!)
-    if (_failedYouTubeSongs.contains(songId) && allowFallback) {
-      printINFO(
-          "Song $songId previously failed on YouTube, attempting alternative unblocked YouTube upload...");
-      final rawTitle = targetSong?.title ?? '';
-      final rawArtist = targetSong?.artist ?? '';
-      if (rawTitle.isNotEmpty) {
-        final query = '$rawTitle $rawArtist'.trim();
-        final yt = YoutubeExplode();
-        try {
-          final searchResults =
-              await yt.search.search(query).timeout(const Duration(seconds: 7));
-          for (final candidate in searchResults.take(6)) {
-            final candidateId = candidate.id.value;
-            if (candidateId == songId || _failedYouTubeSongs.contains(candidateId)) continue;
-            final origDur = targetSong?.duration?.inSeconds ?? 0;
-            final candDur = candidate.duration?.inSeconds ?? 0;
-            if (origDur > 0 && candDur > 0 && (origDur - candDur).abs() > 35) {
-              continue;
-            }
-            final candStream = await StreamProvider.fetch(candidateId);
-            if (candStream.playable && candStream.highestQualityAudio != null) {
-              songsUrlCacheBox.put(songId, candStream.hmStreamingData);
-              final res = HMStreamingData.fromJson(candStream.hmStreamingData);
-              res.setQualityIndex(qualityIndex);
-              return res;
-            }
-          }
-        } catch (_) {} finally {
-          yt.close();
-        }
-      }
-    }
-
-    if (songsUrlCacheBox.containsKey(songId) &&
-        !generateNewUrl &&
-        !_failedYouTubeSongs.contains(songId)) {
+    if (songsUrlCacheBox.containsKey(songId) && !generateNewUrl) {
       final streamInfoJson = songsUrlCacheBox.get(songId);
       if (streamInfoJson.runtimeType.toString().contains("Map")) {
         final lowUrl = streamInfoJson['lowQualityAudio']?['url'];
