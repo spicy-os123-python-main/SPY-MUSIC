@@ -768,19 +768,19 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       );
     }
 
-    // 2. Direct on-demand streaming (does NOT buffer the whole 20MB song upfront!)
+    // 2. Direct on-demand streaming (does NOT buffer the whole song upfront!)
     // Headers matched to YouTube client type to eliminate HTTP 403 Forbidden
     Map<String, String>? streamHeaders;
     if (url.contains('googlevideo.com')) {
-      if (url.contains('c=ANDROID')) {
-        streamHeaders = {
-          'User-Agent':
-              'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
-        };
-      } else if (url.contains('c=IOS')) {
+      if (url.toLowerCase().contains('c=ios')) {
         streamHeaders = {
           'User-Agent':
               'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
+        };
+      } else {
+        streamHeaders = {
+          'User-Agent':
+              'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
         };
       }
     }
@@ -1734,70 +1734,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     mediaItem.add(updated);
   }
 
-  Future<HMStreamingData?> _trySoundCloudFallback(
-      String songId, MediaItem? targetSong) async {
-    final sSong = targetSong ??
-        queue.value.firstWhereOrNull((item) => item.id == songId) ??
-        (mediaItem.value?.id == songId ? mediaItem.value : null);
-    var title = sSong?.title ?? '';
-    var artist = sSong?.artist ?? '';
-    if (title.isEmpty) {
-      try {
-        final libBox = Hive.box("LibrarySongs");
-        if (libBox.containsKey(songId)) {
-          final s = libBox.get(songId);
-          title = s?['title']?.toString() ?? '';
-          artist = s?['artist']?.toString() ?? '';
-        }
-      } catch (_) {}
-    }
-    if (title.isNotEmpty) {
-      String query = title;
-      if (artist.isNotEmpty &&
-          !title.toLowerCase().contains(artist.toLowerCase())) {
-        query = '$title $artist';
-      }
-      query = query
-          .replaceAll(RegExp(r'\(official video\)', caseSensitive: false), '')
-          .replaceAll(RegExp(r'\[official video\]', caseSensitive: false), '')
-          .replaceAll(RegExp(r'\(official audio\)', caseSensitive: false), '')
-          .replaceAll(RegExp(r'\[official audio\]', caseSensitive: false), '')
-          .replaceAll(RegExp(r'\(lyrics\)', caseSensitive: false), '')
-          .replaceAll(RegExp(r'\[lyrics\]', caseSensitive: false), '')
-          .trim();
-      final scTracks = await SoundCloudService()
-          .searchTracks(query, limit: 8)
-          .timeout(const Duration(seconds: 8), onTimeout: () => []);
-      final scTrack = PlatformSearchService.findBestMatch(scTracks, sSong);
-      if (scTrack != null) {
-        final scUrl = await SoundCloudService.resolveStreamUrl(scTrack.id,
-            transcodingUrl: scTrack.extras?['transcodingUrl'] as String?,
-            trackAuthorization:
-                scTrack.extras?['track_authorization'] as String?);
-        if (scUrl != null && scUrl.isNotEmpty) {
-          printINFO(
-              "Successfully recovered playback via SoundCloud CDN for: $query");
-          final audio = Audio(
-            audioCodec: Codec.mp4a,
-            bitrate: 160000,
-            loudnessDb: 0,
-            duration: sSong?.duration?.inMilliseconds ?? 0,
-            size: 0,
-            url: scUrl,
-            itag: 140,
-          );
-          return HMStreamingData(
-            playable: true,
-            statusMSG: "OK",
-            lowQualityAudio: audio,
-            highQualityAudio: audio,
-          );
-        }
-      }
-    }
-    return null;
-  }
-
 // Work around used [useNewInstanceOfExplode = false] to Fix Connection closed before full header was received issue
   Future<HMStreamingData> checkNGetUrl(String songId,
       {MediaItem? targetMediaItem,
@@ -1810,7 +1746,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         queue.value.firstWhereOrNull((item) => item.id == songId) ??
         (mediaItem.value?.id == songId ? mediaItem.value : null);
 
-    // SoundCloud Native Song Handling
+    // SoundCloud Native Song Handling (Strictly SoundCloud - NEVER falls back to other platforms!)
     if (songId.startsWith("sc_")) {
       printINFO("Resolving SoundCloud track: $songId");
       final transcodingUrl = targetSong?.extras?['transcodingUrl'] as String?;
@@ -1853,22 +1789,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           lowQualityAudio: audio,
           highQualityAudio: audio,
         );
-      }
-
-      // Fallback: If SoundCloud stream is unavailable (e.g. DRM encrypted official release), fall back to YouTube
-      if (allowFallback) {
-        printINFO(
-            "SoundCloud track $songId stream not available, trying YouTube fallback...");
-        final artistName = getSafeSongArtist(targetSong, fallback: '');
-        final query =
-            '${targetSong?.title ?? ''} $artistName'.trim();
-        final ytMatch = await PlatformSearchService.resolveMatchedTrack(
-            songId, query,
-            originalTrack: targetSong, skipSoundCloud: true);
-        if (ytMatch != null) {
-          return checkNGetUrl(ytMatch.id,
-              targetMediaItem: targetSong, allowFallback: false);
-        }
       }
 
       SoundCloudService.invalidateStreamCache(songId);
@@ -2034,22 +1954,19 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     }
     //check if song stream url is cached and allocate url accordingly
     final songsUrlCacheBox = Hive.box("SongsUrlCache");
-    final qualityIndex =
-        (Hive.box('AppPrefs').get('streamingQuality', defaultValue: 0) as int)
-            .clamp(0, 2);
+    final dataSaver =
+        Hive.box('AppPrefs').get('dataSaverMode', defaultValue: 0);
+    final streamingQuality =
+        Hive.box('AppPrefs').get('streamingQuality', defaultValue: 0);
+    final qualityIndex = (dataSaver is int && dataSaver > 0)
+        ? dataSaver.clamp(0, 2)
+        : (streamingQuality is int ? streamingQuality : 0).clamp(0, 2);
     HMStreamingData? streamInfo;
 
-    // If YouTube failed previously for this song or is blocked, attempt unblocked alternative or SoundCloud fallback immediately
+    // If YouTube failed previously for this song or is blocked, attempt alternative unblocked YouTube upload immediately (NEVER leaving YouTube!)
     if (_failedYouTubeSongs.contains(songId) && allowFallback) {
       printINFO(
-          "Song $songId previously failed on YouTube, attempting direct unblocked alternative or SoundCloud fallback...");
-      // 1. Try SoundCloud fallback
-      final fallback = await _trySoundCloudFallback(songId, targetSong);
-      if (fallback != null && fallback.playable) {
-        fallback.setQualityIndex(qualityIndex);
-        return fallback;
-      }
-      // 2. Try searching YouTube for unblocked alternative upload
+          "Song $songId previously failed on YouTube, attempting alternative unblocked YouTube upload...");
       final rawTitle = targetSong?.title ?? '';
       final rawArtist = targetSong?.artist ?? '';
       if (rawTitle.isNotEmpty) {
@@ -2061,6 +1978,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           for (final candidate in searchResults.take(6)) {
             final candidateId = candidate.id.value;
             if (candidateId == songId || _failedYouTubeSongs.contains(candidateId)) continue;
+            final origDur = targetSong?.duration?.inSeconds ?? 0;
+            final candDur = candidate.duration?.inSeconds ?? 0;
+            if (origDur > 0 && candDur > 0 && (origDur - candDur).abs() > 35) {
+              continue;
+            }
             final candStream = await StreamProvider.fetch(candidateId);
             if (candStream.playable && candStream.highestQualityAudio != null) {
               songsUrlCacheBox.put(songId, candStream.hmStreamingData);
@@ -2165,18 +2087,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         streamInfo ??= HMStreamingData(
           playable: false,
           statusMSG: _isGerman
-              ? "Kein abspielbarer Stream für diesen Track gefunden."
-              : "No playable stream found for this track.",
+              ? "Kein abspielbarer Stream für diesen Track auf YouTube gefunden."
+              : "No playable stream found for this track on YouTube.",
         );
-
-        // 2. Second recovery attempt: Try SoundCloud fallback
-        if (!streamInfo.playable && allowFallback) {
-          final fallback = await _trySoundCloudFallback(songId, targetSong);
-          if (fallback != null && fallback.playable) {
-            printINFO("Successfully recovered song via SoundCloud fallback!");
-            streamInfo = fallback;
-          }
-        }
 
         if (!streamInfo.playable) {
           final isAgeGated = streamInfo.statusMSG

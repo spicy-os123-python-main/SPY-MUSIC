@@ -54,8 +54,10 @@ class MusicServices extends getx.GetxService {
   Future<void> init({bool forceRefresh = false}) async {
     //check visitor id in data base, if not generate one , set lang code
     final date = DateTime.now();
-    _context['context']['client']['clientVersion'] =
+    final clientVer =
         "1.${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}.01.00";
+    _context['context']['client']['clientVersion'] = clientVer;
+    _headers['X-YouTube-Client-Version'] = clientVer;
     final signatureTimestamp = getDatestamp() - 1;
     _context['playbackContext'] = {
       'contentPlaybackContext': {'signatureTimestamp': signatureTimestamp},
@@ -149,23 +151,22 @@ class MusicServices extends getx.GetxService {
         _headers.remove('cookie');
         _headers.remove('X-Goog-Visitor-Id');
         final requestData = Map<dynamic, dynamic>.from(data);
-        if (retryCount == 1) {
-          // Fallback to ANDROID_MUSIC client if WEB_REMIX triggers bot detection
-          _headers['User-Agent'] =
-              'com.google.android.apps.youtube.music/6.41.52 (Linux; U; Android 14; de_DE)';
-          _headers['X-YouTube-Client-Name'] = '21';
-          _headers['X-YouTube-Client-Version'] = '6.41.52';
-          if (requestData.containsKey('context') &&
-              requestData['context'] is Map &&
-              requestData['context']['client'] is Map) {
-            final clientMap = Map<String, dynamic>.from(requestData['context']['client']);
-            clientMap['clientName'] = 'ANDROID_MUSIC';
-            clientMap['clientVersion'] = '6.41.52';
-            clientMap['androidSdkVersion'] = 34;
-            final contextMap = Map<String, dynamic>.from(requestData['context']);
-            contextMap['client'] = clientMap;
-            requestData['context'] = contextMap;
-          }
+        // Immediately switch to official ANDROID_MUSIC client to bypass web-based Google bot/captcha filters
+        _headers['User-Agent'] =
+            'com.google.android.apps.youtube.music/6.41.52 (Linux; U; Android 14; de_DE)';
+        _headers['X-YouTube-Client-Name'] = '21';
+        _headers['X-YouTube-Client-Version'] = '6.41.52';
+        _headers.remove('origin');
+        if (requestData.containsKey('context') &&
+            requestData['context'] is Map &&
+            requestData['context']['client'] is Map) {
+          final clientMap = Map<String, dynamic>.from(requestData['context']['client']);
+          clientMap['clientName'] = 'ANDROID_MUSIC';
+          clientMap['clientVersion'] = '6.41.52';
+          clientMap['androidSdkVersion'] = 34;
+          final contextMap = Map<String, dynamic>.from(requestData['context']);
+          contextMap['client'] = clientMap;
+          requestData['context'] = contextMap;
         }
         return _sendRequest(action, requestData,
             additionalParams: additionalParams, retryCount: retryCount + 1);

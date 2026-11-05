@@ -22,123 +22,114 @@ class StreamProvider {
   StreamProvider(
       {required this.playable, this.audioFormats, this.statusMSG = ""});
 
-  /// Each client gets its own attempt. Android & iOS clients
-  /// return pure audio streams reliably.
-  static Future<StreamManifest> _manifestWithClients(
-      YoutubeExplode yt, String videoId) async {
+  /// Fetch stream with multi-client probe. If one YouTube client returns 403 or throttled stream,
+  /// seamlessly tries the next client (e.g. androidSdkless, tv, ios) without leaving YouTube.
+  static Future<StreamProvider> fetch(String videoId) async {
+    final yt = YoutubeExplode();
     final clients = <String, YoutubeApiClient>{
       'android': YoutubeApiClient.android,
       'androidSdkless': YoutubeApiClient.androidSdkless,
-      'ios': YoutubeApiClient.ios,
       'tv': YoutubeApiClient.tv,
+      'ios': YoutubeApiClient.ios,
       'androidVr': YoutubeApiClient.androidVr,
     };
-    final watch = Stopwatch()..start();
-    Object? lastError;
-    StreamManifest? fallbackManifest;
-
-    for (final entry in clients.entries) {
-      if (watch.elapsed > const Duration(seconds: 14)) break;
-      try {
-        final manifest = await yt.videos.streamsClient
-            .getManifest(
-              videoId,
-              ytClients: [entry.value],
-              requireWatchPage: false,
-            )
-            .timeout(const Duration(seconds: 8));
-        if (manifest.muxed.any((m) => m.tag == 18 || m.url.toString().contains('ratebypass=yes'))) {
-          printINFO(
-              "YouTube client ${entry.key} returned ratebypass streams for $videoId");
-          return manifest;
-        }
-        if (manifest.streams.isNotEmpty && fallbackManifest == null) {
-          fallbackManifest = manifest;
-        }
-      } catch (e) {
-        lastError = e;
-        printERROR("YouTube client ${entry.key} failed for $videoId: $e");
-      }
-    }
-    if (fallbackManifest != null) {
-      return fallbackManifest;
-    }
-    throw lastError ??
-        VideoUnavailableException('No YouTube client returned audio for $videoId');
-  }
-
-  static Future<StreamProvider> fetch(String videoId) async {
-    final yt = YoutubeExplode();
 
     try {
-      final res = await _manifestWithClients(yt, videoId);
-      final List<Audio> formats = [];
+      final clientWatch = Stopwatch()..start();
+      Object? lastError;
 
-      // 1. Add pure standalone audio streams (STRICTLY NO VIDEO DATA!)
-      for (final a in res.audioOnly) {
-        formats.add(Audio(
-          itag: a.tag,
-          audioCodec:
-              a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
-          bitrate: a.bitrate.bitsPerSecond,
-          duration: 0,
-          loudnessDb: 0.0,
-          url: a.url.toString(),
-          size: a.size.totalBytes,
-        ));
-      }
+      for (final entry in clients.entries) {
+        if (clientWatch.elapsed > const Duration(seconds: 16)) break;
+        try {
+          final res = await yt.videos.streamsClient
+              .getManifest(
+                videoId,
+                ytClients: [entry.value],
+                requireWatchPage: false,
+              )
+              .timeout(const Duration(seconds: 7));
 
-      // 2. Only add itag 18 muxed stream as extreme fallback if audioOnly is completely empty
-      if (formats.isEmpty) {
-        for (final m in res.muxed) {
-          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+          final List<Audio> formats = [];
+
+          // 1. Add pure standalone audio streams (STRICTLY NO VIDEO DATA!)
+          for (final a in res.audioOnly) {
             formats.add(Audio(
-              itag: m.tag,
-              audioCodec: Codec.mp4a,
-              bitrate: 128000,
+              itag: a.tag,
+              audioCodec:
+                  a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
+              bitrate: a.bitrate.bitsPerSecond,
               duration: 0,
               loudnessDb: 0.0,
-              url: m.url.toString(),
-              size: m.size.totalBytes,
+              url: a.url.toString(),
+              size: a.size.totalBytes,
             ));
           }
+
+          // 2. Only add itag 18 muxed stream as extreme fallback if audioOnly is completely empty
+          if (formats.isEmpty) {
+            for (final m in res.muxed) {
+              if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+                formats.add(Audio(
+                  itag: m.tag,
+                  audioCodec: Codec.mp4a,
+                  bitrate: 128000,
+                  duration: 0,
+                  loudnessDb: 0.0,
+                  url: m.url.toString(),
+                  size: m.size.totalBytes,
+                ));
+              }
+            }
+          }
+
+          if (formats.isEmpty) continue;
+
+          // 3. Fast playability & 403 probe: check if YouTube CDN blocks this video with HTTP 403
+          bool isStreamBlocked = false;
+          try {
+            final testUrl = formats.first.url;
+            final client = HttpClient();
+            client.connectionTimeout = const Duration(seconds: 3);
+            final req = await client.getUrl(Uri.parse(testUrl));
+            req.headers.set('Range', 'bytes=0-1024');
+            if (testUrl.toLowerCase().contains('c=android')) {
+              req.headers.set('User-Agent',
+                  'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip');
+            } else if (testUrl.toLowerCase().contains('c=ios')) {
+              req.headers.set('User-Agent',
+                  'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)');
+            }
+            final resp = await req.close().timeout(const Duration(seconds: 3));
+            if (resp.statusCode == 403 || resp.statusCode == 410) {
+              isStreamBlocked = true;
+            }
+            await resp.drain();
+            client.close();
+          } catch (_) {}
+
+          if (!isStreamBlocked) {
+            printINFO(
+                "YouTube client ${entry.key} successfully verified with unblocked pure audio for $videoId");
+            return StreamProvider(
+              playable: true,
+              statusMSG: "OK",
+              audioFormats: formats,
+            );
+          } else {
+            printINFO(
+                "YouTube client ${entry.key} stream blocked with HTTP 403 for $videoId, trying next client...");
+          }
+        } catch (e) {
+          lastError = e;
+          printERROR("YouTube client ${entry.key} failed for $videoId: $e");
         }
       }
 
-      // 3. Fast playability & 403 probe: check if YouTube CDN blocks this video with HTTP 403
-      bool isStreamBlocked = false;
-      if (formats.isNotEmpty) {
-        try {
-          final testUrl = formats.first.url;
-          final client = HttpClient();
-          client.connectionTimeout = const Duration(seconds: 3);
-          final req = await client.getUrl(Uri.parse(testUrl));
-          req.headers.set('Range', 'bytes=0-1024');
-          if (testUrl.contains('c=ANDROID')) {
-            req.headers.set('User-Agent',
-                'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip');
-          }
-          final resp = await req.close().timeout(const Duration(seconds: 3));
-          if (resp.statusCode == 403) {
-            isStreamBlocked = true;
-          }
-          await resp.drain();
-          client.close();
-        } catch (_) {}
-      }
-
-      if (isStreamBlocked || formats.isEmpty) {
-        throw VideoUnavailableException(
-            _isGerman
-                ? 'YouTube sperrt diesen Stream mit HTTP 403'
-                : 'YouTube blocks this stream with HTTP 403');
-      }
-
-      return StreamProvider(
-        playable: true,
-        statusMSG: "OK",
-        audioFormats: formats,
-      );
+      throw lastError ??
+          VideoUnavailableException(
+              _isGerman
+                  ? 'YouTube sperrt diesen Stream mit HTTP 403'
+                  : 'YouTube blocks this stream with HTTP 403');
     } catch (e, stack) {
       printERROR("StreamProvider.fetch YouTube error for $videoId: $e (Type: ${e.runtimeType})\n$stack");
 
