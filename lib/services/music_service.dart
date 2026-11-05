@@ -11,6 +11,7 @@ import '/models/artist.dart';
 import '/models/playlist.dart';
 import '/services/utils.dart';
 import '../utils/helper.dart';
+import 'data_usage_tracker.dart';
 import 'constant.dart';
 import 'continuations.dart';
 import 'nav_parser.dart';
@@ -126,6 +127,8 @@ class MusicServices extends getx.GetxService {
               data: data);
 
       if (response.statusCode == 200) {
+        final len = response.data?.toString().length ?? 0;
+        DataUsageTracker.instance.recordApiRequest(bytes: len);
         return response;
       } else {
         final respText = response.data?.toString() ?? '';

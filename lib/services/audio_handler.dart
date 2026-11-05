@@ -19,6 +19,7 @@ import 'package:rxdart/rxdart.dart';
 import 'soundcloud_service.dart';
 import 'platform_search_service.dart';
 import 'watchtime_service.dart';
+import 'data_usage_tracker.dart';
 import '/models/album.dart';
 import '../models/playlist.dart';
 import '../models/music_source.dart';
@@ -947,6 +948,20 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
           mediaItem.add(playableSong);
           WatchtimeService.recordSongStart(playableSong);
+          DataUsageTracker.instance.recordAudioStream(
+            title: playableSong.title,
+            artist: playableSong.artist ?? '',
+            itag: streamInfo.audio?.itag ?? 0,
+            codec: streamInfo.audio?.audioCodec.name ?? 'aac',
+            bitrate: streamInfo.audio?.bitrate ?? 0,
+            sizeBytes: streamInfo.audio?.size ?? 0,
+            durationSeconds: playableSong.duration?.inSeconds ?? 0,
+            source: streamAudioUrl.contains('googlevideo.com')
+                ? 'YouTube (Pure Audio)'
+                : (streamAudioUrl.contains('sndcdn')
+                    ? 'SoundCloud'
+                    : 'Direct Audio'),
+          );
           playbackState
               .add(playbackState.value.copyWith(queueIndex: currentIndex));
 
@@ -1117,6 +1132,20 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           queue.add([playableSong]);
           mediaItem.add(playableSong);
           WatchtimeService.recordSongStart(playableSong);
+          DataUsageTracker.instance.recordAudioStream(
+            title: playableSong.title,
+            artist: playableSong.artist ?? '',
+            itag: streamInfo.audio?.itag ?? 0,
+            codec: streamInfo.audio?.audioCodec.name ?? 'aac',
+            bitrate: streamInfo.audio?.bitrate ?? 0,
+            sizeBytes: streamInfo.audio?.size ?? 0,
+            durationSeconds: playableSong.duration?.inSeconds ?? 0,
+            source: currentSongUrl!.contains('googlevideo.com')
+                ? 'YouTube (Pure Audio)'
+                : (currentSongUrl!.contains('sndcdn')
+                    ? 'SoundCloud'
+                    : 'Direct Audio'),
+          );
 
           playbackState.add(playbackState.value.copyWith(queueIndex: 0));
           if (reqId != _activePlayRequestId) return;

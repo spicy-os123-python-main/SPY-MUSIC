@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:shimmer/shimmer.dart';
 
+import '../../services/data_usage_tracker.dart';
 import '../screens/Settings/settings_screen_controller.dart';
 import '/models/artist.dart';
 import '../../models/album.dart';
@@ -58,6 +59,16 @@ class ImageWidget extends StatelessWidget {
         uri.hasScheme &&
         (uri.scheme == 'http' || uri.scheme == 'https') &&
         uri.host.isNotEmpty;
+
+    if (hasValidNetworkUrl) {
+      final estimatedBytes = isPlayerArtImage
+          ? (isUltraSaver ? 35 * 1024 : (isDataSaver ? 60 * 1024 : 140 * 1024))
+          : (isDataSaver ? 9 * 1024 : 18 * 1024);
+      DataUsageTracker.instance.recordImageLoad(
+        url: finalImageUrl,
+        estimatedBytes: estimatedBytes,
+      );
+    }
 
     final Widget placeholderWidget = Container(
       padding: const EdgeInsets.all(10),
