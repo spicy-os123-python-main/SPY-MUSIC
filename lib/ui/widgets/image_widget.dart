@@ -4,6 +4,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:hive/hive.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../screens/Settings/settings_screen_controller.dart';
@@ -40,7 +41,16 @@ class ImageWidget extends StatelessWidget {
                     ? (artist?.thumbnailUrl ?? "")
                     : "";
 
-    final finalImageUrl = _optimizeThumbnailUrl(imageUrl, isPlayerArtImage);
+    int dataSaverMode = 0;
+    try {
+      final val = Hive.box('AppPrefs').get('dataSaverMode', defaultValue: 0);
+      if (val is int) dataSaverMode = val;
+    } catch (_) {}
+    final bool isDataSaver = dataSaverMode > 0;
+    final bool isUltraSaver = dataSaverMode == 2;
+
+    final finalImageUrl = _optimizeThumbnailUrl(imageUrl, isPlayerArtImage,
+        isDataSaver: isDataSaver, isUltraSaver: isUltraSaver);
     final uri = Uri.tryParse(finalImageUrl);
     final bool hasValidNetworkUrl = finalImageUrl.isNotEmpty &&
         finalImageUrl != "null" &&
@@ -63,6 +73,13 @@ class ImageWidget extends StatelessWidget {
     /// only valid for offline songs
     final bool offlineAvailable =
         song != null && (song?.extras?["url"] ?? "").contains("file");
+
+    final int? diskCacheLimit = isPlayerArtImage
+        ? (isUltraSaver ? 320 : (isDataSaver ? 500 : null))
+        : (isDataSaver ? 100 : 160);
+    final int? memCacheLimit = isPlayerArtImage
+        ? (isUltraSaver ? 300 : (isDataSaver ? 450 : null))
+        : (isDataSaver ? 90 : 140);
 
     return Container(
       height: size,
@@ -100,10 +117,10 @@ class ImageWidget extends StatelessWidget {
               ? CachedNetworkImage(
                   height: size,
                   width: size,
-                  maxWidthDiskCache: isPlayerArtImage ? null : 160,
-                  maxHeightDiskCache: isPlayerArtImage ? null : 160,
-                  memCacheWidth: isPlayerArtImage ? null : 140,
-                  memCacheHeight: isPlayerArtImage ? null : 140,
+                  maxWidthDiskCache: diskCacheLimit,
+                  maxHeightDiskCache: diskCacheLimit,
+                  memCacheWidth: memCacheLimit,
+                  memCacheHeight: memCacheLimit,
                   imageUrl: finalImageUrl,
                   fit: BoxFit.cover,
                   errorWidget: (context, url, error) => placeholderWidget,
@@ -127,13 +144,46 @@ class ImageWidget extends StatelessWidget {
     );
   }
 
-  static String _optimizeThumbnailUrl(String url, bool isHighQuality) {
-    if (isHighQuality || url.isEmpty) return url;
+  static String _optimizeThumbnailUrl(String url, bool isPlayerArtImage,
+      {bool isDataSaver = false, bool isUltraSaver = false}) {
+    if (url.isEmpty) return url;
 
+    if (isPlayerArtImage) {
+      if (isUltraSaver) {
+        if (url.contains('i.ytimg.com/vi/') || url.contains('img.youtube.com/vi/')) {
+          return url
+              .replaceAll('/maxresdefault.jpg', '/mqdefault.jpg')
+              .replaceAll('/hq720.jpg', '/mqdefault.jpg')
+              .replaceAll('/sddefault.jpg', '/mqdefault.jpg');
+        }
+        if (url.contains('googleusercontent.com') || url.contains('ggpht.com')) {
+          final sizeRegex = RegExp(r'=(?:w\d+-h\d+|s\d+)(-[^=]*)?$');
+          if (sizeRegex.hasMatch(url)) {
+            return url.replaceAll(sizeRegex, '=w320-h320-l80-rj');
+          }
+        }
+      } else if (isDataSaver) {
+        if (url.contains('i.ytimg.com/vi/') || url.contains('img.youtube.com/vi/')) {
+          return url
+              .replaceAll('/maxresdefault.jpg', '/hqdefault.jpg')
+              .replaceAll('/hq720.jpg', '/hqdefault.jpg');
+        }
+        if (url.contains('googleusercontent.com') || url.contains('ggpht.com')) {
+          final sizeRegex = RegExp(r'=(?:w\d+-h\d+|s\d+)(-[^=]*)?$');
+          if (sizeRegex.hasMatch(url)) {
+            return url.replaceAll(sizeRegex, '=w500-h500-l80-rj');
+          }
+        }
+      }
+      return url;
+    }
+
+    // List thumbnails (save massive mobile data during browsing!)
     // YouTube Video thumbnail (save up to 2MB per track!)
     if (url.contains('i.ytimg.com/vi/') || url.contains('img.youtube.com/vi/')) {
       return url
           .replaceAll('/maxresdefault.jpg', '/mqdefault.jpg')
+          .replaceAll('/hq720.jpg', '/mqdefault.jpg')
           .replaceAll('/sddefault.jpg', '/mqdefault.jpg')
           .replaceAll('/hqdefault.jpg', '/mqdefault.jpg');
     }
@@ -142,7 +192,8 @@ class ImageWidget extends StatelessWidget {
     if (url.contains('googleusercontent.com') || url.contains('ggpht.com')) {
       final sizeRegex = RegExp(r'=(?:w\d+-h\d+|s\d+)(-[^=]*)?$');
       if (sizeRegex.hasMatch(url)) {
-        return url.replaceAll(sizeRegex, '=w140-h140-l80-rj');
+        return url.replaceAll(
+            sizeRegex, isDataSaver ? '=w90-h90-l80-rj' : '=w140-h140-l80-rj');
       }
     }
 

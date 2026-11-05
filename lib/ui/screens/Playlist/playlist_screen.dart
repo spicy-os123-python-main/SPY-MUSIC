@@ -96,7 +96,7 @@ class PlaylistScreen extends StatelessWidget {
                             child: Builder(builder: (context) {
                               final thumbUrl = Thumbnail(playlistController
                                       .playlist.value.thumbnailUrl)
-                                  .extraHigh;
+                                  .low;
                               final uri = Uri.tryParse(thumbUrl);
                               final bool isValid = thumbUrl.isNotEmpty &&
                                   uri != null &&
@@ -109,6 +109,10 @@ class PlaylistScreen extends StatelessWidget {
                               }
                               return CachedNetworkImage(
                                 imageUrl: thumbUrl,
+                                maxWidthDiskCache: 200,
+                                maxHeightDiskCache: 200,
+                                memCacheWidth: 160,
+                                memCacheHeight: 160,
                                 fit:
                                     landscape ? BoxFit.fitHeight : BoxFit.cover,
                                 width: landscape ? null : size.width,

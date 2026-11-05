@@ -89,7 +89,7 @@ class AlbumScreen extends StatelessWidget {
                             child: Builder(builder: (context) {
                               final thumbUrl = Thumbnail(
                                       albumController.album.value.thumbnailUrl)
-                                  .extraHigh;
+                                  .low;
                               final uri = Uri.tryParse(thumbUrl);
                               final bool isValid = thumbUrl.isNotEmpty &&
                                   uri != null &&
@@ -102,6 +102,10 @@ class AlbumScreen extends StatelessWidget {
                               }
                               return CachedNetworkImage(
                                 imageUrl: thumbUrl,
+                                maxWidthDiskCache: 200,
+                                maxHeightDiskCache: 200,
+                                memCacheWidth: 160,
+                                memCacheHeight: 160,
                                 fit: landscape
                                     ? BoxFit.fitHeight
                                     : BoxFit.fitWidth,

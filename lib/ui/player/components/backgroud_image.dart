@@ -72,7 +72,10 @@ class BackgroudImage extends StatelessWidget {
                     }
 
                     return CachedNetworkImage(
-                      memCacheHeight: cacheHeight,
+                      memCacheHeight: cacheHeight ?? 160,
+                      memCacheWidth: 160,
+                      maxWidthDiskCache: 200,
+                      maxHeightDiskCache: 200,
                       imageBuilder: (context, imageProvider) {
                         Get.find<SettingsScreenController>()
                                     .themeModetype

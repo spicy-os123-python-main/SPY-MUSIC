@@ -431,6 +431,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   void _preloadNextSongStream() {
     if (queue.value.isEmpty) return;
+    final dataSaver =
+        Hive.box('AppPrefs').get('dataSaverMode', defaultValue: 0);
+    if (dataSaver is int && dataSaver > 0) {
+      // In Data Saver Mode (Mid or Ultra), do NOT preload next song in background to save mobile data!
+      return;
+    }
     final currIndex = playbackState.value.queueIndex ?? 0;
     final nextIndex = currIndex + 1;
     if (nextIndex >= queue.value.length) return;
@@ -1898,16 +1904,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         if (testUrl != null && !isExpired(url: testUrl)) {
           final lowItag = streamInfoJson['lowQualityAudio']?['itag'];
           final highItag = streamInfoJson['highQualityAudio']?['itag'];
-          final isRateBypass = testUrl.contains('ratebypass=yes') ||
-              highItag == 18 ||
-              lowItag == 18;
-          // Evict old HD video streams (itag 22) or blocked non-ratebypass streams (itag 140/139) from googlevideo
+          // Evict heavy video streams (itag 18 / 22) so we strictly save mobile data
           if (testUrl.contains('googlevideo.com') &&
-              (!isRateBypass || highItag == 22 || lowItag == 22)) {
-            printINFO("Evicting incompatible cached stream for ($songId)");
+              (highItag == 18 || lowItag == 18 || highItag == 22 || lowItag == 22)) {
+            printINFO("Evicting heavy video stream for ($songId) to save mobile data");
             songsUrlCacheBox.delete(songId);
           } else {
-            printINFO("Got cached Url ($songId)");
+            printINFO("Got cached pure audio Url ($songId)");
             streamInfo = HMStreamingData.fromJson(streamInfoJson);
           }
         } else {
