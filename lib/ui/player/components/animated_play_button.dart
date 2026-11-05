@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:spymusic/ui/player/player_controller.dart';
+import '../../themes/components/spy_button_animation.dart';
 import '../../widgets/loader.dart';
 
 /// A combined Play & Pause button that animates between play and pause icons
@@ -49,46 +50,49 @@ class _AnimatedPlayButtonState extends State<AnimatedPlayButton>
         _controller.reverse();
       }
 
-      return Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: isPlaying
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFFFF0055).withOpacity(0.55),
-                    blurRadius: 18,
-                    spreadRadius: 2,
+      return SpyButtonAnimation(
+        onTap: () {
+          if (isPlaying) {
+            controller.pause();
+          } else {
+            controller.play();
+          }
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: isPlaying
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFFFF0055).withOpacity(0.55),
+                      blurRadius: 18,
+                      spreadRadius: 2,
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFF00D2FF).withOpacity(0.40),
+                      blurRadius: 10,
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: const Color(0xFF00D2FF).withOpacity(0.25),
+                      blurRadius: 8,
+                    ),
+                  ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: isLoading
+                ? const LoadingIndicator(
+                    dimension: 22,
+                  )
+                : AnimatedIcon(
+                    icon: AnimatedIcons.play_pause,
+                    progress: _controller,
+                    color: Colors.white,
+                    size: widget.iconSize,
                   ),
-                  BoxShadow(
-                    color: const Color(0xFF00D2FF).withOpacity(0.40),
-                    blurRadius: 10,
-                  ),
-                ]
-              : [
-                  BoxShadow(
-                    color: const Color(0xFF00D2FF).withOpacity(0.25),
-                    blurRadius: 8,
-                  ),
-                ],
-        ),
-        child: IconButton(
-          iconSize: widget.iconSize,
-          onPressed: () {
-            if (isPlaying) {
-              controller.pause();
-            } else {
-              controller.play();
-            }
-          },
-          icon: isLoading
-              ? const LoadingIndicator(
-                  dimension: 22,
-                )
-              : AnimatedIcon(
-                  icon: AnimatedIcons.play_pause,
-                  progress: _controller,
-                  color: Colors.white,
-                ),
+          ),
         ),
       );
     });

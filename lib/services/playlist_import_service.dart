@@ -12,6 +12,7 @@ import '../ui/widgets/snackbar.dart';
 import '../utils/helper.dart';
 import 'music_service.dart';
 import 'piped_service.dart';
+import 'platform_search_service.dart';
 
 class PlaylistImportService {
   static final PlaylistImportService _instance = PlaylistImportService._internal();
@@ -409,6 +410,8 @@ class PlaylistImportService {
                   artUri: Uri.tryParse(finalCover),
                   extras: {
                     'searchQuery': '$trackName $trackArtist',
+                    'cleanTitle': PlatformSearchService.extractCleanTitle(trackName),
+                    'primaryArtist': PlatformSearchService.extractPrimaryArtist(trackArtist),
                     'artist': trackArtist,
                     'artists': artistNames.isNotEmpty
                         ? artistNames.map((name) => {'name': name, 'id': ''}).toList()
@@ -506,6 +509,8 @@ class PlaylistImportService {
               artUri: Uri.tryParse(finalCover),
               extras: {
                 'searchQuery': '$trackName $trackArtist',
+                'cleanTitle': PlatformSearchService.extractCleanTitle(trackName),
+                'primaryArtist': PlatformSearchService.extractPrimaryArtist(trackArtist),
                 'artist': trackArtist,
                 'artists': [
                   {'name': trackArtist, 'id': ''}

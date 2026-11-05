@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/theme_controller.dart';
 
@@ -412,6 +413,15 @@ class AppThemes {
 
   static bool isCustomTheme(ThemeType type) {
     return fromType(type) != null;
+  }
+
+  static SpyThemeConfig? get current {
+    try {
+      if (Get.isRegistered<ThemeController>()) {
+        return Get.find<ThemeController>().activeCustomTheme.value;
+      }
+    } catch (_) {}
+    return null;
   }
 }
 

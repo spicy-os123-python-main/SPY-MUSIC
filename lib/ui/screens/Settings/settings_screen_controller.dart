@@ -22,6 +22,7 @@ import '../Home/home_screen_controller.dart';
 import '/ui/utils/theme_controller.dart';
 import '../../widgets/app_update_dialog.dart';
 import '../../themes/custom_animations/custom_animation_painters.dart';
+import '../../themes/interaction_animations/interaction_animation_types.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 enum DataSaverMode {
@@ -36,6 +37,7 @@ class SettingsScreenController extends GetxController {
   final setBox = Hive.box("AppPrefs");
   final themeModetype = ThemeType.dynamic.obs;
   final customAnimationType = CustomAnimationType.none.obs;
+  final interactionAnimationType = InteractionAnimationType.standard.obs;
   final reduceEffects = false.obs;
   final skipSilenceEnabled = false.obs;
   final loudnessNormalizationEnabled = false.obs;
@@ -189,6 +191,15 @@ class SettingsScreenController extends GetxController {
       customAnimationType.value = CustomAnimationType.values[savedAnimIndex];
     } else {
       customAnimationType.value = CustomAnimationType.none;
+    }
+    final savedInteractionIndex = setBox.get('interactionAnimationType') ?? 0;
+    if (savedInteractionIndex is int &&
+        savedInteractionIndex >= 0 &&
+        savedInteractionIndex < InteractionAnimationType.values.length) {
+      interactionAnimationType.value =
+          InteractionAnimationType.values[savedInteractionIndex];
+    } else {
+      interactionAnimationType.value = InteractionAnimationType.standard;
     }
     skipSilenceEnabled.value =
         isDesktop ? false : setBox.get("skipSilenceEnabled");
@@ -428,6 +439,13 @@ class SettingsScreenController extends GetxController {
     if (val is CustomAnimationType) {
       setBox.put('customAnimationType', val.index);
       customAnimationType.value = val;
+    }
+  }
+
+  void onInteractionAnimationChange(dynamic val) {
+    if (val is InteractionAnimationType) {
+      setBox.put('interactionAnimationType', val.index);
+      interactionAnimationType.value = val;
     }
   }
 

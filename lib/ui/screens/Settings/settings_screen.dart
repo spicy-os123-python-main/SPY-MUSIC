@@ -13,6 +13,8 @@ import '/services/discord_service.dart';
 import '../../widgets/discord_login_dialog.dart';
 import '/ui/utils/theme_controller.dart';
 import '../../themes/custom_animations/custom_animation_painters.dart';
+import '../../themes/interaction_animations/interaction_animation_types.dart';
+import '../../themes/components/spy_button_animation.dart';
 import 'components/custom_expansion_tile.dart';
 import 'components/auto_backup_settings_widget.dart';
 import 'settings_screen_controller.dart';
@@ -111,6 +113,24 @@ class SettingsScreen extends StatelessWidget {
                       context: context,
                       builder: (context) =>
                           const CustomAnimationSelectorDialog(),
+                    ),
+                  ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.only(left: 5, right: 10),
+                    title: const Text("Button- & Seiten-Animationen"),
+                    subtitle: Obx(
+                      () => Text(
+                        getInteractionAnimationName(
+                            settingsController.interactionAnimationType.value),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                        size: 16, color: Colors.white54),
+                    onTap: () => showDialog(
+                      context: context,
+                      builder: (context) =>
+                          const InteractionAnimationSelectorDialog(),
                     ),
                   ),
                   ListTile(
@@ -1015,6 +1035,211 @@ class CustomAnimationSelectorDialog extends StatelessWidget {
                   child: Text("cancel".tr),
                 ),
                 onTap: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class InteractionAnimationSelectorDialog extends StatelessWidget {
+  const InteractionAnimationSelectorDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final settingsController = Get.find<SettingsScreenController>();
+    return CommonDialog(
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        padding: const EdgeInsets.only(top: 22, left: 8, right: 14, bottom: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Button- & Seiten-Animationen",
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      "Wähle wie sich Seiten wechseln und Buttons beim Klick verhalten",
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    // Interactive Test Button Box
+                    Obx(() {
+                      final currentType =
+                          settingsController.interactionAnimationType.value;
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF141928),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: const Color(0xFF00D2FF).withOpacity(0.35),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Vorschau: ${getInteractionAnimationName(currentType)}",
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: Color(0xFF00D2FF),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Text(
+                                    "Tippe auf den Button zum Testen:",
+                                    style: TextStyle(
+                                        fontSize: 11, color: Colors.white70),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SpyButtonAnimation(
+                              onTap: () {},
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF00D2FF), Color(0xFF0055FF)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF00D2FF)
+                                          .withOpacity(0.3),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.touch_app_rounded,
+                                        size: 16, color: Colors.white),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      "Klick mich!",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Flexible(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: InteractionAnimationType.values.map((type) {
+                    return Obx(() {
+                      final isSelected =
+                          settingsController.interactionAnimationType.value ==
+                              type;
+                      return ListTile(
+                        visualDensity: const VisualDensity(vertical: -2),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 10),
+                        onTap: () {
+                          settingsController.onInteractionAnimationChange(type);
+                        },
+                        leading: Radio<InteractionAnimationType>(
+                          value: type,
+                          groupValue:
+                              settingsController.interactionAnimationType.value,
+                          onChanged: (val) {
+                            if (val != null) {
+                              settingsController
+                                  .onInteractionAnimationChange(val);
+                            }
+                          },
+                        ),
+                        title: Row(
+                          children: [
+                            Icon(
+                              getInteractionAnimationIcon(type),
+                              size: 18,
+                              color: isSelected
+                                  ? (Theme.of(context).colorScheme.primary)
+                                  : Colors.white70,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                getInteractionAnimationName(type),
+                                style: TextStyle(
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w600,
+                                  color: isSelected
+                                      ? (Theme.of(context).colorScheme.primary)
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(left: 26.0),
+                          child: Text(
+                            getInteractionAnimationDescription(type),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      );
+                    });
+                  }).toList(),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8.0, top: 4),
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    "Fertig",
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

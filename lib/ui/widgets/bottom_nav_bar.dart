@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../screens/Home/home_screen_controller.dart';
 import '../screens/Settings/settings_screen_controller.dart';
 import '../themes/app_themes.dart';
+import '../themes/components/spy_button_animation.dart';
 import '../utils/theme_controller.dart';
 
 class BottomNavBar extends StatelessWidget {
@@ -77,8 +78,8 @@ class BottomNavBar extends StatelessWidget {
                     final item = items[index];
                     final isSelected = currentIndex == index;
 
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
+                    return SpyButtonAnimation(
+                      borderRadius: BorderRadius.circular(16),
                       onTap: () => homeScreenController.onBottonBarTabSelected(index),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
@@ -210,7 +211,7 @@ class BottomNavBar extends StatelessWidget {
                         child: Obx(() {
                           final isSelected =
                               homeScreenController.tabIndex.toInt() == index;
-                          return InkWell(
+                          return SpyButtonAnimation(
                             borderRadius: BorderRadius.circular(99),
                             onTap: () => homeScreenController
                                 .onBottonBarTabSelected(index),
@@ -380,7 +381,7 @@ class BottomNavBar extends StatelessWidget {
                         child: Obx(() {
                           final isSelected =
                               homeScreenController.tabIndex.toInt() == index;
-                          return InkWell(
+                          return SpyButtonAnimation(
                             borderRadius: config.isSignal
                                 ? BorderRadius.zero
                                 : BorderRadius.circular(config.radius),
