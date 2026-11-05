@@ -1,6 +1,7 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'music_service.dart';
 import 'soundcloud_service.dart';
 import '../utils/helper.dart';
@@ -216,7 +217,24 @@ class PlatformSearchService {
 
   /// Spotify and Amazon tracks carry official studio metadata (from Deezer/Spotify),
   /// so the audio is matched against official studio releases on YouTube Music FIRST.
-  /// Multi-tier matching ensures 100% exact studio masters without wrong SoundCloud covers.
+  static List<MediaItem> _extractYtTracks(Map<String, dynamic> res) {
+    final List<MediaItem> tracks = [];
+    for (final val in res.values) {
+      if (val is List) {
+        for (final item in val) {
+          if (item is MediaItem &&
+              !item.id.startsWith('sp_') &&
+              !item.id.startsWith('az_') &&
+              !tracks.any((t) => t.id == item.id)) {
+            tracks.add(item);
+          }
+        }
+      }
+    }
+    return tracks;
+  }
+
+  /// Multi-tier matching ensures 100% exact studio masters without wrong covers or wrong artists.
   static Future<MediaItem?> resolveMatchedTrack(
       String trackId, String searchQuery,
       {MediaItem? originalTrack, bool skipSoundCloud = false}) async {
@@ -238,11 +256,7 @@ class PlatformSearchService {
       final res = await musicServices
           .search(q1, filter: 'songs', limit: 8)
           .timeout(const Duration(seconds: 6));
-      final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
-      final ytTracks = (rawList ?? const [])
-          .whereType<MediaItem>()
-          .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
-          .toList();
+      final ytTracks = _extractYtTracks(res);
       final match = findBestMatch(ytTracks, originalTrack);
       if (match != null) {
         _remember(trackId, match);
@@ -261,11 +275,7 @@ class PlatformSearchService {
         final res = await musicServices
             .search(q2, filter: 'songs', limit: 8)
             .timeout(const Duration(seconds: 6));
-        final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
-        final ytTracks = (rawList ?? const [])
-            .whereType<MediaItem>()
-            .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
-            .toList();
+        final ytTracks = _extractYtTracks(res);
         final match = findBestMatch(ytTracks, originalTrack);
         if (match != null) {
           _remember(trackId, match);
@@ -284,11 +294,7 @@ class PlatformSearchService {
       final res = await musicServices
           .search(q3, limit: 6)
           .timeout(const Duration(seconds: 6));
-      final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
-      final ytTracks = (rawList ?? const [])
-          .whereType<MediaItem>()
-          .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
-          .toList();
+      final ytTracks = _extractYtTracks(res);
       final match = findBestMatch(ytTracks, originalTrack);
       if (match != null) {
         _remember(trackId, match);
@@ -306,11 +312,7 @@ class PlatformSearchService {
       final res = await musicServices
           .search(q4, limit: 6)
           .timeout(const Duration(seconds: 6));
-      final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
-      final ytTracks = (rawList ?? const [])
-          .whereType<MediaItem>()
-          .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
-          .toList();
+      final ytTracks = _extractYtTracks(res);
       final match = findBestMatch(ytTracks, originalTrack);
       if (match != null) {
         _remember(trackId, match);
@@ -321,18 +323,14 @@ class PlatformSearchService {
       printINFO("YouTube Official Audio search error for $trackId: $e");
     }
 
-    // 5. YouTube - Clean Title + Primary Artist General Search
+    // 5. YouTube - Clean Title + Primary Artist General Search (includes Videos & Cards)
     try {
       final musicServices = Get.find<MusicServices>();
       final q5 = '$cleanTitle $primaryArtist'.trim();
       final res = await musicServices
-          .search(q5, limit: 6)
+          .search(q5, limit: 8)
           .timeout(const Duration(seconds: 6));
-      final rawList = (res['Songs'] as List?) ?? (res['mixed'] as List?);
-      final ytTracks = (rawList ?? const [])
-          .whereType<MediaItem>()
-          .where((e) => !e.id.startsWith('sp_') && !e.id.startsWith('az_'))
-          .toList();
+      final ytTracks = _extractYtTracks(res);
       final match = findBestMatch(ytTracks, originalTrack);
       if (match != null) {
         _remember(trackId, match);
@@ -343,7 +341,37 @@ class PlatformSearchService {
       printINFO("YouTube General search error for $trackId: $e");
     }
 
-    // 6. SoundCloud - Strict verified fallback ONLY (strictly rejects non-matching artists or covers)
+    // 6. Direct YouTube Search for Creator & Indie Tracks (e.g. Execute gaming songs, YouTube music videos)
+    try {
+      final yt = YoutubeExplode();
+      try {
+        final qYT = '$cleanTitle $primaryArtist'.trim();
+        final searchResults =
+            await yt.search.search(qYT).timeout(const Duration(seconds: 7));
+        final ytCandidates = <MediaItem>[];
+        for (final v in searchResults.take(8)) {
+          ytCandidates.add(MediaItem(
+            id: v.id.value,
+            title: v.title,
+            artist: v.author,
+            duration: v.duration,
+          ));
+        }
+        final match = findBestMatch(ytCandidates, originalTrack);
+        if (match != null) {
+          _remember(trackId, match);
+          printINFO(
+              "Matched $trackId to YouTube Creator Upload: '${match.title}' by '${match.artist}'");
+          return match;
+        }
+      } finally {
+        yt.close();
+      }
+    } catch (e) {
+      printERROR("YouTube Creator search error for $trackId: $e");
+    }
+
+    // 7. SoundCloud - Strict verified fallback ONLY (strictly rejects non-matching artists or covers)
     if (!skipSoundCloud) {
       try {
         final qSC = '$cleanTitle $primaryArtist'.trim();
@@ -502,40 +530,68 @@ class PlatformSearchService {
         continue;
       }
 
-      // Strict check for SoundCloud: candidate MUST explicitly match the artist
-      if (strictSpeedCheck) {
-        final normCandArtist = _normalizeArtist(cArtist);
-        final normPrimArtist = _normalizeArtist(primaryArtist);
-        final artistMatches = normCandArtist.contains(normPrimArtist) ||
-            normPrimArtist.contains(normCandArtist) ||
-            rawTitleLower.contains(normPrimArtist);
-        if (!artistMatches) {
-          continue; // Drop unverified third-party SoundCloud uploads
+      // 2. Strict Artist Verification
+      final normCand = _normalizeArtist(cArtist);
+      final normExp = _normalizeArtist(expectedArtist);
+      final normPrim = _normalizeArtist(primaryArtist);
+
+      final bool artistMatches = normCand == normExp ||
+          normCand == normPrim ||
+          normCand.contains(normPrim) ||
+          normExp.contains(normCand) ||
+          rawTitleLower.contains(normPrim) ||
+          rawTitleLower.contains(normExp);
+
+      if (strictSpeedCheck && !artistMatches) {
+        continue;
+      }
+
+      // If the artist doesn't match at all:
+      // For short titles (1-2 words), NEVER allow a different artist!
+      final titleWords = expectedTitle.split(' ').where((w) => w.length > 1).toList();
+      if (!artistMatches && expectedArtist.isNotEmpty) {
+        if (titleWords.length <= 2) {
+          continue; // Disqualify wrong artist completely!
+        }
+        score -= 85.0; // Heavy penalty for mismatching artist
+      } else if (artistMatches) {
+        if (normCand == normExp || normCand == normPrim) {
+          score += 45.0;
+        } else if (normCand.contains(normPrim) || normExp.contains(normCand)) {
+          score += 35.0;
+        } else if (rawTitleLower.contains(normPrim)) {
+          score += 28.0;
+        }
+        // Creator video boost: "by <Artist>" or "song by <Artist>"
+        if (rawTitleLower.contains('by $normPrim') ||
+            rawTitleLower.contains('song by $normPrim') ||
+            rawTitleLower.contains('by $normExp')) {
+          score += 25.0;
         }
       }
 
-      // 2. Duration matching: Studio master tracks on YT Music and Spotify match within seconds
+      // 3. Duration matching: Studio master tracks on YT Music and Spotify match within seconds
       if (expectedDurationSec > 0 && cDurationSec > 0) {
         final diff = (expectedDurationSec - cDurationSec).abs();
         if (strictSpeedCheck && diff > 5) {
           continue; // SoundCloud track differs too much -> skip
         }
-        if (diff <= 2) {
+        if (diff <= 3) {
           score += 45.0; // Near identical length -> studio master
-        } else if (diff <= 5) {
+        } else if (diff <= 8) {
           score += 35.0;
-        } else if (diff <= 10) {
+        } else if (diff <= 18) {
           score += 20.0;
-        } else if (diff <= 20) {
-          score += 5.0;
         } else if (diff <= 35) {
-          score -= 20.0;
+          score += 5.0;
+        } else if (diff > 60) {
+          score -= 70.0; // Heavy penalty for gameplay, tutorial, or extended mix!
         } else {
-          score -= 60.0; // Heavy penalty for wrong length
+          score -= 30.0;
         }
       }
 
-      // 3. Official Release / Topic Channel Boost
+      // 4. Official Release / Topic Channel Boost
       if (rawTitleLower.contains('official audio') ||
           cArtist.toLowerCase().contains('topic') ||
           cArtist.toLowerCase().contains('vevo') ||
@@ -543,35 +599,19 @@ class PlatformSearchService {
         score += 30.0;
       }
 
-      // 4. Title matching
+      // 5. Title matching
       if (cTitle == expectedTitle) {
         score += 55.0;
       } else if (cTitle.startsWith(expectedTitle) || expectedTitle.startsWith(cTitle)) {
-        score += 42.0;
+        score += 45.0;
       } else if (cTitle.contains(expectedTitle) || expectedTitle.contains(cTitle)) {
-        score += 32.0;
+        score += 40.0;
       } else {
         final expectedWords = expectedTitle.split(' ').where((w) => w.length > 2).toList();
         if (expectedWords.isNotEmpty) {
           int matchedWords = expectedWords.where((w) => cTitle.contains(w)).length;
-          score += (matchedWords / expectedWords.length) * 28.0;
-        }
-      }
-
-      // 5. Artist matching
-      if (expectedArtist.isNotEmpty) {
-        final normCand = _normalizeArtist(cArtist);
-        final normExp = _normalizeArtist(expectedArtist);
-        final normPrim = _normalizeArtist(primaryArtist);
-
-        if (normCand == normExp || normCand == normPrim) {
-          score += 40.0;
-        } else if (normCand.contains(normPrim) || normExp.contains(normCand)) {
-          score += 30.0;
-        } else if (rawTitleLower.contains(normPrim)) {
-          score += 22.0;
-        } else {
-          score -= 25.0; // Penalty for mismatching artist
+          if (matchedWords == 0) continue; // Zero title words matched -> cannot be the song!
+          score += (matchedWords / expectedWords.length) * 32.0;
         }
       }
 
