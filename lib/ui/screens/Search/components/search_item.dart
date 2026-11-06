@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../../services/love_mode_service.dart';
 import '/ui/screens/Search/search_screen_controller.dart';
 
 import '../../../navigator.dart';
@@ -16,6 +17,13 @@ class SearchItem extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.only(left: 10, right: 20),
       onTap: () {
+        if (LoveModeService.isLoveCode(queryString)) {
+          FocusManager.instance.primaryFocus?.unfocus();
+          searchScreenController.focusNode.unfocus();
+          searchScreenController.reset();
+          LoveModeService.toggleLoveMode(context);
+          return;
+        }
         FocusManager.instance.primaryFocus?.unfocus();
         Get.toNamed(ScreenNavigationSetup.searchResultScreen,
             id: ScreenNavigationSetup.id, arguments: queryString);

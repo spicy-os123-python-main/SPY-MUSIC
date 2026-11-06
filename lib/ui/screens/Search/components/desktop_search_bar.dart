@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import '../../../../services/love_mode_service.dart';
 import 'search_item.dart';
 import '/ui/screens/Search/search_screen_controller.dart';
 
@@ -25,6 +26,12 @@ class DesktopSearchBar extends StatelessWidget {
             onTapOutside: (event) {},
             onChanged: searchScreenController.onChanged,
             onSubmitted: (val) {
+              if (LoveModeService.isLoveCode(val)) {
+                searchScreenController.focusNode.unfocus();
+                searchScreenController.reset();
+                LoveModeService.toggleLoveMode(context);
+                return;
+              }
               if (val.contains("https://")) {
                 searchScreenController.filterLinks(Uri.parse(val));
                 searchScreenController.reset();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'components/search_item.dart';
+import '../../../services/love_mode_service.dart';
 import '/ui/screens/Settings/settings_screen_controller.dart';
 import '../../widgets/modified_text_field.dart';
 import '/ui/navigator.dart';
@@ -74,6 +75,12 @@ class SearchScreen extends StatelessWidget {
                       textInputAction: TextInputAction.search,
                       onChanged: searchScreenController.onChanged,
                       onSubmitted: (val) {
+                        if (LoveModeService.isLoveCode(val)) {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          searchScreenController.reset();
+                          LoveModeService.toggleLoveMode(context);
+                          return;
+                        }
                         if (val.contains("https://")) {
                           searchScreenController.filterLinks(Uri.parse(val));
                           searchScreenController.reset();

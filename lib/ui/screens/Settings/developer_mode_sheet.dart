@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import '../../../services/app_log_service.dart';
 import '../../../services/data_usage_tracker.dart';
+import '../../../services/love_mode_service.dart';
 import '../../../services/music_service.dart';
 import '../../widgets/snackbar.dart';
 import 'settings_screen_controller.dart';
@@ -260,6 +261,87 @@ class DeveloperModeSheet extends StatelessWidget {
                         ),
                       );
                     }),
+
+                    // Romantic Love Mode Easter Egg Card
+                    StatefulBuilder(
+                      builder: (context, setInnerState) {
+                        final isLove = LoveModeService.isEnabled;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isLove
+                                ? const Color(0xFFFF2D55).withOpacity(0.14)
+                                : Colors.grey.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isLove
+                                  ? const Color(0xFFFF2D55)
+                                  : Colors.white.withOpacity(0.15),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: isLove
+                                      ? const Color(0xFFFF2D55).withOpacity(0.2)
+                                      : Colors.white.withOpacity(0.08),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.favorite_rounded,
+                                  color: isLove
+                                      ? const Color(0xFFFF2D55)
+                                      : Colors.white54,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Liebesmodus (LOVE YOU SCHATZ)",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: isLove
+                                            ? const Color(0xFFFF2D55)
+                                            : theme.textTheme.bodyMedium?.color,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      isLove
+                                          ? "Aktiv: Text wird auf der Dino-Animation angezeigt"
+                                          : "Geheimcode 'schatz' in der Suche oder 5x Version tippen",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: theme.textTheme.bodyMedium?.color
+                                            ?.withOpacity(0.75),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: isLove,
+                                activeColor: const Color(0xFFFF2D55),
+                                onChanged: (val) {
+                                  LoveModeService.isEnabled = val;
+                                  setInnerState(() {});
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
 
                     // Mode Banner
                     Obx(() {

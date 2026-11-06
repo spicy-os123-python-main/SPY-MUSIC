@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../services/love_mode_service.dart';
 
-/// Fully animated Indoraptor background animation using extracted video frames.
+/// Fully animated Indoraptor background animation with smooth 3D vector rendering
+/// and secret romantic Easter Egg for his girlfriend ("LOVE YOU / SCHATZ").
 class DinoStalkerWidget extends StatelessWidget {
   final double time;
   final Color accent;
@@ -14,12 +16,14 @@ class DinoStalkerWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isLoveActive = LoveModeService.isEnabled;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         return Stack(
           fit: StackFit.expand,
           children: [
-            // Ambient predator glow in the background matching accent color
+            // 1. Ambient predator / love glow in the background matching accent/love color
             Positioned(
               bottom: constraints.maxHeight * 0.12,
               left: 0,
@@ -32,7 +36,8 @@ class DinoStalkerWidget extends StatelessWidget {
                       center: const Alignment(0.0, 0.4),
                       radius: 0.75,
                       colors: [
-                        accent.withOpacity(0.12),
+                        (isLoveActive ? const Color(0xFFFF2D55) : accent)
+                            .withOpacity(0.14),
                         Colors.transparent,
                       ],
                     ),
@@ -41,33 +46,120 @@ class DinoStalkerWidget extends StatelessWidget {
               ),
             ),
 
-            // The transparent dinosaur animation from the user video
+            // 2. The smooth, bug-free, fully articulated 3D Indoraptor
             Positioned.fill(
               child: IgnorePointer(
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: FractionallySizedBox(
-                    widthFactor: 1.0,
-                    heightFactor: 0.88,
-                    child: Image.asset(
-                      'assets/animations/dino_stalker.webp',
-                      fit: BoxFit.contain,
-                      alignment: Alignment.bottomCenter,
-                      gaplessPlayback: true,
-                      errorBuilder: (context, error, stackTrace) {
-                        return CustomPaint(
-                          painter: Indoraptor3DPainter(time: time, accentColor: accent),
-                          size: Size.infinite,
-                        );
-                      },
-                    ),
+                child: CustomPaint(
+                  painter: Indoraptor3DPainter(
+                    time: time,
+                    accentColor: isLoveActive ? const Color(0xFFFF2D55) : accent,
                   ),
+                  size: Size.infinite,
                 ),
               ),
             ),
+
+            // 3. Romantic Easter Egg Text for girlfriend: "LOVE YOU" / "SCHATZ"
+            if (isLoveActive)
+              Positioned(
+                top: (constraints.maxHeight * 0.16).clamp(70.0, 220.0),
+                left: 20,
+                right: 20,
+                child: IgnorePointer(
+                  child: _buildLoveBanner(time),
+                ),
+              ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildLoveBanner(double t) {
+    final double pulse = 0.88 + 0.12 * math.sin(t * 3.2);
+    final double floatY = math.sin(t * 1.8) * 5.0;
+
+    return Transform.translate(
+      offset: Offset(0, floatY),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: const Color(0xFFFF2D55).withOpacity(0.45 * pulse),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFF2D55).withOpacity(0.25 * pulse),
+                blurRadius: 24,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.favorite_rounded,
+                    color: const Color(0xFFFF2D55),
+                    size: 18 * pulse,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "LOVE YOU",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 5.0,
+                      color: Colors.white,
+                      shadows: [
+                        Shadow(
+                          color: const Color(0xFFFF2D55)
+                              .withOpacity(0.9 * pulse),
+                          blurRadius: 18,
+                        ),
+                        Shadow(
+                          color: const Color(0xFFFF2D55)
+                              .withOpacity(0.6 * pulse),
+                          blurRadius: 32,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.favorite_rounded,
+                    color: const Color(0xFFFF2D55),
+                    size: 18 * pulse,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                "SCHATZ",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 7.0,
+                  color: const Color(0xFFFFD1DC),
+                  shadows: [
+                    Shadow(
+                      color: const Color(0xFFFF2D55).withOpacity(0.85 * pulse),
+                      blurRadius: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

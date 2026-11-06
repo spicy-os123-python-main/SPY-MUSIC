@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:spymusic/ui/screens/Settings/settings_screen_controller.dart';
 
 import '../../../models/music_source.dart';
+import '../../../services/love_mode_service.dart';
 import '../../../services/soundcloud_service.dart';
 import '../../../services/platform_search_service.dart';
 import '../../../utils/helper.dart';
@@ -191,6 +192,10 @@ class SearchResultScreenController extends GetxController
     if (args != null) {
       queryString.value = args.toString();
       String finalQuery = args.toString();
+
+      if (LoveModeService.isLoveCode(finalQuery)) {
+        LoveModeService.toggleLoveMode(Get.context);
+      }
 
       // Check if user has SoundCloud selected as platform
       MusicSource selectedPlatform = MusicSource.all;

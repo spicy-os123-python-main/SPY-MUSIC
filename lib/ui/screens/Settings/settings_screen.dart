@@ -12,6 +12,7 @@ import '/services/music_service.dart';
 import '/services/discord_service.dart';
 import '../../widgets/discord_login_dialog.dart';
 import '/ui/utils/theme_controller.dart';
+import '../../../services/love_mode_service.dart';
 import '../../widgets/animated_screen_transition.dart';
 import '../../themes/custom_animations/custom_animation_painters.dart';
 import '../../themes/interaction_animations/interaction_animation_types.dart';
@@ -21,6 +22,8 @@ import 'components/auto_backup_settings_widget.dart';
 import 'settings_screen_controller.dart';
 
 class SettingsScreen extends StatelessWidget {
+  static int _versionTapCount = 0;
+  static DateTime? _lastVersionTapTime;
   const SettingsScreen({super.key, this.isBottomNavActive = false});
   final bool isBottomNavActive;
 
@@ -807,11 +810,30 @@ class SettingsScreen extends StatelessWidget {
               )
             ],
           )),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 20.0),
-            child: Text(
-              "${settingsController.currentVersion} by SPY",
-              style: Theme.of(context).textTheme.bodySmall,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              final now = DateTime.now();
+              if (_lastVersionTapTime != null &&
+                  now.difference(_lastVersionTapTime!) >
+                      const Duration(seconds: 2)) {
+                _versionTapCount = 1;
+              } else {
+                _versionTapCount++;
+              }
+              _lastVersionTapTime = now;
+              if (_versionTapCount >= 5) {
+                _versionTapCount = 0;
+                LoveModeService.toggleLoveMode(context);
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.only(
+                  bottom: 20.0, top: 10.0, left: 24.0, right: 24.0),
+              child: Text(
+                "${settingsController.currentVersion} by SPY",
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ),
           ),
         ],
