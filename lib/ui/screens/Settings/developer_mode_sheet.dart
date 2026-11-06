@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../../services/app_log_service.dart';
 import '../../../services/data_usage_tracker.dart';
 import '../../../services/music_service.dart';
 import '../../widgets/snackbar.dart';
@@ -788,6 +789,42 @@ class DeveloperModeSheet extends StatelessWidget {
                                   size: SanckBarSize.BIG,
                                 ),
                               );
+                            },
+                          ),
+                          const Divider(height: 16),
+
+                          // Copy Error Logs Button
+                          _buildActionButton(
+                            context,
+                            icon: Icons.bug_report_rounded,
+                            label: "Error-Logs in Zwischenablage kopieren",
+                            subtitle: "Kopiert die letzten App-Fehler zum schnellen Teilen",
+                            color: Colors.redAccent,
+                            onTap: () async {
+                              final count = AppLogService.errorLogs.length;
+                              await AppLogService.copyToClipboard(errorsOnly: true);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  snackbar(
+                                    context,
+                                    "$count Fehler-Logs in Zwischenablage kopiert!",
+                                    size: SanckBarSize.BIG,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                          const Divider(height: 16),
+
+                          // Share All Logs Button
+                          _buildActionButton(
+                            context,
+                            icon: Icons.share_rounded,
+                            label: "Diagnose- & Error-Logs teilen",
+                            subtitle: "Öffnet das Teilen-Menü für alle Diagnose-Logs",
+                            color: Colors.orangeAccent,
+                            onTap: () async {
+                              await AppLogService.shareLogs();
                             },
                           ),
                         ],

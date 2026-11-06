@@ -7,6 +7,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 
 import '../../models/playling_from.dart';
+import '../../services/app_log_service.dart';
 import '../../services/downloader.dart';
 import '../screens/Playlist/playlist_screen_controller.dart';
 import '../widgets/snackbar.dart';
@@ -1197,9 +1198,54 @@ class PlayerController extends GetxController
   /// or returned streamInfo null due to network error
   void notifyPlayError(String message) {
     printERROR("Song playback failed: $message", tag: "PlayerController");
-    ScaffoldMessenger.of(Get.context!).showSnackBar(snackbar(
-        Get.context!, message == "networkError" ? message.tr : message,
-        size: SanckBarSize.MEDIUM));
+    final ctx = Get.context;
+    if (ctx != null) {
+      final isGerman = (Get.locale?.languageCode ?? 'de') == 'de';
+      ScaffoldMessenger.of(ctx).hideCurrentSnackBar();
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(
+          backgroundColor: Theme.of(ctx).colorScheme.secondary,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  message == "networkError" ? message.tr : message,
+                  style: TextStyle(
+                    color: Theme.of(ctx).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () {
+                  AppLogService.copyToClipboard(errorsOnly: true);
+                  ScaffoldMessenger.of(ctx).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(
+                      content: Text(isGerman
+                          ? "Logs in Zwischenablage kopiert!"
+                          : "Logs copied to clipboard!"),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+                child: Text(
+                  isGerman ? "LOGS KOPIEREN" : "COPY LOGS",
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 
   @override

@@ -95,6 +95,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   String? _lastTrackedSongId;
   int _activePlayRequestId = 0;
   bool _isTriggeringNext = false;
+  DateTime? _lastStreamErrorTime;
 
   // list of shuffled queue songs ids
   List<String> shuffledQueue = [];
@@ -112,12 +113,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         useProxyForRequestHeaders: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 15),
-          maxBufferDuration: Duration(seconds: 35),
+          minBufferDuration: Duration(seconds: 8),
+          maxBufferDuration: Duration(seconds: 20),
           bufferForPlaybackDuration: Duration(milliseconds: 500),
           bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1000),
           prioritizeTimeOverSizeThresholds: true,
-          backBufferDuration: Duration(seconds: 15),
+          backBufferDuration: Duration(seconds: 10),
         )));
     if (GetPlatform.isAndroid || GetPlatform.isIOS) {
       _initAudioSession();
@@ -389,6 +390,14 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       if (isSongLoading) {
         return;
       }
+
+      // Debounce duplicate error events dispatched by ExoPlayer in the same second
+      final now = DateTime.now();
+      if (_lastStreamErrorTime != null &&
+          now.difference(_lastStreamErrorTime!) < const Duration(milliseconds: 1500)) {
+        return;
+      }
+      _lastStreamErrorTime = now;
 
       final currentId = mediaItem.value?.id ??
           (currentIndex != null && queue.value.isNotEmpty
@@ -778,6 +787,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     return AudioSource.uri(
       uri,
       tag: mediaItem,
+      headers: url.contains('googlevideo.com')
+          ? {
+              'User-Agent':
+                  'Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+            }
+          : null,
     );
   }
 
@@ -2030,10 +2045,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         if (testUrl != null && !isExpired(url: testUrl)) {
           final lowItag = streamInfoJson['lowQualityAudio']?['itag'];
           final highItag = streamInfoJson['highQualityAudio']?['itag'];
-          // Only evict old high-res 720p/1080p video streams (itag 22), preserve itag 18 and pure audio
-          if (testUrl.contains('googlevideo.com') &&
-              (highItag == 22 || lowItag == 22)) {
-            printINFO("Evicting heavy HD video stream for ($songId)");
+          // Evict old heavy HD video streams AND any YouTube DASH audio streams lacking ratebypass=yes (which fail with 403)
+          final isBlockedDash = testUrl.contains('googlevideo.com') &&
+              !testUrl.contains('ratebypass=yes');
+          if ((testUrl.contains('googlevideo.com') &&
+                  (highItag == 22 || lowItag == 22)) ||
+              isBlockedDash) {
+            printINFO("Evicting incompatible YouTube stream from cache for ($songId)");
             songsUrlCacheBox.delete(songId);
           } else {
             printINFO("Got cached stream Url ($songId)");

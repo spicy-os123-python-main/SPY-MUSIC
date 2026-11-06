@@ -2,6 +2,7 @@
 
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
+import '../services/app_log_service.dart';
 import '../services/discord_webhook_service.dart';
 import '../ui/screens/Settings/settings_screen_controller.dart';
 
@@ -12,16 +13,21 @@ void printERROR(dynamic text, {String tag = "SPY MUSIC"}) {
   // Release logs enabled for troubleshooting via adb logcat -s flutter
   print("\x1B[31m[$tag ERROR]: $text\x1B[0m");
 
+  // Keep in in-memory diagnostics buffer for 1-tap copying / sharing
+  AppLogService.add('ERROR', text, tag: tag);
+
   // Send errors to configured Discord webhook
   DiscordWebhookService.sendError(text, tag: tag);
 }
 
 void printWarning(dynamic text, {String tag = 'SPY MUSIC'}) {
   print("\x1B[33m[$tag WARN]: $text\x1B[34m");
+  AppLogService.add('WARN', text, tag: tag);
 }
 
 void printINFO(dynamic text, {String tag = 'SPY MUSIC'}) {
   print("\x1B[32m[$tag INFO]: $text\x1B[34m");
+  AppLogService.add('INFO', text, tag: tag);
 }
 
 String? getCurrentRouteName() {
@@ -171,9 +177,9 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
   currentVer ??= "v1.0.0";
   final dio = Dio(
     BaseOptions(
-      connectTimeout: const Duration(seconds: 5),
-      sendTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
+      connectTimeout: const Duration(seconds: 20),
+      sendTimeout: const Duration(seconds: 20),
+      receiveTimeout: const Duration(seconds: 20),
       headers: {
         'User-Agent': 'SPY-MUSIC-App/1.0',
         'Accept': 'application/vnd.github.v3+json',
@@ -233,8 +239,8 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
     try {
       final redirectDio = Dio(
         BaseOptions(
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
+          connectTimeout: const Duration(seconds: 20),
+          receiveTimeout: const Duration(seconds: 20),
           headers: {'User-Agent': 'Mozilla/5.0 (Linux; Android 10)'},
         ),
       );
