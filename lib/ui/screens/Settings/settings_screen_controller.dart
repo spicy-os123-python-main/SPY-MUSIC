@@ -322,6 +322,7 @@ class SettingsScreenController extends GetxController {
     setBox.put("streamingQuality", idx);
     setBox.put("dataSaverMode", idx);
     streamingQuality.value = val;
+    dataSaverMode.value = DataSaverMode.values[idx.clamp(0, 2)];
   }
 
   void setPlayerUi(dynamic val) {

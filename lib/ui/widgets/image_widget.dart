@@ -46,12 +46,14 @@ class ImageWidget extends StatelessWidget {
     try {
       final val = Hive.box('AppPrefs').get('dataSaverMode', defaultValue: 0);
       if (val is int) dataSaverMode = val;
+      final qVal = Hive.box('AppPrefs').get('streamingQuality', defaultValue: 0);
+      if (qVal is int && qVal > dataSaverMode) dataSaverMode = qVal;
     } catch (_) {}
     final bool isDataSaver = dataSaverMode > 0;
     final bool isUltraSaver = dataSaverMode == 2;
 
-    final finalImageUrl = _optimizeThumbnailUrl(imageUrl, isPlayerArtImage,
-        isDataSaver: isDataSaver, isUltraSaver: isUltraSaver);
+    final finalImageUrl = optimizeThumbnailUrl(imageUrl, isPlayerArtImage,
+        isDataSaver: isDataSaver, isUltraSaver: isUltraSaver, displaySize: size);
     final uri = Uri.tryParse(finalImageUrl);
     final bool hasValidNetworkUrl = finalImageUrl.isNotEmpty &&
         finalImageUrl != "null" &&
@@ -62,8 +64,8 @@ class ImageWidget extends StatelessWidget {
 
     if (hasValidNetworkUrl) {
       final estimatedBytes = isPlayerArtImage
-          ? (isUltraSaver ? 35 * 1024 : (isDataSaver ? 60 * 1024 : 140 * 1024))
-          : (isDataSaver ? 9 * 1024 : 18 * 1024);
+          ? (isUltraSaver ? 95 * 1024 : (isDataSaver ? 110 * 1024 : 180 * 1024))
+          : (isUltraSaver ? 5 * 1024 : (isDataSaver ? 9 * 1024 : 18 * 1024));
       DataUsageTracker.instance.recordImageLoad(
         url: finalImageUrl,
         estimatedBytes: estimatedBytes,
@@ -85,12 +87,12 @@ class ImageWidget extends StatelessWidget {
     final bool offlineAvailable =
         song != null && (song?.extras?["url"] ?? "").contains("file");
 
-    final int? diskCacheLimit = isPlayerArtImage
-        ? (isUltraSaver ? 320 : (isDataSaver ? 500 : null))
-        : (isDataSaver ? 100 : 160);
-    final int? memCacheLimit = isPlayerArtImage
-        ? (isUltraSaver ? 300 : (isDataSaver ? 450 : null))
-        : (isDataSaver ? 90 : 140);
+    final int diskCacheLimit = isPlayerArtImage
+        ? 720
+        : (isUltraSaver ? 180 : (isDataSaver ? 220 : 300));
+    final int memCacheLimit = isPlayerArtImage
+        ? 720
+        : (isUltraSaver ? 144 : (isDataSaver ? 180 : 260));
 
     return Container(
       height: size,
@@ -155,42 +157,77 @@ class ImageWidget extends StatelessWidget {
     );
   }
 
-  static String _optimizeThumbnailUrl(String url, bool isPlayerArtImage,
-      {bool isDataSaver = false, bool isUltraSaver = false}) {
+  static String optimizeThumbnailUrl(String url, bool isPlayerArtImage,
+      {bool isDataSaver = false,
+      bool isUltraSaver = false,
+      double? displaySize}) {
     if (url.isEmpty) return url;
 
+    // 1. Full Player Screen Cover Artwork ("richtigen bilder in 720p wenn man das bild so sieht")
     if (isPlayerArtImage) {
-      if (isUltraSaver) {
+      if (isUltraSaver || isDataSaver) {
+        // Enforce clean 720p HD (saves ~95% data vs uncompressed 4K maxresdefault while looking crisp)
         if (url.contains('i.ytimg.com/vi/') || url.contains('img.youtube.com/vi/')) {
           return url
-              .replaceAll('/maxresdefault.jpg', '/mqdefault.jpg')
-              .replaceAll('/hq720.jpg', '/mqdefault.jpg')
-              .replaceAll('/sddefault.jpg', '/mqdefault.jpg');
+              .replaceAll('/maxresdefault.jpg', '/hq720.jpg')
+              .replaceAll('/sddefault.jpg', '/hq720.jpg')
+              .replaceAll('/mqdefault.jpg', '/hq720.jpg')
+              .replaceAll('/default.jpg', '/hq720.jpg');
         }
         if (url.contains('googleusercontent.com') || url.contains('ggpht.com')) {
           final sizeRegex = RegExp(r'=(?:w\d+-h\d+|s\d+)(-[^=]*)?$');
           if (sizeRegex.hasMatch(url)) {
-            return url.replaceAll(sizeRegex, '=w320-h320-l80-rj');
+            return url.replaceAll(sizeRegex, '=w720-h720-l80-rj');
           }
         }
-      } else if (isDataSaver) {
-        if (url.contains('i.ytimg.com/vi/') || url.contains('img.youtube.com/vi/')) {
+        if (url.contains('sndcdn.com')) {
           return url
-              .replaceAll('/maxresdefault.jpg', '/hqdefault.jpg')
-              .replaceAll('/hq720.jpg', '/hqdefault.jpg');
-        }
-        if (url.contains('googleusercontent.com') || url.contains('ggpht.com')) {
-          final sizeRegex = RegExp(r'=(?:w\d+-h\d+|s\d+)(-[^=]*)?$');
-          if (sizeRegex.hasMatch(url)) {
-            return url.replaceAll(sizeRegex, '=w500-h500-l80-rj');
-          }
+              .replaceAll('-large.jpg', '-t500x500.jpg')
+              .replaceAll('-original.jpg', '-t500x500.jpg');
         }
       }
       return url;
     }
 
-    // List thumbnails (save massive mobile data during browsing!)
-    // YouTube Video thumbnail (save up to 2MB per track!)
+    // 2. Track / Song Thumbnails in Lists, Search, Library, Miniplayer ("titel bildern in 240p oder 144p")
+    if (isUltraSaver) {
+      // 85% Data Saver Mode: 240p (mqdefault ~8KB) or 144p (default ~3KB for small tiles)
+      final bool use144p = (displaySize != null && displaySize <= 65);
+
+      if (url.contains('i.ytimg.com/vi/') || url.contains('img.youtube.com/vi/')) {
+        final targetFormat = use144p ? '/default.jpg' : '/mqdefault.jpg';
+        return url
+            .replaceAll('/maxresdefault.jpg', targetFormat)
+            .replaceAll('/hq720.jpg', targetFormat)
+            .replaceAll('/sddefault.jpg', targetFormat)
+            .replaceAll('/hqdefault.jpg', targetFormat)
+            .replaceAll('/mqdefault.jpg', targetFormat);
+      }
+
+      if (url.contains('googleusercontent.com') || url.contains('ggpht.com')) {
+        final sizeRegex = RegExp(r'=(?:w\d+-h\d+|s\d+)(-[^=]*)?$');
+        if (sizeRegex.hasMatch(url)) {
+          return url.replaceAll(
+              sizeRegex, use144p ? '=w120-h120-l80-rj' : '=w180-h180-l80-rj');
+        }
+      }
+
+      if (url.contains('sndcdn.com')) {
+        return url
+            .replaceAll('-t500x500.jpg', '-large.jpg')
+            .replaceAll('-original.jpg', '-large.jpg')
+            .replaceAll('-t300x300.jpg', '-large.jpg');
+      }
+
+      if (url.contains('i.scdn.co/image/ab67616d0000b273')) {
+        return url.replaceAll('ab67616d0000b273',
+            use144p ? 'ab67616d00004851' : 'ab67616d00001e02');
+      }
+
+      return url;
+    }
+
+    // Standard list optimization (saves massive mobile data during browsing)
     if (url.contains('i.ytimg.com/vi/') || url.contains('img.youtube.com/vi/')) {
       return url
           .replaceAll('/maxresdefault.jpg', '/mqdefault.jpg')
@@ -199,16 +236,14 @@ class ImageWidget extends StatelessWidget {
           .replaceAll('/hqdefault.jpg', '/mqdefault.jpg');
     }
 
-    // Google User Content / YouTube Music thumbnails
     if (url.contains('googleusercontent.com') || url.contains('ggpht.com')) {
       final sizeRegex = RegExp(r'=(?:w\d+-h\d+|s\d+)(-[^=]*)?$');
       if (sizeRegex.hasMatch(url)) {
         return url.replaceAll(
-            sizeRegex, isDataSaver ? '=w90-h90-l80-rj' : '=w140-h140-l80-rj');
+            sizeRegex, isDataSaver ? '=w120-h120-l80-rj' : '=w180-h180-l80-rj');
       }
     }
 
-    // SoundCloud track covers
     if (url.contains('sndcdn.com')) {
       return url
           .replaceAll('-t500x500.jpg', '-large.jpg')
@@ -216,7 +251,6 @@ class ImageWidget extends StatelessWidget {
           .replaceAll('-t300x300.jpg', '-large.jpg');
     }
 
-    // Spotify image resizing
     if (url.contains('i.scdn.co/image/ab67616d0000b273')) {
       return url.replaceAll('ab67616d0000b273', 'ab67616d00001e02');
     }

@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 
 import '../../screens/Settings/settings_screen_controller.dart';
 import '../../utils/theme_controller.dart';
+import '../../widgets/image_widget.dart';
 import '../player_controller.dart';
 
 class BackgroudImage extends StatelessWidget {
@@ -71,6 +72,15 @@ class BackgroudImage extends StatelessWidget {
                       return const SizedBox.shrink();
                     }
 
+                    // Background is heavily blurred (Sigma 25): use ultra-compact 144p/240p thumbnail
+                    final optimizedArt = ImageWidget.optimizeThumbnailUrl(
+                      artUriStr,
+                      false,
+                      isDataSaver: true,
+                      isUltraSaver: true,
+                      displaySize: 140,
+                    );
+
                     return CachedNetworkImage(
                       memCacheHeight: cacheHeight ?? 160,
                       memCacheWidth: 160,
@@ -92,7 +102,7 @@ class BackgroudImage extends StatelessWidget {
                           fit: BoxFit.cover,
                         );
                       },
-                      imageUrl: artUriStr,
+                      imageUrl: optimizedArt,
                       cacheKey:
                           "${playerController.currentSong.value!.id}_song",
                       errorWidget: (_, __, ___) => const SizedBox.shrink(),

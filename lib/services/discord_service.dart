@@ -108,14 +108,14 @@ class DiscordService {
 
   void _startHealthCheck() {
     _healthCheckTimer?.cancel();
-    _healthCheckTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+    _healthCheckTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (isEnabled && token.isNotEmpty) {
         if (!isGatewayConnected && !_isConnecting) {
           debugPrint('[SPY MUSIC Discord] Health check: Reconnecting inactive gateway...');
           connectGateway();
         } else if (isGatewayConnected && _currentIsPlaying && currentTitle != null) {
-          // Keep presence active and sync progress smoothly (max once every 25s, well within Discord limits)
-          _sendPresencePayload(isPlaying: true, force: false);
+          // Live Discord Rich Presence progress sync every 15 seconds
+          _sendPresencePayload(isPlaying: true, force: true);
         }
       }
     });
@@ -472,7 +472,7 @@ class DiscordService {
       currentPosition = position;
     }
 
-    if (songChanged || songStartTime == null || posDiff > 2) {
+    if (songChanged || songStartTime == null || posDiff > 5) {
       final offsetMs = position?.inMilliseconds ?? currentPosition?.inMilliseconds ?? 0;
       songStartTime = DateTime.now().subtract(Duration(milliseconds: offsetMs));
     }
@@ -482,13 +482,14 @@ class DiscordService {
       _pauseGraceTimer = null;
       _currentIsPlaying = true;
 
-      // Skip redundant sends if same song is already playing and no seek occurred
-      if (!songChanged && _lastSentIsPlaying == true && _lastSentTitle == currentTitle && posDiff <= 2) {
+      // Skip redundant sends if same song is already playing and no major seek occurred
+      // (Routine progress is smoothly synced by the 15-second health check timer)
+      if (!songChanged && _lastSentIsPlaying == true && _lastSentTitle == currentTitle && posDiff <= 5) {
         return;
       }
 
       _debounceTimer?.cancel();
-      _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _debounceTimer = Timer(const Duration(milliseconds: 600), () {
         _sendPresencePayload(isPlaying: true);
       });
     } else {

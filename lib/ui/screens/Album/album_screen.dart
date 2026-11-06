@@ -10,6 +10,7 @@ import 'package:widget_marquee/widget_marquee.dart';
 
 import '../../../services/downloader.dart';
 import '../../player/player_controller.dart';
+import '../../widgets/image_widget.dart';
 import '../../widgets/loader.dart';
 import '../../widgets/snackbar.dart';
 import '../../widgets/song_list_tile.dart';
@@ -101,7 +102,9 @@ class AlbumScreen extends StatelessWidget {
                                 return const SizedBox.shrink();
                               }
                               return CachedNetworkImage(
-                                imageUrl: thumbUrl,
+                                imageUrl: ImageWidget.optimizeThumbnailUrl(
+                                    thumbUrl, false,
+                                    isDataSaver: true, isUltraSaver: true),
                                 maxWidthDiskCache: 200,
                                 maxHeightDiskCache: 200,
                                 memCacheWidth: 160,

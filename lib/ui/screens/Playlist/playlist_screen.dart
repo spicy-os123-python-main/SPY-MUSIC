@@ -12,6 +12,7 @@ import '../../../services/downloader.dart';
 import '../../../services/playlist_repair_service.dart';
 import '../../navigator.dart';
 import '../../player/player_controller.dart';
+import '../../widgets/image_widget.dart';
 import '../../widgets/loader.dart';
 import '../../widgets/playlist_export_dialog.dart';
 import '../../widgets/playlist_options_bottom_sheet.dart';
@@ -108,7 +109,9 @@ class PlaylistScreen extends StatelessWidget {
                                 return const SizedBox.shrink();
                               }
                               return CachedNetworkImage(
-                                imageUrl: thumbUrl,
+                                imageUrl: ImageWidget.optimizeThumbnailUrl(
+                                    thumbUrl, false,
+                                    isDataSaver: true, isUltraSaver: true),
                                 maxWidthDiskCache: 200,
                                 maxHeightDiskCache: 200,
                                 memCacheWidth: 160,

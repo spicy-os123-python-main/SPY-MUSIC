@@ -140,11 +140,15 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     });
     _player.playerStateStream.listen((playerState) {
       if (mediaItem.value != null) {
-        DiscordService().updatePresence(
-          mediaItem.value,
-          isPlaying: playerState.playing,
-          position: _player.position,
-        );
+        // Only update Discord on state changes when ready or completed, avoiding spam during loading/buffering
+        if (playerState.processingState == ProcessingState.ready ||
+            playerState.processingState == ProcessingState.completed) {
+          DiscordService().updatePresence(
+            mediaItem.value,
+            isPlaying: playerState.playing,
+            position: _player.position,
+          );
+        }
       }
     });
     _createCacheDir();
@@ -2045,13 +2049,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         if (testUrl != null && !isExpired(url: testUrl)) {
           final lowItag = streamInfoJson['lowQualityAudio']?['itag'];
           final highItag = streamInfoJson['highQualityAudio']?['itag'];
-          // Evict old heavy HD video streams AND any YouTube DASH audio streams lacking ratebypass=yes (which fail with 403)
-          final isBlockedDash = testUrl.contains('googlevideo.com') &&
-              !testUrl.contains('ratebypass=yes');
-          if ((testUrl.contains('googlevideo.com') &&
-                  (highItag == 22 || lowItag == 22)) ||
-              isBlockedDash) {
-            printINFO("Evicting incompatible YouTube stream from cache for ($songId)");
+          // Evict old heavy video streams (itag 18 or 22) so data saver gets pure 1-2 MB audio
+          final isHeavyVideo = (highItag == 18 || lowItag == 18 || highItag == 22 || lowItag == 22);
+          if (testUrl.contains('googlevideo.com') && isHeavyVideo) {
+            printINFO("Evicting heavy video stream from cache for ($songId) to save data");
             songsUrlCacheBox.delete(songId);
           } else {
             printINFO("Got cached stream Url ($songId)");
