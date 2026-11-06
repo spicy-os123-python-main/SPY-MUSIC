@@ -46,15 +46,22 @@ class DinoStalkerWidget extends StatelessWidget {
               ),
             ),
 
-            // 2. The smooth, bug-free, fully articulated 3D Indoraptor
+            // 2. The authentic photorealistic CGI Indoraptor from video
             Positioned.fill(
               child: IgnorePointer(
-                child: CustomPaint(
-                  painter: Indoraptor3DPainter(
-                    time: time,
-                    accentColor: isLoveActive ? const Color(0xFFFF2D55) : accent,
+                child: Image.asset(
+                  'assets/animations/dino_stalker.webp',
+                  fit: BoxFit.cover,
+                  alignment: Alignment.center,
+                  gaplessPlayback: true,
+                  errorBuilder: (context, error, stackTrace) => CustomPaint(
+                    painter: Indoraptor3DPainter(
+                      time: time,
+                      accentColor:
+                          isLoveActive ? const Color(0xFFFF2D55) : accent,
+                    ),
+                    size: Size.infinite,
                   ),
-                  size: Size.infinite,
                 ),
               ),
             ),

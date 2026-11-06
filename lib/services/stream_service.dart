@@ -82,33 +82,47 @@ class StreamProvider {
 
           if (formats.isEmpty) continue;
 
-          // 3. Fast playability & 403 probe: check if YouTube CDN blocks this stream with HTTP 403
-          bool isStreamBlocked = false;
-          try {
-            final testUrl = formats.first.url;
-            final client = HttpClient();
-            client.connectionTimeout = const Duration(seconds: 4);
-            final req = await client.getUrl(Uri.parse(testUrl));
-            req.headers.set('Range', 'bytes=0-1024');
-            final resp = await req.close().timeout(const Duration(seconds: 4));
-            if (resp.statusCode == 403 || resp.statusCode == 410) {
-              isStreamBlocked = true;
-            }
-            await resp.drain();
-            client.close();
-          } catch (_) {}
+          // 3. Fast playability & 403 probe with official Android YouTube UA
+          final verifiedFormats = <Audio>[];
+          final client = HttpClient();
+          client.connectionTimeout = const Duration(seconds: 3);
 
-          if (!isStreamBlocked) {
+          final candidatesToTest = formats.take(4).toList();
+          final results = await Future.wait(candidatesToTest.map((f) async {
+            try {
+              final req = await client.getUrl(Uri.parse(f.url));
+              req.headers.set('User-Agent',
+                  'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US) gzip');
+              req.headers.set('Range', 'bytes=0-1024');
+              final resp =
+                  await req.close().timeout(const Duration(seconds: 3));
+              final ok = resp.statusCode == 200 || resp.statusCode == 206;
+              await resp.drain();
+              return ok ? f : null;
+            } catch (_) {
+              return null;
+            }
+          }));
+          client.close();
+
+          for (final r in results) {
+            if (r != null) verifiedFormats.add(r);
+          }
+
+          if (verifiedFormats.isNotEmpty) {
+            for (final f in formats.skip(4)) {
+              verifiedFormats.add(f);
+            }
             printINFO(
                 "YouTube client ${entry.key} successfully verified with pure audio for $videoId");
             return StreamProvider(
               playable: true,
               statusMSG: "OK",
-              audioFormats: formats,
+              audioFormats: verifiedFormats,
             );
           } else {
             printINFO(
-                "YouTube client ${entry.key} stream blocked with HTTP 403 for $videoId, trying next client...");
+                "YouTube client ${entry.key} streams blocked with HTTP 403 for $videoId, trying next client...");
           }
         } catch (e) {
           lastError = e;

@@ -114,8 +114,10 @@ class DiscordService {
           debugPrint('[SPY MUSIC Discord] Health check: Reconnecting inactive gateway...');
           connectGateway();
         } else if (isGatewayConnected && _currentIsPlaying && currentTitle != null) {
-          // Live Discord Rich Presence progress sync every 15 seconds
-          _sendPresencePayload(isPlaying: true, force: true);
+          // Keep Discord Rich Presence updated every 15s without wasting data during normal playback
+          if (_lastSentTitle != currentTitle || _lastSentIsPlaying != _currentIsPlaying) {
+            _sendPresencePayload(isPlaying: true, force: false);
+          }
         }
       }
     });

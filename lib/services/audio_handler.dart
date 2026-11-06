@@ -794,7 +794,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       headers: url.contains('googlevideo.com')
           ? {
               'User-Agent':
-                  'Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+                  'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US) gzip',
             }
           : null,
     );
@@ -1068,7 +1068,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             source: isFromDiskCache
                 ? 'Device Cache (0 MB)'
                 : (streamAudioUrl.contains('googlevideo.com')
-                    ? 'YouTube (Pure Audio)'
+                    ? ((streamInfo.audio?.itag == 18 ||
+                            streamInfo.audio?.itag == 22)
+                        ? 'YouTube (Muxed Fallback)'
+                        : 'YouTube (Pure Audio)')
                     : (streamAudioUrl.contains('sndcdn')
                         ? 'SoundCloud'
                         : 'Direct Audio')),
@@ -1099,9 +1102,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           } catch (loadErr) {
             final errStr = loadErr.toString().toLowerCase();
             if (reqId != _activePlayRequestId ||
-                errStr.contains("loading interrupted") ||
-                errStr.contains("abort") ||
-                errStr.contains("connection aborted")) {
+                errStr.contains("loading interrupted")) {
               return;
             }
             final fallback = streamInfo.fallbackAudio;
@@ -1119,6 +1120,21 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 queue.value[songIndex] = fallbackSong;
               }
               mediaItem.add(fallbackSong);
+              DataUsageTracker.instance.recordAudioStream(
+                title: fallbackSong.title,
+                artist: fallbackSong.artist ?? '',
+                itag: fallback.itag,
+                codec: fallback.audioCodec.name,
+                bitrate: fallback.bitrate,
+                sizeBytes: fallback.size,
+                durationSeconds: fallbackSong.duration?.inSeconds ?? 0,
+                source: fallback.url.contains('googlevideo.com')
+                    ? ((fallback.itag == 18 || fallback.itag == 22)
+                        ? 'YouTube (Muxed Fallback)'
+                        : 'YouTube (Pure Audio)')
+                    : 'Direct Audio',
+                isCached: false,
+              );
               await _player.setAudioSource(
                 _createAudioSource(fallbackSong),
                 initialPosition: startPos,
@@ -1146,9 +1162,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         } catch (e, st) {
           final errStr = e.toString().toLowerCase();
           if (reqId != _activePlayRequestId ||
-              errStr.contains("loading interrupted") ||
-              errStr.contains("abort") ||
-              errStr.contains("connection aborted")) {
+              errStr.contains("loading interrupted")) {
             return;
           }
           _isTriggeringNext = false;
@@ -1306,7 +1320,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             source: isFromDiskCache
                 ? 'Device Cache (0 MB)'
                 : (currentSongUrl!.contains('googlevideo.com')
-                    ? 'YouTube (Pure Audio)'
+                    ? ((streamInfo.audio?.itag == 18 ||
+                            streamInfo.audio?.itag == 22)
+                        ? 'YouTube (Muxed Fallback)'
+                        : 'YouTube (Pure Audio)')
                     : (currentSongUrl!.contains('sndcdn')
                         ? 'SoundCloud'
                         : 'Direct Audio')),
@@ -1331,9 +1348,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           } catch (loadErr) {
             final errStr = loadErr.toString().toLowerCase();
             if (reqId != _activePlayRequestId ||
-                errStr.contains("loading interrupted") ||
-                errStr.contains("abort") ||
-                errStr.contains("connection aborted")) {
+                errStr.contains("loading interrupted")) {
               return;
             }
             final fallback = streamInfo.fallbackAudio;
@@ -1349,6 +1364,21 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               currentSongUrl = fallback.url;
               queue.add([fallbackSong]);
               mediaItem.add(fallbackSong);
+              DataUsageTracker.instance.recordAudioStream(
+                title: fallbackSong.title,
+                artist: fallbackSong.artist ?? '',
+                itag: fallback.itag,
+                codec: fallback.audioCodec.name,
+                bitrate: fallback.bitrate,
+                sizeBytes: fallback.size,
+                durationSeconds: fallbackSong.duration?.inSeconds ?? 0,
+                source: fallback.url.contains('googlevideo.com')
+                    ? ((fallback.itag == 18 || fallback.itag == 22)
+                        ? 'YouTube (Muxed Fallback)'
+                        : 'YouTube (Pure Audio)')
+                    : 'Direct Audio',
+                isCached: false,
+              );
               await _player.setAudioSource(
                 _createAudioSource(fallbackSong),
                 initialPosition: Duration.zero,
@@ -1374,9 +1404,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         } catch (e, st) {
           final errStr = e.toString().toLowerCase();
           if (reqId != _activePlayRequestId ||
-              errStr.contains("loading interrupted") ||
-              errStr.contains("abort") ||
-              errStr.contains("connection aborted")) {
+              errStr.contains("loading interrupted")) {
             return;
           }
           _isTriggeringNext = false;
