@@ -349,14 +349,19 @@ class PlatformSearchService {
         final searchResults =
             await yt.search.search(qYT).timeout(const Duration(seconds: 7));
         final ytCandidates = <MediaItem>[];
-        for (final v in searchResults.take(8)) {
-          ytCandidates.add(MediaItem(
-            id: v.id.value,
-            title: v.title,
-            artist: v.author,
-            duration: v.duration,
-          ));
-        }
+        try {
+          for (final v in searchResults) {
+            try {
+              ytCandidates.add(MediaItem(
+                id: v.id.value,
+                title: v.title,
+                artist: v.author,
+                duration: v.duration,
+              ));
+              if (ytCandidates.length >= 8) break;
+            } catch (_) {}
+          }
+        } catch (_) {}
         final match = findBestMatch(ytCandidates, originalTrack);
         if (match != null) {
           _remember(trackId, match);

@@ -203,26 +203,26 @@ class StreamProvider {
   Audio? get highestQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // 1. High-quality pure AAC stream (itag 140 ~128k, ~4 MB)
-    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
-    if (aac140 != null) return aac140;
-
-    // 2. High-bitrate Opus (itag 251 ~160k, ~4 MB)
-    final highOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
-    if (highOpus != null) return highOpus;
-
-    // 3. Medium Opus (itag 250 ~70k, ~1.8 MB)
-    final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
-    if (midOpus != null) return midOpus;
-
-    // 4. Low AAC (itag 139 ~48k, ~1.2 MB)
-    final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
-    if (lowAac != null) return lowAac;
-
-    // 5. Fallback ratebypass stream (itag 18)
+    // 1. High-speed rate-bypass progressive stream (itag 18 - 360p MP4 audio/video) - unthrottled by YouTube CDN!
     final rateBypass = audioFormats!.firstWhereOrNull(
         (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
     if (rateBypass != null) return rateBypass;
+
+    // 2. High-quality pure AAC stream (itag 140 ~128k)
+    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (aac140 != null) return aac140;
+
+    // 3. High-bitrate Opus (itag 251 ~160k)
+    final highOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
+    if (highOpus != null) return highOpus;
+
+    // 4. Medium Opus (itag 250 ~70k)
+    final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
+    if (midOpus != null) return midOpus;
+
+    // 5. Low AAC (itag 139 ~48k)
+    final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
+    if (lowAac != null) return lowAac;
 
     final sorted = List<Audio>.from(audioFormats!)
       ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
@@ -262,27 +262,24 @@ class StreamProvider {
   Audio? get lowQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // 1. Ultra Data Saver: 50 kbps Opus (itag 600) -> only ~1.0-1.2 MB per song!
-    final op600 = audioFormats!.firstWhereOrNull((item) => item.itag == 600);
-    if (op600 != null) return op600;
-
-    // 2. Ultra Data Saver: 48 kbps AAC (itag 139 / 599) -> only ~1.1-1.4 MB per song!
+    // 1. Ultra Data Saver (~1.1 MB): 48 kbps AAC (itag 139)
     final lowAac = audioFormats!.firstWhereOrNull(
         (item) => item.itag == 139 || item.itag == 599);
     if (lowAac != null) return lowAac;
 
-    // 3. Ultra Data Saver: 50 kbps Opus (itag 249) -> only ~1.2-1.5 MB per song!
-    final lowOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 249);
+    // 2. Ultra Data Saver (~1.1 MB): 50 kbps Opus (itag 249 or 600)
+    final lowOpus = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 249 || item.itag == 600);
     if (lowOpus != null) return lowOpus;
 
-    // 4. Low Data Saver: 70 kbps Opus (itag 250) -> only ~1.6-1.9 MB per song!
+    // 3. Medium Data Saver (~1.6 MB): 70 kbps Opus (itag 250)
     final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
     if (midOpus != null) return midOpus;
 
-    // 5. Any audio stream under 96k
-    final anyLow = audioFormats!
-        .firstWhereOrNull((item) => item.bitrate > 0 && item.bitrate <= 96000);
-    if (anyLow != null) return anyLow;
+    // 4. Rate-bypass stream (itag 18)
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
 
     final sorted = List<Audio>.from(audioFormats!)
       ..sort((a, b) => a.bitrate.compareTo(b.bitrate));
@@ -292,18 +289,18 @@ class StreamProvider {
   Audio? get midQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // 1. Medium Data Saver (~1.7 MB per song): 70 kbps Opus (itag 250)
+    // 1. Guaranteed unthrottled rate-bypass stream (itag 18)
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
+
+    // 2. AAC 140
+    final midAac = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (midAac != null) return midAac;
+
+    // 3. 70 kbps Opus (itag 250)
     final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
     if (midOpus != null) return midOpus;
-
-    // 2. 50 kbps Opus (itag 249 or 600) -> ~1.2 MB
-    final lowOpus = audioFormats!.firstWhereOrNull(
-        (item) => item.itag == 249 || item.itag == 600);
-    if (lowOpus != null) return lowOpus;
-
-    // 3. 48 kbps AAC (itag 139) -> ~1.2 MB
-    final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
-    if (lowAac != null) return lowAac;
 
     return lowQualityAudio;
   }

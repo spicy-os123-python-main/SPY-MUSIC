@@ -375,6 +375,21 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       //print("set ${playbackState.value.queueIndex},${event.currentIndex}");
     }, onError: (Object e, StackTrace st) async {
       printERROR("playbackEventStream error: $e");
+      final errStr = e.toString().toLowerCase();
+
+      // Normal cancellations when switching tracks or replacing media sources: ignore completely!
+      if (errStr.contains("abort") ||
+          errStr.contains("loading interrupted") ||
+          errStr.contains("connection aborted")) {
+        return;
+      }
+
+      // If a song is actively being loaded in playByIndex or setSourceNPlay,
+      // let its own try/catch handle it! Do NOT launch a competing retry!
+      if (isSongLoading) {
+        return;
+      }
+
       final currentId = mediaItem.value?.id ??
           (currentIndex != null && queue.value.isNotEmpty
               ? queue.value[currentIndex!].id
@@ -398,17 +413,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         _songErrorRetryCount++;
         printINFO(
             "Retrying playback for $currentId (attempt $_songErrorRetryCount of 2)...");
-        if (isPlayingUsingLockCachingSource &&
-            e.toString().contains("Connection closed while receiving data")) {
-          Duration curPos = _player.position;
-          await _player.seek(curPos, index: 0);
-          try {
-            final session = await AudioSession.instance;
-            await session.setActive(true);
-          } catch (_) {}
-          await _player.play();
-          return;
-        }
         customAction(
             "playByIndex", {'index': currentIndex ?? 0, 'newUrl': true});
       } else {
@@ -1074,9 +1078,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               },
             );
           } catch (loadErr) {
+            final errStr = loadErr.toString().toLowerCase();
             if (reqId != _activePlayRequestId ||
-                loadErr.toString().contains("Loading interrupted") ||
-                loadErr.toString().contains("abort")) {
+                errStr.contains("loading interrupted") ||
+                errStr.contains("abort") ||
+                errStr.contains("connection aborted")) {
               return;
             }
             final fallback = streamInfo.fallbackAudio;
@@ -1119,9 +1125,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             await _player.play();
           }
         } catch (e, st) {
+          final errStr = e.toString().toLowerCase();
           if (reqId != _activePlayRequestId ||
-              e.toString().contains("Loading interrupted") ||
-              e.toString().contains("abort")) {
+              errStr.contains("loading interrupted") ||
+              errStr.contains("abort") ||
+              errStr.contains("connection aborted")) {
             return;
           }
           _isTriggeringNext = false;
@@ -1302,9 +1310,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               },
             );
           } catch (loadErr) {
+            final errStr = loadErr.toString().toLowerCase();
             if (reqId != _activePlayRequestId ||
-                loadErr.toString().contains("Loading interrupted") ||
-                loadErr.toString().contains("abort")) {
+                errStr.contains("loading interrupted") ||
+                errStr.contains("abort") ||
+                errStr.contains("connection aborted")) {
               return;
             }
             final fallback = streamInfo.fallbackAudio;
@@ -1343,9 +1353,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           } catch (_) {}
           await _player.play();
         } catch (e, st) {
+          final errStr = e.toString().toLowerCase();
           if (reqId != _activePlayRequestId ||
-              e.toString().contains("Loading interrupted") ||
-              e.toString().contains("abort")) {
+              errStr.contains("loading interrupted") ||
+              errStr.contains("abort") ||
+              errStr.contains("connection aborted")) {
             return;
           }
           _isTriggeringNext = false;
