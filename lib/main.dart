@@ -108,7 +108,7 @@ class MyApp extends StatelessWidget {
         home: const Home(),
         debugShowCheckedModeBanner: false,
         defaultTransition: Transition.fadeIn,
-        transitionDuration: const Duration(milliseconds: 260),
+        transitionDuration: const Duration(milliseconds: 420),
         translations: Languages(),
         locale: Locale(
           Hive.isBoxOpen("AppPrefs")

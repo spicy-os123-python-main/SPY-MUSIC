@@ -175,8 +175,7 @@ class _ThemeBackgroundState extends State<ThemeBackground>
         painter = GoldenStardustPainter(time: _elapsedTime, accent: accent);
         break;
       case CustomAnimationType.indoraptorHunt:
-        painter = Indoraptor3DPainter(time: _elapsedTime, accentColor: accent);
-        break;
+        return DinoStalkerWidget(time: _elapsedTime, accent: accent);
       case CustomAnimationType.none:
         return const SizedBox.shrink();
     }

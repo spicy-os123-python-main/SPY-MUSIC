@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-/// Fully animated procedural & 3D Indoraptor background animation.
+/// Fully animated Indoraptor background animation using extracted video frames.
 class DinoStalkerWidget extends StatelessWidget {
   final double time;
   final Color accent;
@@ -14,9 +14,60 @@ class DinoStalkerWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: Indoraptor3DPainter(time: time, accentColor: accent),
-      size: Size.infinite,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // Ambient predator glow in the background matching accent color
+            Positioned(
+              bottom: constraints.maxHeight * 0.12,
+              left: 0,
+              right: 0,
+              height: constraints.maxHeight * 0.45,
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(0.0, 0.4),
+                      radius: 0.75,
+                      colors: [
+                        accent.withOpacity(0.12),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // The transparent dinosaur animation from the user video
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: FractionallySizedBox(
+                    widthFactor: 1.0,
+                    heightFactor: 0.88,
+                    child: Image.asset(
+                      'assets/animations/dino_stalker.webp',
+                      fit: BoxFit.contain,
+                      alignment: Alignment.bottomCenter,
+                      gaplessPlayback: true,
+                      errorBuilder: (context, error, stackTrace) {
+                        return CustomPaint(
+                          painter: Indoraptor3DPainter(time: time, accentColor: accent),
+                          size: Size.infinite,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

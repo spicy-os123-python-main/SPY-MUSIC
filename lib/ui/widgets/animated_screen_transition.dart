@@ -33,30 +33,28 @@ class AnimatedScreenTransition extends StatelessWidget {
     Duration duration;
     switch (type) {
       case InteractionAnimationType.bookFlip:
-        duration = const Duration(milliseconds: 880);
+        duration = const Duration(milliseconds: 720);
         break;
       case InteractionAnimationType.cube3d:
-        duration = const Duration(milliseconds: 680);
+        duration = const Duration(milliseconds: 620);
         break;
       case InteractionAnimationType.elasticBounce:
-        duration = const Duration(milliseconds: 700);
-        break;
-      case InteractionAnimationType.jellySquish:
-        duration = const Duration(milliseconds: 550);
-        break;
-      case InteractionAnimationType.cardStack:
         duration = const Duration(milliseconds: 580);
         break;
+      case InteractionAnimationType.jellySquish:
+        duration = const Duration(milliseconds: 540);
+        break;
+      case InteractionAnimationType.cardStack:
+        duration = const Duration(milliseconds: 540);
+        break;
       case InteractionAnimationType.tilt3d:
-        duration = const Duration(milliseconds: 600);
+        duration = const Duration(milliseconds: 520);
         break;
       case InteractionAnimationType.zoomPop:
-        duration = const Duration(milliseconds: 400);
-        break;
       case InteractionAnimationType.neonGlow:
       case InteractionAnimationType.smoothSlide:
       case InteractionAnimationType.standard:
-        duration = const Duration(milliseconds: 450);
+        duration = const Duration(milliseconds: 500);
         break;
     }
 
@@ -68,45 +66,24 @@ class AnimatedScreenTransition extends StatelessWidget {
             return DualTransitionBuilder(
               animation: primaryAnimation,
               forwardBuilder: (context, animation, child) {
-                // Entering page turns smoothly from 90 deg to 0 around spine
+                // Entering page turns gracefully from soft angle to 0
                 final curved = CurvedAnimation(
                     parent: animation, curve: Curves.easeInOutCubic);
                 return AnimatedBuilder(
                   animation: curved,
                   builder: (context, child) {
-                    final angle = (1.0 - curved.value) * (math.pi / 2.0);
+                    final angle = (1.0 - curved.value) * (math.pi / 4.5);
                     return Transform(
                       transform: Matrix4.identity()
-                        ..setEntry(3, 2, 0.0014)
+                        ..setEntry(3, 2, 0.0008)
                         ..rotateY(resverse ? -angle : angle),
                       alignment: resverse
                           ? Alignment.centerRight
                           : Alignment.centerLeft,
-                      child: Stack(
-                        children: [
-                          child!,
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: resverse
-                                        ? Alignment.centerLeft
-                                        : Alignment.centerRight,
-                                    end: resverse
-                                        ? Alignment.centerRight
-                                        : Alignment.centerLeft,
-                                    colors: [
-                                      Colors.transparent,
-                                      Colors.black.withOpacity(
-                                          (1.0 - curved.value) * 0.45),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: FadeTransition(
+                        opacity: CurvedAnimation(
+                            parent: animation, curve: Curves.easeOut),
+                        child: child,
                       ),
                     );
                   },
@@ -114,45 +91,25 @@ class AnimatedScreenTransition extends StatelessWidget {
                 );
               },
               reverseBuilder: (context, animation, child) {
-                // Exiting page turns away smoothly to 90 deg with spine shadow
+                // Exiting page turns away gracefully with subtle fade
                 final curved = CurvedAnimation(
                     parent: secondaryAnimation, curve: Curves.easeInOutCubic);
                 return AnimatedBuilder(
                   animation: curved,
                   builder: (context, child) {
-                    final angle = curved.value * (math.pi / 2.0);
+                    final angle = curved.value * (math.pi / 4.5);
                     return Transform(
                       transform: Matrix4.identity()
-                        ..setEntry(3, 2, 0.0014)
+                        ..setEntry(3, 2, 0.0008)
                         ..rotateY(resverse ? angle : -angle),
                       alignment: resverse
                           ? Alignment.centerLeft
                           : Alignment.centerRight,
-                      child: Stack(
-                        children: [
-                          child!,
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: resverse
-                                        ? Alignment.centerRight
-                                        : Alignment.centerLeft,
-                                    end: resverse
-                                        ? Alignment.centerLeft
-                                        : Alignment.centerRight,
-                                    colors: [
-                                      Colors.transparent,
-                                      Colors.black.withOpacity(
-                                          curved.value * 0.55),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: FadeTransition(
+                        opacity: Tween<double>(begin: 1.0, end: 0.0)
+                            .animate(CurvedAnimation(
+                                parent: secondaryAnimation, curve: Curves.easeIn)),
+                        child: child,
                       ),
                     );
                   },
@@ -167,19 +124,23 @@ class AnimatedScreenTransition extends StatelessWidget {
               animation: primaryAnimation,
               forwardBuilder: (context, animation, child) {
                 final curved = CurvedAnimation(
-                    parent: animation, curve: Curves.easeOutQuad);
+                    parent: animation, curve: Curves.easeOutCubic);
                 return AnimatedBuilder(
                   animation: curved,
                   builder: (context, child) {
-                    final angle = (1.0 - curved.value) * (math.pi / 2.0);
+                    final angle = (1.0 - curved.value) * (math.pi / 4.0);
                     return Transform(
                       transform: Matrix4.identity()
-                        ..setEntry(3, 2, 0.0018)
+                        ..setEntry(3, 2, 0.0010)
                         ..rotateY(resverse ? -angle : angle),
                       alignment: resverse
                           ? Alignment.centerRight
                           : Alignment.centerLeft,
-                      child: child,
+                      child: FadeTransition(
+                        opacity: CurvedAnimation(
+                            parent: animation, curve: Curves.easeOut),
+                        child: child,
+                      ),
                     );
                   },
                   child: child,
@@ -187,19 +148,24 @@ class AnimatedScreenTransition extends StatelessWidget {
               },
               reverseBuilder: (context, animation, child) {
                 final curved = CurvedAnimation(
-                    parent: secondaryAnimation, curve: Curves.easeInQuad);
+                    parent: secondaryAnimation, curve: Curves.easeOutCubic);
                 return AnimatedBuilder(
                   animation: curved,
                   builder: (context, child) {
-                    final angle = curved.value * (math.pi / 2.0);
+                    final angle = curved.value * (math.pi / 4.0);
                     return Transform(
                       transform: Matrix4.identity()
-                        ..setEntry(3, 2, 0.0018)
+                        ..setEntry(3, 2, 0.0010)
                         ..rotateY(resverse ? angle : -angle),
                       alignment: resverse
                           ? Alignment.centerLeft
                           : Alignment.centerRight,
-                      child: child,
+                      child: FadeTransition(
+                        opacity: Tween<double>(begin: 1.0, end: 0.0)
+                            .animate(CurvedAnimation(
+                                parent: secondaryAnimation, curve: Curves.easeIn)),
+                        child: child,
+                      ),
                     );
                   },
                   child: child,
@@ -363,24 +329,45 @@ class AnimatedScreenTransition extends StatelessWidget {
 
           case InteractionAnimationType.smoothSlide:
           case InteractionAnimationType.standard:
-            final forwardTween = resverse
-                ? Tween<Offset>(begin: const Offset(-1.0, 0), end: Offset.zero)
-                : Tween<Offset>(begin: const Offset(1.0, 0), end: Offset.zero);
-            final reverseTween = resverse
-                ? Tween<Offset>(begin: Offset.zero, end: const Offset(1.0, 0))
-                : Tween<Offset>(begin: Offset.zero, end: const Offset(-1.0, 0));
+            final offsetEnter = resverse
+                ? Tween<Offset>(begin: const Offset(-0.14, 0), end: Offset.zero)
+                : Tween<Offset>(begin: const Offset(0.14, 0), end: Offset.zero);
+            final offsetExit = resverse
+                ? Tween<Offset>(begin: Offset.zero, end: const Offset(0.10, 0))
+                : Tween<Offset>(begin: Offset.zero, end: const Offset(-0.10, 0));
             return DualTransitionBuilder(
               animation: primaryAnimation,
-              forwardBuilder: (context, animation, child) => SlideTransition(
-                position: forwardTween.animate(CurvedAnimation(
-                    parent: primaryAnimation, curve: Curves.easeOutCubic)),
-                child: child,
-              ),
-              reverseBuilder: (context, animation, child) => SlideTransition(
-                position: reverseTween.animate(CurvedAnimation(
-                    parent: secondaryAnimation, curve: Curves.easeOutCubic)),
-                child: child,
-              ),
+              forwardBuilder: (context, animation, child) {
+                final curved = CurvedAnimation(
+                    parent: animation, curve: Curves.easeOutCubic);
+                return SlideTransition(
+                  position: offsetEnter.animate(curved),
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.97, end: 1.0).animate(curved),
+                    child: FadeTransition(
+                      opacity: CurvedAnimation(
+                          parent: animation, curve: Curves.easeOut),
+                      child: child,
+                    ),
+                  ),
+                );
+              },
+              reverseBuilder: (context, animation, child) {
+                final curved = CurvedAnimation(
+                    parent: secondaryAnimation, curve: Curves.easeOutCubic);
+                return SlideTransition(
+                  position: offsetExit.animate(curved),
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 1.0, end: 0.97).animate(curved),
+                    child: FadeTransition(
+                      opacity: Tween<double>(begin: 1.0, end: 0.0).animate(
+                          CurvedAnimation(
+                              parent: secondaryAnimation, curve: Curves.easeIn)),
+                      child: child,
+                    ),
+                  ),
+                );
+              },
               child: child,
             );
         }

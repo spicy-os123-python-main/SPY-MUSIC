@@ -38,7 +38,8 @@ class ScreenNavigation extends StatelessWidget {
               return GetPageRoute(
                   page: () => const HomeScreen(),
                   transition: Transition.fadeIn,
-                  transitionDuration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  transitionDuration: const Duration(milliseconds: 400),
                   settings: settings);
 
             case ScreenNavigationSetup.albumScreen:
@@ -49,7 +50,7 @@ class ScreenNavigation extends StatelessWidget {
                       ),
                   transition: Transition.rightToLeftWithFade,
                   curve: Curves.easeOutCubic,
-                  transitionDuration: const Duration(milliseconds: 300),
+                  transitionDuration: const Duration(milliseconds: 450),
                   settings: settings);
 
             case ScreenNavigationSetup.playlistScreen:
@@ -60,7 +61,7 @@ class ScreenNavigation extends StatelessWidget {
                       ),
                   transition: Transition.rightToLeftWithFade,
                   curve: Curves.easeOutCubic,
-                  transitionDuration: const Duration(milliseconds: 300),
+                  transitionDuration: const Duration(milliseconds: 450),
                   settings: settings);
 
             case ScreenNavigationSetup.searchScreen:
@@ -68,7 +69,7 @@ class ScreenNavigation extends StatelessWidget {
                   page: () => const SearchScreen(),
                   transition: Transition.fadeIn,
                   curve: Curves.easeOutCubic,
-                  transitionDuration: const Duration(milliseconds: 250),
+                  transitionDuration: const Duration(milliseconds: 400),
                   settings: settings);
 
             case ScreenNavigationSetup.searchResultScreen:
@@ -76,7 +77,7 @@ class ScreenNavigation extends StatelessWidget {
                   page: () => const SearchResultScreen(),
                   transition: Transition.rightToLeftWithFade,
                   curve: Curves.easeOutCubic,
-                  transitionDuration: const Duration(milliseconds: 300),
+                  transitionDuration: const Duration(milliseconds: 450),
                   settings: settings);
 
             case ScreenNavigationSetup.artistScreen:
@@ -88,7 +89,7 @@ class ScreenNavigation extends StatelessWidget {
                       ),
                   transition: Transition.rightToLeftWithFade,
                   curve: Curves.easeOutCubic,
-                  transitionDuration: const Duration(milliseconds: 300),
+                  transitionDuration: const Duration(milliseconds: 450),
                   settings: settings);
             
             default:
