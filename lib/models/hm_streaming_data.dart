@@ -35,6 +35,49 @@ class HMStreamingData {
     }
   }
 
+  /// Get intelligent fallback stream respecting Data Saver mode and avoiding heavy video streams
+  Audio? getFallbackFor(Audio? currentAudio) {
+    final currentUrl = currentAudio?.url;
+    final currentItag = currentAudio?.itag;
+
+    // Preference order based on qualityIndex
+    final candidates = <Audio?>[];
+    if (qualityIndex == 2) {
+      // Ultra Data Saver: low -> mid -> high
+      candidates.addAll([lowQualityAudio, midQualityAudio, highQualityAudio]);
+    } else if (qualityIndex == 1) {
+      // Mid Data Saver: mid -> low -> high
+      candidates.addAll([midQualityAudio, lowQualityAudio, highQualityAudio]);
+    } else {
+      // Normal: high -> mid -> low
+      candidates.addAll([highQualityAudio, midQualityAudio, lowQualityAudio]);
+    }
+
+    // Try candidates that are pure audio (not itag 18/22) and different from current
+    for (final cand in candidates) {
+      if (cand != null &&
+          cand.url.isNotEmpty &&
+          cand.url != currentUrl &&
+          cand.itag != currentItag &&
+          cand.itag != 18 &&
+          cand.itag != 22) {
+        return cand;
+      }
+    }
+
+    // In Ultra Data Saver mode, NEVER fall back to heavy video streams (itag 18 or 22)
+    if (qualityIndex == 2) {
+      return null;
+    }
+
+    // Otherwise, as an absolute last resort, return fallbackAudio if different
+    if (fallbackAudio != null && fallbackAudio!.url != currentUrl) {
+      return fallbackAudio;
+    }
+
+    return null;
+  }
+
   factory HMStreamingData.fromJson(json) {
     if (!json['playable']) {
       return HMStreamingData(

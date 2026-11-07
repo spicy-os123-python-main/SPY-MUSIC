@@ -12,15 +12,10 @@ class DiscordWebhookService {
 
   static final List<Map<String, dynamic>> _queue = [];
   static bool _isProcessing = false;
+  static String _lastSentError = '';
+  static DateTime? _lastSentTime;
 
-  // Anti-Abuse & Rate-Limiting Protection
-  static final List<DateTime> _recentSendTimestamps = [];
-  static int _sessionSendCount = 0;
-  static const int _maxPerMinute = 3;
-  static const int _maxPerSession = 15;
-  static final Map<String, DateTime> _sentErrorHashes = {};
-
-  /// Send error message to Discord Webhook with strict rate limiting & anti-abuse guards
+  /// Send error message to Discord Webhook
   static void sendError(dynamic text, {String tag = 'SPY MUSIC'}) {
     if (text == null) return;
     final errorStr = text.toString().trim();
@@ -37,35 +32,19 @@ class DiscordWebhookService {
       return;
     }
 
-    // 1. Session-wide cap protection (prevents infinite loop or runaway crash spam)
-    if (_sessionSendCount >= _maxPerSession) {
-      return;
-    }
-
-    // 2. Sliding-window rate limiter: max 3 requests per 60 seconds
+    // Deduplicate identical error messages within 3 seconds to avoid crash loop spam
     final now = DateTime.now();
-    _recentSendTimestamps.removeWhere(
-        (ts) => now.difference(ts) > const Duration(seconds: 60));
-    if (_recentSendTimestamps.length >= _maxPerMinute) {
+    if (_lastSentError == errorStr &&
+        _lastSentTime != null &&
+        now.difference(_lastSentTime!) < const Duration(seconds: 3)) {
       return;
     }
-
-    // 3. 5-minute deduplication per error signature
-    final errorKey = '$tag:$errorStr';
-    final lastSent = _sentErrorHashes[errorKey];
-    if (lastSent != null && now.difference(lastSent) < const Duration(minutes: 5)) {
-      return;
-    }
-    _sentErrorHashes[errorKey] = now;
-    // Clean old hashes periodically
-    if (_sentErrorHashes.length > 50) {
-      _sentErrorHashes.removeWhere(
-          (_, ts) => now.difference(ts) > const Duration(minutes: 10));
-    }
+    _lastSentError = errorStr;
+    _lastSentTime = now;
 
     // Sanitize string (truncate and hide potential sensitive tokens)
-    var sanitized = errorStr.length > 1500
-        ? '${errorStr.substring(0, 1500)}\n... [truncated]'
+    var sanitized = errorStr.length > 1800
+        ? '${errorStr.substring(0, 1800)}\n... [truncated]'
         : errorStr;
     sanitized = sanitized.replaceAll(
         RegExp(r'(key|token|auth|password|secret)=[a-zA-Z0-9_\-\.]+'), r'$1=***');
@@ -87,7 +66,7 @@ class DiscordWebhookService {
       ]
     };
 
-    if (_queue.length < 5) {
+    if (_queue.length < 25) {
       _queue.add(payload);
     }
     _processQueue();
@@ -108,13 +87,11 @@ class DiscordWebhookService {
               data: payload,
               options: Options(headers: {'Content-Type': 'application/json'}),
             );
-            _recentSendTimestamps.add(DateTime.now());
-            _sessionSendCount++;
           }
         } catch (_) {
           // Strictly swallow errors here to avoid recursive crash loops
         }
-        await Future.delayed(const Duration(milliseconds: 1000));
+        await Future.delayed(const Duration(milliseconds: 600));
       }
     } finally {
       _isProcessing = false;

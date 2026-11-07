@@ -810,7 +810,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       headers: url.contains('googlevideo.com')
           ? {
               'User-Agent':
-                  'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US) gzip',
+                  'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US)',
             }
           : null,
     );
@@ -1133,7 +1133,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 errStr.contains("loading interrupted")) {
               return;
             }
-            final fallback = streamInfo.fallbackAudio;
+            final fallback =
+                streamInfo.getFallbackFor(streamInfo.audio) ?? streamInfo.fallbackAudio;
             if (fallback != null && fallback.url != streamAudioUrl) {
               printINFO(
                   "Primary audio failed with $loadErr, switching to fallback ratebypass stream for ${currentSong.id}");
@@ -1391,7 +1392,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 errStr.contains("loading interrupted")) {
               return;
             }
-            final fallback = streamInfo.fallbackAudio;
+            final fallback =
+                streamInfo.getFallbackFor(streamInfo.audio) ?? streamInfo.fallbackAudio;
             if (fallback != null && fallback.url != currentSongUrl) {
               printINFO(
                   "Primary audio failed with $loadErr, switching to fallback ratebypass stream for ${currMed.id}");
@@ -2059,7 +2061,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       );
     }
 
-    final songDownloadsBox = Hive.box("SongDownloads");
     final songsCacheBox = await Hive.openBox("SongsCache");
     final cachedFilePath = "$_cacheDir/cachedSongs/$songId.mp3";
     final cachedFile = File(cachedFilePath);
@@ -2157,9 +2158,18 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         final testUrl = highUrl ?? lowUrl ?? midUrl;
         if (testUrl != null && !isExpired(url: testUrl)) {
           final lowItag = streamInfoJson['lowQualityAudio']?['itag'];
+          final midItag = streamInfoJson['midQualityAudio']?['itag'];
           final highItag = streamInfoJson['highQualityAudio']?['itag'];
+          final fallbackItag = streamInfoJson['fallbackAudio']?['itag'];
           // Evict old heavy video streams (itag 18 or 22) so data saver gets pure 1-2 MB audio
-          final isHeavyVideo = (highItag == 18 || lowItag == 18 || highItag == 22 || lowItag == 22);
+          final isHeavyVideo = (highItag == 18 ||
+              lowItag == 18 ||
+              midItag == 18 ||
+              fallbackItag == 18 ||
+              highItag == 22 ||
+              lowItag == 22 ||
+              midItag == 22 ||
+              fallbackItag == 22);
           if (testUrl.contains('googlevideo.com') && isHeavyVideo) {
             printINFO("Evicting heavy video stream from cache for ($songId) to save data");
             songsUrlCacheBox.delete(songId);

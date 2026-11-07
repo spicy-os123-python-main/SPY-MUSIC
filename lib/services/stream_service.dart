@@ -92,7 +92,7 @@ class StreamProvider {
             try {
               final req = await client.getUrl(Uri.parse(f.url));
               req.headers.set('User-Agent',
-                  'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US) gzip');
+                  'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US)');
               req.headers.set('Range', 'bytes=0-1024');
               final resp =
                   await req.close().timeout(const Duration(seconds: 3));
@@ -246,8 +246,19 @@ class StreamProvider {
 
   Audio? get fallbackAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
+    final pureAudios =
+        audioFormats!.where((item) => item.itag != 18 && item.itag != 22).toList();
+    if (pureAudios.isNotEmpty) {
+      // Prioritize pure audio streams (AAC 140 or 139 or Opus) before heavy video
+      return pureAudios.firstWhereOrNull((item) => item.itag == 140) ??
+          pureAudios.firstWhereOrNull((item) => item.itag == 139) ??
+          pureAudios.firstWhereOrNull((item) => item.itag == 250) ??
+          pureAudios.firstWhereOrNull((item) => item.itag == 251) ??
+          pureAudios.first;
+    }
     return audioFormats!.firstWhereOrNull((item) => item.itag == 18) ??
-        audioFormats!.firstWhereOrNull((item) => item.url.contains('ratebypass=yes')) ??
+        audioFormats!
+            .firstWhereOrNull((item) => item.url.contains('ratebypass=yes')) ??
         audioFormats!.last;
   }
 
