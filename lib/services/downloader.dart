@@ -13,6 +13,7 @@ import '../ui/screens/Album/album_screen_controller.dart';
 import '../ui/screens/Playlist/playlist_screen_controller.dart';
 import '/services/stream_service.dart';
 import '../ui/widgets/snackbar.dart';
+import '../ui/widgets/image_widget.dart';
 import '/services/permission_service.dart';
 import '../ui/screens/Settings/settings_screen_controller.dart';
 import '/utils/helper.dart';
@@ -196,9 +197,16 @@ class Downloader extends GetxService {
     printINFO("Downloading filePath: $filePath");
     final totalBytes = requiredAudioStream.size;
 
+    final downloadHeaders = <String, dynamic>{
+      if (totalBytes > 0) "Range": 'bytes=0-$totalBytes',
+      if (requiredAudioStream.url.contains('googlevideo.com'))
+        'User-Agent':
+            'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US) gzip',
+    };
+
     _dio.download(
         requiredAudioStream.url,
-        options: Options(headers: {"Range": 'bytes=0-$totalBytes'}),
+        options: Options(headers: downloadHeaders),
         filePath, onReceiveProgress: (count, total) {
       if (total <= 0) return;
       songDownloadingProgress.value = ((count / total) * 100).toInt();
@@ -218,25 +226,62 @@ class Downloader extends GetxService {
           }
         } catch (_) {}
 
-        // Save Thumbnail
+        // Save Thumbnail locally with compact size (~40-80 KB)
+        String thumbnailPath = "";
         try {
-          final thumbnailPath =
-              "${settingsScreenController.supportDirPath}/thumbnails/${song.id}.png";
-          await _dio.downloadUri(song.artUri!, thumbnailPath);
-          // ignore: empty_catches
-        } catch (e) {}
+          final supportDir = settingsScreenController.supportDirPath;
+          final thumbDir = Directory("$supportDir/thumbnails");
+          if (!thumbDir.existsSync()) {
+            thumbDir.createSync(recursive: true);
+          }
+          thumbnailPath = "$supportDir/thumbnails/${song.id}.png";
+          final artUriStr = song.artUri?.toString() ?? '';
+          if (artUriStr.isNotEmpty &&
+              (artUriStr.startsWith('http://') ||
+                  artUriStr.startsWith('https://'))) {
+            final optimizedThumb = ImageWidget.optimizeThumbnailUrl(
+                artUriStr, true,
+                isDataSaver: true);
+            await _dio.download(
+              optimizedThumb,
+              thumbnailPath,
+              options: Options(receiveTimeout: const Duration(seconds: 12)),
+            );
+          }
+        } catch (e) {
+          printERROR("Thumbnail download error for ${song.id}: $e");
+        }
+
+        final bool hasLocalThumb = thumbnailPath.isNotEmpty &&
+            File(thumbnailPath).existsSync() &&
+            File(thumbnailPath).lengthSync() > 100;
 
         song.extras?['url'] = filePath;
         final songJson = MediaItemBuilder.toJson(song);
         songJson['url'] = filePath;
+        if (hasLocalThumb) {
+          songJson['artUri'] = "file://$thumbnailPath";
+          songJson['localThumbnail'] = thumbnailPath;
+        }
         final streamInfoJson = requiredAudioStream.toJson();
         streamInfoJson['url'] = filePath;
         // [playbility status, info map]
         songJson["streamInfo"] = [true, streamInfoJson];
 
         Hive.box("SongDownloads").put(song.id, songJson);
-        Get.find<LibrarySongsController>().librarySongsList.add(song);
-        printINFO("Downloaded successfully");
+        final downloadedMediaItem = song.copyWith(
+          artUri: hasLocalThumb ? Uri.file(thumbnailPath) : song.artUri,
+          extras: {
+            ...Map<String, dynamic>.from(song.extras ?? {}),
+            'url': filePath,
+            if (hasLocalThumb) 'localThumbnail': thumbnailPath,
+          },
+        );
+        Get.find<LibrarySongsController>()
+            .librarySongsList
+            .add(downloadedMediaItem);
+        printINFO(
+            "Downloaded successfully: ${(File(filePath).lengthSync() / (1024 * 1024)).toStringAsFixed(2)} MB");
 
         final trackDetails = (song.extras?['trackDetails'])?.split("/");
         final int? trackNumber = int.tryParse(trackDetails?[0] ?? "");

@@ -1,6 +1,7 @@
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:spymusic/ui/screens/Settings/settings_screen_controller.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:widget_marquee/widget_marquee.dart';
@@ -258,23 +259,57 @@ class MiniPlayer extends StatelessWidget {
                                   ],
                                 ),
                                 const SizedBox(height: 2),
-                                SizedBox(
-                                  height: 18,
-                                  child: Marquee(
-                                    id: "${playerController.currentSong.value?.id ?? 'idle'}_mini",
-                                    delay: const Duration(milliseconds: 300),
-                                    duration: const Duration(seconds: 5),
-                                    child: Text(
-                                      getSafeSongArtist(playerController.currentSong.value),
-                                      maxLines: 1,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            color: Colors.white60,
+                                Row(
+                                  children: [
+                                    ValueListenableBuilder<Box>(
+                                      valueListenable:
+                                          Hive.box("SongDownloads").listenable(),
+                                      builder: (context, box, _) {
+                                        final currId = playerController
+                                            .currentSong.value?.id;
+                                        if (currId == null ||
+                                            !box.containsKey(currId)) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return Container(
+                                          margin:
+                                              const EdgeInsets.only(right: 5),
+                                          padding: const EdgeInsets.all(1.5),
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFF1DB954),
+                                            shape: BoxShape.circle,
                                           ),
+                                          child: const Icon(
+                                            Icons.check,
+                                            size: 9,
+                                            color: Colors.black,
+                                          ),
+                                        );
+                                      },
                                     ),
-                                  ),
+                                    Expanded(
+                                      child: SizedBox(
+                                        height: 18,
+                                        child: Marquee(
+                                          id: "${playerController.currentSong.value?.id ?? 'idle'}_mini",
+                                          delay:
+                                              const Duration(milliseconds: 300),
+                                          duration: const Duration(seconds: 5),
+                                          child: Text(
+                                            getSafeSongArtist(playerController
+                                                .currentSong.value),
+                                            maxLines: 1,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleSmall
+                                                ?.copyWith(
+                                                  color: Colors.white60,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

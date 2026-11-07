@@ -62,9 +62,35 @@ class ImageWidget extends StatelessWidget {
         (uri.scheme == 'http' || uri.scheme == 'https') &&
         uri.host.isNotEmpty;
 
-    if (hasValidNetworkUrl) {
+    final String supportDir = Get.isRegistered<SettingsScreenController>()
+        ? Get.find<SettingsScreenController>().supportDirPath
+        : '';
+    final File localThumbFile = (song != null && supportDir.isNotEmpty)
+        ? File("$supportDir/thumbnails/${song!.id}.png")
+        : File("");
+    final bool hasLocalThumb = localThumbFile.path.isNotEmpty &&
+        localThumbFile.existsSync() &&
+        localThumbFile.lengthSync() > 100;
+
+    final bool isDownloaded =
+        song != null && Hive.box("SongDownloads").containsKey(song!.id);
+    final bool isArtUriLocal =
+        song?.artUri?.toString().startsWith("file:") ?? false;
+
+    /// only valid for offline songs
+    final bool offlineAvailable = hasLocalThumb ||
+        isArtUriLocal ||
+        (song != null && (song?.extras?["url"] ?? "").contains("file")) ||
+        isDownloaded;
+
+    if (hasValidNetworkUrl &&
+        !offlineAvailable &&
+        !hasLocalThumb &&
+        !isArtUriLocal) {
       final estimatedBytes = isPlayerArtImage
-          ? (isUltraSaver ? 95 * 1024 : (isDataSaver ? 110 * 1024 : 180 * 1024))
+          ? (isUltraSaver
+              ? 95 * 1024
+              : (isDataSaver ? 110 * 1024 : 180 * 1024))
           : (isUltraSaver ? 5 * 1024 : (isDataSaver ? 9 * 1024 : 18 * 1024));
       DataUsageTracker.instance.recordImageLoad(
         url: finalImageUrl,
@@ -82,10 +108,6 @@ class ImageWidget extends StatelessWidget {
       child: Image.asset(
           "assets/icons/${song != null ? "song" : artist != null ? "artist" : "album"}.png"),
     );
-
-    /// only valid for offline songs
-    final bool offlineAvailable =
-        song != null && (song?.extras?["url"] ?? "").contains("file");
 
     final int diskCacheLimit = isPlayerArtImage
         ? 720
@@ -117,16 +139,23 @@ class ImageWidget extends StatelessWidget {
               ]
             : null,
       ),
-      child: offlineAvailable
+      child: hasLocalThumb
           ? Image.file(
-              File(
-                  "${Get.find<SettingsScreenController>().supportDirPath}/thumbnails/${song!.id}.png"),
+              localThumbFile,
               height: size,
               width: size,
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => placeholderWidget,
             )
-          : (hasValidNetworkUrl
+          : isArtUriLocal && song?.artUri != null
+              ? Image.file(
+                  File(song!.artUri!.toFilePath()),
+                  height: size,
+                  width: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => placeholderWidget,
+                )
+              : (hasValidNetworkUrl
               ? CachedNetworkImage(
                   height: size,
                   width: size,

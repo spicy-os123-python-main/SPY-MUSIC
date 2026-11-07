@@ -721,19 +721,35 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   AudioSource _createAudioSource(MediaItem mediaItem) {
-    String url = (mediaItem.extras?['url'] ?? '') as String;
-
-    if (url.isEmpty && Hive.box("SongDownloads").containsKey(mediaItem.id)) {
+    // 0. ABSOLUTE PRIORITY: Check SongDownloads FIRST!
+    // If this song is downloaded, ALWAYS play the local file (0 KB mobile data!),
+    // even if mediaItem.extras?['url'] contains a remote stream URL!
+    if (Hive.box("SongDownloads").containsKey(mediaItem.id)) {
       final songJson = Hive.box("SongDownloads").get(mediaItem.id);
-      url = (songJson['url'] ?? '') as String;
+      final dlPath = (songJson is Map ? (songJson['url'] ?? '') : '')
+          .toString()
+          .replaceFirst('file://', '');
+      if (dlPath.isNotEmpty) {
+        final dlFile = File(dlPath);
+        if (dlFile.existsSync() && dlFile.lengthSync() > 1024) {
+          printINFO(
+              "Playing offline downloaded file from SongDownloads (0 mobile data): $dlPath");
+          isPlayingUsingLockCachingSource = false;
+          return AudioSource.file(
+            dlPath,
+            tag: mediaItem,
+          );
+        }
+      }
     }
 
+    String url = (mediaItem.extras?['url'] ?? '') as String;
     final isLocalFile =
         !url.startsWith('http://') && !url.startsWith('https://');
     if (isLocalFile && url.isNotEmpty) {
       final cleanPath = url.replaceFirst('file://', '');
       final file = File(cleanPath);
-      if (file.existsSync()) {
+      if (file.existsSync() && file.lengthSync() > 1024) {
         printINFO("Playing offline local file: $cleanPath");
         isPlayingUsingLockCachingSource = false;
         return AudioSource.file(
@@ -1053,29 +1069,41 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
           mediaItem.add(playableSong);
           WatchtimeService.recordSongStart(playableSong);
+          final dlBox = Hive.box("SongDownloads");
+          final bool isDownloaded = dlBox.containsKey(playableSong.id) &&
+              File((dlBox.get(playableSong.id)['url'] ?? '')
+                      .toString()
+                      .replaceFirst('file://', ''))
+                  .existsSync();
           final isFromDiskCache =
               File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").existsSync() &&
                   (File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").lengthSync() >= 250 * 1024);
-          _currentSongCachedToDisk = isFromDiskCache;
+          final bool isLocalFile = isDownloaded ||
+              isFromDiskCache ||
+              streamAudioUrl.startsWith('file:') ||
+              playableSong.extras?['url']?.toString().startsWith('file:') == true;
+          _currentSongCachedToDisk = isLocalFile;
           DataUsageTracker.instance.recordAudioStream(
             title: playableSong.title,
             artist: playableSong.artist ?? '',
             itag: streamInfo.audio?.itag ?? 0,
             codec: streamInfo.audio?.audioCodec.name ?? 'aac',
             bitrate: streamInfo.audio?.bitrate ?? 0,
-            sizeBytes: isFromDiskCache ? 0 : (streamInfo.audio?.size ?? 0),
+            sizeBytes: isLocalFile ? 0 : (streamInfo.audio?.size ?? 0),
             durationSeconds: playableSong.duration?.inSeconds ?? 0,
-            source: isFromDiskCache
-                ? 'Device Cache (0 MB)'
-                : (streamAudioUrl.contains('googlevideo.com')
-                    ? ((streamInfo.audio?.itag == 18 ||
-                            streamInfo.audio?.itag == 22)
-                        ? 'YouTube (Muxed Fallback)'
-                        : 'YouTube (Pure Audio)')
-                    : (streamAudioUrl.contains('sndcdn')
-                        ? 'SoundCloud'
-                        : 'Direct Audio')),
-            isCached: isFromDiskCache,
+            source: isDownloaded
+                ? 'Downloaded Songs (0 MB)'
+                : (isFromDiskCache
+                    ? 'Device Cache (0 MB)'
+                    : (streamAudioUrl.contains('googlevideo.com')
+                        ? ((streamInfo.audio?.itag == 18 ||
+                                streamInfo.audio?.itag == 22)
+                            ? 'YouTube (Muxed Fallback)'
+                            : 'YouTube (Pure Audio)')
+                        : (streamAudioUrl.contains('sndcdn')
+                            ? 'SoundCloud'
+                            : 'Direct Audio'))),
+            isCached: isLocalFile,
           );
           playbackState
               .add(playbackState.value.copyWith(queueIndex: currentIndex));
@@ -1305,29 +1333,41 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           queue.add([playableSong]);
           mediaItem.add(playableSong);
           WatchtimeService.recordSongStart(playableSong);
+          final dlBox = Hive.box("SongDownloads");
+          final bool isDownloaded = dlBox.containsKey(playableSong.id) &&
+              File((dlBox.get(playableSong.id)['url'] ?? '')
+                      .toString()
+                      .replaceFirst('file://', ''))
+                  .existsSync();
           final isFromDiskCache =
               File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").existsSync() &&
                   (File("$_cacheDir/cachedSongs/${playableSong.id}.mp3").lengthSync() >= 250 * 1024);
-          _currentSongCachedToDisk = isFromDiskCache;
+          final bool isLocalFile = isDownloaded ||
+              isFromDiskCache ||
+              currentSongUrl!.startsWith('file:') ||
+              playableSong.extras?['url']?.toString().startsWith('file:') == true;
+          _currentSongCachedToDisk = isLocalFile;
           DataUsageTracker.instance.recordAudioStream(
             title: playableSong.title,
             artist: playableSong.artist ?? '',
             itag: streamInfo.audio?.itag ?? 0,
             codec: streamInfo.audio?.audioCodec.name ?? 'aac',
             bitrate: streamInfo.audio?.bitrate ?? 0,
-            sizeBytes: isFromDiskCache ? 0 : (streamInfo.audio?.size ?? 0),
+            sizeBytes: isLocalFile ? 0 : (streamInfo.audio?.size ?? 0),
             durationSeconds: playableSong.duration?.inSeconds ?? 0,
-            source: isFromDiskCache
-                ? 'Device Cache (0 MB)'
-                : (currentSongUrl!.contains('googlevideo.com')
-                    ? ((streamInfo.audio?.itag == 18 ||
-                            streamInfo.audio?.itag == 22)
-                        ? 'YouTube (Muxed Fallback)'
-                        : 'YouTube (Pure Audio)')
-                    : (currentSongUrl!.contains('sndcdn')
-                        ? 'SoundCloud'
-                        : 'Direct Audio')),
-            isCached: isFromDiskCache,
+            source: isDownloaded
+                ? 'Downloaded Songs (0 MB)'
+                : (isFromDiskCache
+                    ? 'Device Cache (0 MB)'
+                    : (currentSongUrl!.contains('googlevideo.com')
+                        ? ((streamInfo.audio?.itag == 18 ||
+                                streamInfo.audio?.itag == 22)
+                            ? 'YouTube (Muxed Fallback)'
+                            : 'YouTube (Pure Audio)')
+                        : (currentSongUrl!.contains('sndcdn')
+                            ? 'SoundCloud'
+                            : 'Direct Audio'))),
+            isCached: isLocalFile,
           );
 
           playbackState.add(playbackState.value.copyWith(queueIndex: 0));
@@ -1849,6 +1889,47 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     final targetSong = targetMediaItem ??
         queue.value.firstWhereOrNull((item) => item.id == songId) ??
         (mediaItem.value?.id == songId ? mediaItem.value : null);
+
+    // 0. ABSOLUTE TOP PRIORITY: Check SongDownloads FIRST!
+    // If this song is downloaded locally, NEVER touch the network,
+    // NEVER search Spotify/SoundCloud/YouTube, and NEVER consume mobile data!
+    final songDownloadsBox = Hive.box("SongDownloads");
+    if (!offlineReplacementUrl && songDownloadsBox.containsKey(songId)) {
+      final song = songDownloadsBox.get(songId);
+      final rawPath = song is Map ? (song['url']?.toString() ?? '') : '';
+      final filePath = rawPath.replaceFirst("file://", "");
+      if (filePath.isNotEmpty) {
+        final dlFile = File(filePath);
+        if (dlFile.existsSync() && dlFile.lengthSync() > 1024) {
+          printINFO(
+              "checkNGetUrl: Song ($songId) is DOWNLOADED (${dlFile.lengthSync()} bytes) -> Playing offline file with 0 mobile data");
+          final streamInfoJson = song["streamInfo"];
+          Audio? audio;
+          if (streamInfoJson != null &&
+              streamInfoJson is List &&
+              streamInfoJson.length > 1) {
+            audio = Audio.fromJson(streamInfoJson[1]);
+          }
+          audio ??= Audio(
+            itag: 140,
+            audioCodec: Codec.mp4a,
+            bitrate: 0,
+            duration: targetSong?.duration?.inMilliseconds ?? 0,
+            loudnessDb: 0,
+            url: "file://$filePath",
+            size: dlFile.lengthSync(),
+          );
+
+          return HMStreamingData(
+            playable: true,
+            statusMSG: "OK",
+            highQualityAudio: audio,
+            midQualityAudio: audio,
+            lowQualityAudio: audio,
+          );
+        }
+      }
+    }
 
     // SoundCloud Native Song Handling (Strictly SoundCloud - NEVER falls back to other platforms!)
     if (songId.startsWith("sc_")) {

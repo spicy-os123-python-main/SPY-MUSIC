@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:widget_marquee/widget_marquee.dart';
 
@@ -289,19 +290,52 @@ class GesturePlayer extends StatelessWidget {
                                   }),
                                   const SizedBox(height: 4),
                                   Obx(() {
-                                    return Marquee(
-                                      delay: const Duration(milliseconds: 300),
-                                      duration: const Duration(seconds: 10),
-                                      id: "${playerController.currentSong.value?.id ?? 'idle'}_subtitle",
-                                      child: Text(
-                                        getSafeSongArtist(playerController.currentSong.value),
-                                        textAlign: TextAlign.start,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.white.withOpacity(0.7),
+                                    return Row(
+                                      children: [
+                                        ValueListenableBuilder<Box>(
+                                          valueListenable:
+                                              Hive.box("SongDownloads").listenable(),
+                                          builder: (context, box, _) {
+                                            final currId = playerController
+                                                .currentSong.value?.id;
+                                            if (currId == null ||
+                                                !box.containsKey(currId)) {
+                                              return const SizedBox.shrink();
+                                            }
+                                            return Container(
+                                              margin: const EdgeInsets.only(right: 6),
+                                              padding: const EdgeInsets.all(2),
+                                              decoration: const BoxDecoration(
+                                                color: Color(0xFF1DB954),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.check,
+                                                size: 11,
+                                                color: Colors.black,
+                                              ),
+                                            );
+                                          },
                                         ),
-                                      ),
+                                        Expanded(
+                                          child: Marquee(
+                                            delay: const Duration(milliseconds: 300),
+                                            duration: const Duration(seconds: 10),
+                                            id: "${playerController.currentSong.value?.id ?? 'idle'}_subtitle",
+                                            child: Text(
+                                              getSafeSongArtist(
+                                                  playerController.currentSong.value),
+                                              textAlign: TextAlign.start,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color:
+                                                    Colors.white.withOpacity(0.7),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     );
                                   }),
                                 ],

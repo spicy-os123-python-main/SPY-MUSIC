@@ -56,10 +56,34 @@ class SongInfoBottomSheet extends StatelessWidget {
                 song.title,
                 maxLines: 1,
               ),
-              subtitle: Text(
-                getSafeSongArtist(song),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              subtitle: Row(
+                children: [
+                  Obx(() {
+                    if (!songInfoController.isDownloaded.value) {
+                      return const SizedBox.shrink();
+                    }
+                    return Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF1DB954), // Spotify Green
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check,
+                        size: 10,
+                        color: Colors.black,
+                      ),
+                    );
+                  }),
+                  Expanded(
+                    child: Text(
+                      getSafeSongArtist(song),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
               trailing: SizedBox(
                 width: 110,

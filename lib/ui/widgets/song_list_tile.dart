@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:widget_marquee/widget_marquee.dart';
 
 import '../../models/playlist.dart';
@@ -422,6 +423,29 @@ class _SongListTileState extends State<SongListTile>
                   ),
                   subtitle: Row(
                     children: [
+                      // Spotify-style small green checkmark circle for downloaded songs
+                      ValueListenableBuilder<Box>(
+                        valueListenable: Hive.box("SongDownloads")
+                            .listenable(keys: [widget.song.id]),
+                        builder: (context, box, _) {
+                          final isDownloaded =
+                              box.containsKey(widget.song.id);
+                          if (!isDownloaded) return const SizedBox.shrink();
+                          return Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.all(2),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF1DB954), // Spotify Green
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.check,
+                              size: 10,
+                              color: Colors.black,
+                            ),
+                          );
+                        },
+                      ),
                       _buildPlatformBadge(_resolvePlatform(widget.song)),
                       Expanded(
                         child: Text(

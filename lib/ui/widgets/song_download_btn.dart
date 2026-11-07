@@ -35,9 +35,17 @@ class SongDownloadButton extends StatelessWidget {
 
       return (isDownloadingDone ||
               Hive.box("SongDownloads").containsKey(song!.id))
-          ? Icon(
-              Icons.download_done,
-              color: Theme.of(context).textTheme.titleMedium!.color,
+          ? Container(
+              padding: const EdgeInsets.all(3.5),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1DB954), // Spotify Green
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check,
+                size: 14,
+                color: Colors.black,
+              ),
             )
           : downloader.songQueue.contains(song) &&
                   downloader.isJobRunning.isTrue &&
