@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
+import 'app_secrets.dart';
 
 /// Secret Easter Egg & Love Mode Service for the user's girlfriend.
 /// Toggles the romantic "LOVE YOU / SCHATZ" glowing message on the dinosaur animation.
@@ -23,19 +24,14 @@ class LoveModeService {
   }
 
   static bool isLoveCode(String input) {
-    final clean = input.trim().toLowerCase();
-    return clean == 'schatz' ||
-        clean == 'love you' ||
-        clean == 'loveyou' ||
-        clean == '#love' ||
-        clean == '#schatz' ||
+    final clean = input.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    final noSpaces = clean.replaceAll(' ', '');
+    final codes = AppSecrets.loveSecretKeywords;
+    return codes.contains(clean) ||
+        codes.contains(noSpaces) ||
         clean == 'love' ||
-        clean == 'iloveyou' ||
-        clean == 'i love you' ||
-        clean == 'love you schatz' ||
-        clean == 'loveyouschatz' ||
-        clean == 'ich liebe dich' ||
-        clean == 'liebe';
+        clean == 'liebe' ||
+        clean == 'ich liebe dich';
   }
 
   static void toggleLoveMode(BuildContext? context) {

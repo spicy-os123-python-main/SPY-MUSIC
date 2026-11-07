@@ -2,6 +2,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:hive/hive.dart';
 import '../utils/helper.dart';
+import 'app_secrets.dart';
 
 class _CachedStream {
   final String url;
@@ -24,7 +25,7 @@ class SoundCloudService {
     },
   ));
 
-  static String _clientId = 'N5nHxilyZaG4XKY57pV0M6qx6JysgIFW';
+  static String _clientId = AppSecrets.soundCloudDefaultClientId;
   static Future<void>? _refreshFuture;
   static DateTime? _lastRefreshAttempt;
   static const Duration _refreshCooldown = Duration(minutes: 10);

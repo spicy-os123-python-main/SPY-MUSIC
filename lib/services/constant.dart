@@ -1,11 +1,10 @@
-import 'dart:convert';
+import 'app_secrets.dart';
 
 const domain = "https://music.youtube.com/";
 const String baseUrl = '${domain}youtubei/v1/';
 
-// Public YouTube Music web client key (standard public key used by open-source clients for public web API)
-final String _ytPublicKey = utf8.decode(
-    base64.decode('QUl6YVN5QzlYTDNaaldkZFh5YTZYNzRkSm9DVEwtV0VZRkROWDMw'));
+// Public YouTube Music web client key (retrieved from secure secrets vault)
+final String _ytPublicKey = AppSecrets.ytPublicKey;
 final String fixedParms = '?prettyPrint=false&alt=json&key=$_ytPublicKey';
 
 const userAgent =

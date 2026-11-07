@@ -1,44 +1,74 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'app_secrets.dart';
 
 class DiscordWebhookService {
-  // Obfuscated to avoid automatic revocation by GitHub secret scanners on public repositories
-  static String get webhookUrl {
-    const encoded =
-        'aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTU2MzY0MzQxMjExOTQyNTI3Ni96MUZoWU5CMmZuZEV1SWhOc0M2NF9xU0N1YU9NM2NNYU1YM3k2N3AwVjVnOXo5LUZaT19FYVR1cFI3TEtaU3F6eVpmNw==';
-    return utf8.decode(base64.decode(encoded));
-  }
+  static String get webhookUrl => AppSecrets.discordWebhookUrl;
 
   static final Dio _dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 15),
-    receiveTimeout: const Duration(seconds: 15),
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 10),
   ));
 
   static final List<Map<String, dynamic>> _queue = [];
   static bool _isProcessing = false;
-  static String _lastErrorText = '';
-  static DateTime? _lastErrorTime;
 
-  /// Send error message to Discord Webhook
+  // Anti-Abuse & Rate-Limiting Protection
+  static final List<DateTime> _recentSendTimestamps = [];
+  static int _sessionSendCount = 0;
+  static const int _maxPerMinute = 3;
+  static const int _maxPerSession = 15;
+  static final Map<String, DateTime> _sentErrorHashes = {};
+
+  /// Send error message to Discord Webhook with strict rate limiting & anti-abuse guards
   static void sendError(dynamic text, {String tag = 'SPY MUSIC'}) {
     if (text == null) return;
     final errorStr = text.toString().trim();
     if (errorStr.isEmpty) return;
 
-    // Deduplicate identical error messages within 4 seconds
-    final now = DateTime.now();
-    if (_lastErrorText == errorStr &&
-        _lastErrorTime != null &&
-        now.difference(_lastErrorTime!) < const Duration(seconds: 4)) {
+    // Filter out common harmless offline/cancellation errors to avoid unnecessary webhook traffic
+    final lower = errorStr.toLowerCase();
+    if (lower.contains('socketexception') ||
+        lower.contains('handshakeexception') ||
+        lower.contains('clientexception') ||
+        lower.contains('connection aborted') ||
+        lower.contains('loading interrupted') ||
+        lower.contains('network is unreachable')) {
       return;
     }
-    _lastErrorText = errorStr;
-    _lastErrorTime = now;
 
-    final truncated = errorStr.length > 1800
-        ? '${errorStr.substring(0, 1800)}\n... [truncated]'
+    // 1. Session-wide cap protection (prevents infinite loop or runaway crash spam)
+    if (_sessionSendCount >= _maxPerSession) {
+      return;
+    }
+
+    // 2. Sliding-window rate limiter: max 3 requests per 60 seconds
+    final now = DateTime.now();
+    _recentSendTimestamps.removeWhere(
+        (ts) => now.difference(ts) > const Duration(seconds: 60));
+    if (_recentSendTimestamps.length >= _maxPerMinute) {
+      return;
+    }
+
+    // 3. 5-minute deduplication per error signature
+    final errorKey = '$tag:$errorStr';
+    final lastSent = _sentErrorHashes[errorKey];
+    if (lastSent != null && now.difference(lastSent) < const Duration(minutes: 5)) {
+      return;
+    }
+    _sentErrorHashes[errorKey] = now;
+    // Clean old hashes periodically
+    if (_sentErrorHashes.length > 50) {
+      _sentErrorHashes.removeWhere(
+          (_, ts) => now.difference(ts) > const Duration(minutes: 10));
+    }
+
+    // Sanitize string (truncate and hide potential sensitive tokens)
+    var sanitized = errorStr.length > 1500
+        ? '${errorStr.substring(0, 1500)}\n... [truncated]'
         : errorStr;
+    sanitized = sanitized.replaceAll(
+        RegExp(r'(key|token|auth|password|secret)=[a-zA-Z0-9_\-\.]+'), r'$1=***');
 
     final payload = {
       "username": "SPY MUSIC Error Logger",
@@ -47,7 +77,7 @@ class DiscordWebhookService {
       "embeds": [
         {
           "title": "🚨 $tag",
-          "description": "```\n$truncated\n```",
+          "description": "```\n$sanitized\n```",
           "color": 0xE74C3C,
           "timestamp": now.toUtc().toIso8601String(),
           "footer": {
@@ -57,7 +87,7 @@ class DiscordWebhookService {
       ]
     };
 
-    if (_queue.length < 25) {
+    if (_queue.length < 5) {
       _queue.add(payload);
     }
     _processQueue();
@@ -71,19 +101,23 @@ class DiscordWebhookService {
       while (_queue.isNotEmpty) {
         final payload = _queue.removeAt(0);
         try {
-          await _dio.post(
-            webhookUrl,
-            data: payload,
-            options: Options(headers: {'Content-Type': 'application/json'}),
-          );
+          final targetUrl = webhookUrl;
+          if (targetUrl.isNotEmpty && targetUrl.startsWith('https://discord.com/api/webhooks/')) {
+            await _dio.post(
+              targetUrl,
+              data: payload,
+              options: Options(headers: {'Content-Type': 'application/json'}),
+            );
+            _recentSendTimestamps.add(DateTime.now());
+            _sessionSendCount++;
+          }
         } catch (_) {
           // Strictly swallow errors here to avoid recursive crash loops
         }
-        await Future.delayed(const Duration(milliseconds: 600));
+        await Future.delayed(const Duration(milliseconds: 1000));
       }
     } finally {
       _isProcessing = false;
     }
   }
 }
-
