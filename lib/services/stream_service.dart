@@ -31,15 +31,15 @@ class StreamProvider {
     try {
       Object? lastError;
 
-      // 1. Primary: iOS + androidSdkless client fast direct manifest (pure audio 1-3 MB, no PO Token, no deciphering)
+      // 1. Primary: androidSdkless + android direct fast manifest (<1s, pure audio 1-3 MB, no PO Token, no deciphering)
       try {
         final res = await yt.videos.streamsClient
             .getManifest(
               videoId,
-              ytClients: [YoutubeApiClient.ios, YoutubeApiClient.androidSdkless],
+              ytClients: [YoutubeApiClient.androidSdkless, YoutubeApiClient.android],
               requireWatchPage: false,
             )
-            .timeout(const Duration(seconds: 7));
+            .timeout(const Duration(seconds: 5));
 
         final List<Audio> formats = [];
         // 1. Add pure audio streams
@@ -73,7 +73,7 @@ class StreamProvider {
 
         if (formats.isNotEmpty) {
           printINFO(
-              "YouTube iOS+androidSdkless fast manifest successfully fetched ${formats.length} streams for $videoId");
+              "YouTube androidSdkless fast manifest successfully fetched ${formats.length} streams for $videoId");
           return StreamProvider(
             playable: true,
             statusMSG: "OK",
@@ -82,10 +82,110 @@ class StreamProvider {
         }
       } catch (e) {
         lastError = e;
-        printINFO("YouTube fast manifest failed for $videoId: $e, trying watchPage fallback...");
+        printINFO("YouTube fast manifest failed for $videoId: $e, trying standard Android client...");
       }
 
-      // 2. Secondary fallback: androidSdkless with watchpage deciphering
+      // 2. Secondary fallback: Android client directly without watchpage
+      try {
+        final res = await yt.videos.streamsClient
+            .getManifest(
+              videoId,
+              ytClients: [YoutubeApiClient.android],
+              requireWatchPage: false,
+            )
+            .timeout(const Duration(seconds: 5));
+
+        final List<Audio> formats = [];
+        for (final a in res.audioOnly) {
+          formats.add(Audio(
+            itag: a.tag,
+            audioCodec:
+                a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
+            bitrate: a.bitrate.bitsPerSecond,
+            duration: 0,
+            loudnessDb: 0.0,
+            url: a.url.toString(),
+            size: a.size.totalBytes,
+          ));
+        }
+        for (final m in res.muxed) {
+          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+            formats.add(Audio(
+              itag: m.tag,
+              audioCodec: Codec.mp4a,
+              bitrate: 128000,
+              duration: 0,
+              loudnessDb: 0.0,
+              url: m.url.toString(),
+              size: m.size.totalBytes,
+            ));
+          }
+        }
+        if (formats.isNotEmpty) {
+          printINFO(
+              "YouTube Android direct fallback successfully fetched ${formats.length} streams for $videoId");
+          return StreamProvider(
+            playable: true,
+            statusMSG: "OK",
+            audioFormats: formats,
+          );
+        }
+      } catch (e) {
+        lastError = e;
+        printINFO("YouTube Android direct fallback failed for $videoId: $e, trying isolated iOS client fallback...");
+      }
+
+      // 3. Tertiary fallback: iOS client alone (isolated so any 403 on video streams does not affect Android streams)
+      try {
+        final res = await yt.videos.streamsClient
+            .getManifest(
+              videoId,
+              ytClients: [YoutubeApiClient.ios],
+              requireWatchPage: false,
+            )
+            .timeout(const Duration(seconds: 5));
+
+        final List<Audio> formats = [];
+        for (final a in res.audioOnly) {
+          formats.add(Audio(
+            itag: a.tag,
+            audioCodec:
+                a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
+            bitrate: a.bitrate.bitsPerSecond,
+            duration: 0,
+            loudnessDb: 0.0,
+            url: a.url.toString(),
+            size: a.size.totalBytes,
+          ));
+        }
+        for (final m in res.muxed) {
+          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+            formats.add(Audio(
+              itag: m.tag,
+              audioCodec: Codec.mp4a,
+              bitrate: 128000,
+              duration: 0,
+              loudnessDb: 0.0,
+              url: m.url.toString(),
+              size: m.size.totalBytes,
+            ));
+          }
+        }
+        if (formats.isNotEmpty) {
+          printINFO(
+              "YouTube iOS fallback successfully fetched ${formats.length} streams for $videoId");
+          return StreamProvider(
+            playable: true,
+            statusMSG: "OK",
+            audioFormats: formats,
+          );
+        }
+      } catch (e) {
+        lastError = e;
+        printINFO("YouTube iOS fallback failed for $videoId: $e, trying watchPage deciphering fallback...");
+      }
+
+      // 4. Quaternary fallback: androidSdkless with watchpage deciphering
       try {
         final res = await yt.videos.streamsClient
             .getManifest(
@@ -108,7 +208,7 @@ class StreamProvider {
             size: a.size.totalBytes,
           ));
         }
-        // 2. Unconditionally add itag 18 muxed stream as reliable unthrottled ratebypass stream
+        // Unconditionally add itag 18 muxed stream as reliable unthrottled ratebypass stream
         for (final m in res.muxed) {
           if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
             formats.add(Audio(
@@ -133,58 +233,7 @@ class StreamProvider {
         }
       } catch (e) {
         lastError = e;
-        printINFO("YouTube androidSdkless watchPage fallback failed for $videoId: $e, trying standard Android client...");
-      }
-
-      // 2. Secondary fallback: Android client with requireWatchPage: true
-      try {
-        final res = await yt.videos.streamsClient
-            .getManifest(
-              videoId,
-              ytClients: [YoutubeApiClient.android],
-              requireWatchPage: true,
-            )
-            .timeout(const Duration(seconds: 6));
-
-        final List<Audio> formats = [];
-        for (final a in res.audioOnly) {
-          formats.add(Audio(
-            itag: a.tag,
-            audioCodec:
-                a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
-            bitrate: a.bitrate.bitsPerSecond,
-            duration: 0,
-            loudnessDb: 0.0,
-            url: a.url.toString(),
-            size: a.size.totalBytes,
-          ));
-        }
-        // 2. Unconditionally add itag 18 muxed stream as reliable unthrottled ratebypass stream
-        for (final m in res.muxed) {
-          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
-            formats.add(Audio(
-              itag: m.tag,
-              audioCodec: Codec.mp4a,
-              bitrate: 128000,
-              duration: 0,
-              loudnessDb: 0.0,
-              url: m.url.toString(),
-              size: m.size.totalBytes,
-            ));
-          }
-        }
-        if (formats.isNotEmpty) {
-          printINFO(
-              "YouTube Android (watchPage) fallback successfully fetched ${formats.length} streams for $videoId");
-          return StreamProvider(
-            playable: true,
-            statusMSG: "OK",
-            audioFormats: formats,
-          );
-        }
-      } catch (e) {
-        lastError = e;
-        printINFO("YouTube Android fallback failed for $videoId: $e");
+        printINFO("YouTube watchPage fallback failed for $videoId: $e");
       }
 
       throw lastError ??
