@@ -306,10 +306,10 @@ class StreamProvider {
 
   Audio? get fallbackAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
-    return audioFormats!.firstWhereOrNull(
-            (item) => item.itag == 18 || item.url.contains('ratebypass=yes')) ??
-        audioFormats!.firstWhereOrNull((item) => item.itag == 140) ??
-        audioFormats!.first;
+    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    return aac140 ?? rateBypass ?? audioFormats!.first;
   }
 
   Audio? get highestBitrateMp4aAudio {

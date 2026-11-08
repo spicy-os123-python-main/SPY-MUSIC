@@ -9,6 +9,12 @@ import '../services/utils.dart';
 import 'helper.dart';
 
 void startHouseKeeping() {
+  try {
+    // Clear temporary streaming URL cache on launch so updated stream signatures are always fresh
+    final songsUrlCacheBox = Hive.box("SongsUrlCache");
+    songsUrlCacheBox.clear();
+    printINFO("Cleared SongsUrlCache on startup for fresh streaming");
+  } catch (_) {}
   removeExpiredSongsUrlFromDb();
 }
 
@@ -19,10 +25,16 @@ Future<void> removeExpiredSongsUrlFromDb() async {
         songsUrlCacheBox.keys.whereType<String>().toList();
     for (var i = 0; i < songsUrlCacheKeysList.length; i++) {
       final songUrlKey = songsUrlCacheKeysList[i];
-      final streamData = songsUrlCacheBox.get(songUrlKey)[1];
-      if (streamData == null ||
-          streamData.runtimeType == String ||
-          (streamData != null && isExpired(url: streamData['url'] as String))) {
+      final raw = songsUrlCacheBox.get(songUrlKey);
+      String? testUrl;
+      if (raw is Map) {
+        testUrl = raw['highQualityAudio']?['url'] ??
+            raw['lowQualityAudio']?['url'] ??
+            raw['midQualityAudio']?['url'];
+      } else if (raw is List && raw.length > 1 && raw[1] is Map) {
+        testUrl = raw[1]['url'];
+      }
+      if (testUrl == null || isExpired(url: testUrl)) {
         await songsUrlCacheBox.delete(songUrlKey);
       }
     }

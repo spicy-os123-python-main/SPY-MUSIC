@@ -40,21 +40,22 @@ class HMStreamingData {
     final currentUrl = currentAudio?.url;
     final currentItag = currentAudio?.itag;
 
-    // 1. Guaranteed unthrottled fallback: fallbackAudio (itag 18 with ratebypass=yes)
+    // 1. Guaranteed unthrottled fallback: fallbackAudio (itag 18 with ratebypass=yes or pure aac140)
     if (fallbackAudio != null &&
         fallbackAudio!.url.isNotEmpty &&
-        fallbackAudio!.url != currentUrl) {
+        fallbackAudio!.url != currentUrl &&
+        fallbackAudio!.itag != currentItag) {
       return fallbackAudio;
     }
 
     // 2. Try any other format that has a different URL/itag
     final candidates = <Audio?>[];
     if (qualityIndex == 2) {
-      candidates.addAll([lowQualityAudio, midQualityAudio, highQualityAudio]);
+      candidates.addAll([lowQualityAudio, midQualityAudio, highQualityAudio, fallbackAudio]);
     } else if (qualityIndex == 1) {
-      candidates.addAll([midQualityAudio, lowQualityAudio, highQualityAudio]);
+      candidates.addAll([midQualityAudio, lowQualityAudio, highQualityAudio, fallbackAudio]);
     } else {
-      candidates.addAll([highQualityAudio, midQualityAudio, lowQualityAudio]);
+      candidates.addAll([highQualityAudio, midQualityAudio, lowQualityAudio, fallbackAudio]);
     }
 
     for (final cand in candidates) {

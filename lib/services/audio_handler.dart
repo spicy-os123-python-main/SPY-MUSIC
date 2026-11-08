@@ -732,7 +732,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     queue.add(newQueue);
   }
 
-  AudioSource _createAudioSource(MediaItem mediaItem) {
+  AudioSource _createAudioSource(MediaItem mediaItem, {bool skipHeaders = false}) {
     // 0. ABSOLUTE PRIORITY: Check SongDownloads FIRST!
     // If this song is downloaded, ALWAYS play the local file (0 KB mobile data!),
     // even if mediaItem.extras?['url'] contains a remote stream URL!
@@ -816,15 +816,26 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     isPlayingUsingLockCachingSource = false;
     final uri =
         isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
+
+    Map<String, String>? headers;
+    if (!skipHeaders && url.contains('googlevideo.com')) {
+      String ua = 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
+      if (url.contains('c=IOS')) {
+        ua = 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)';
+      } else if (url.contains('c=WEB')) {
+        ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0';
+      }
+      headers = {
+        'User-Agent': ua,
+        'Origin': 'https://www.youtube.com',
+        'Referer': 'https://www.youtube.com',
+      };
+    }
+
     return AudioSource.uri(
       uri,
       tag: mediaItem,
-      headers: url.contains('googlevideo.com')
-          ? {
-              'User-Agent':
-                  'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US)',
-            }
-          : null,
+      headers: headers,
     );
   }
 
@@ -1153,10 +1164,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               audioSource,
               initialPosition: startPos,
             ).timeout(
-              const Duration(seconds: 25),
+              const Duration(seconds: 20),
               onTimeout: () {
                 throw TimeoutException(
-                    "Playback loading timed out after 25 seconds");
+                    "Playback loading timed out after 20 seconds");
               },
             );
           } catch (loadErr) {
@@ -1170,42 +1181,65 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               printINFO("playByIndex setAudioSource interrupted for $reqId: $loadErr");
               return;
             }
-            final fallback = streamInfo.getFallbackFor(streamInfo.audio);
-            if (fallback != null && fallback.url != streamAudioUrl) {
-              printINFO(
-                  "Primary audio failed with $loadErr, switching to fallback pure stream for ${currentSong.id}");
-              final fallbackSong = playableSong.copyWith(extras: {
-                ...Map<String, dynamic>.from(playableSong.extras ?? {}),
-                'url': fallback.url,
-                'size': fallback.size,
-                'codec': fallback.audioCodec.name,
-              });
-              currentSongUrl = fallback.url;
-              if (currentIndex < queue.value.length) {
-                queue.value[currentIndex] = fallbackSong;
+
+            // Retry A: Try raw stream without custom headers (pure native player)
+            bool streamLoaded = false;
+            if (playableSong.extras?['url']?.toString().contains('googlevideo.com') == true) {
+              try {
+                printINFO("Primary audio failed with $loadErr, retrying raw stream without headers for ${currentSong.id}");
+                await _player.setAudioSource(
+                  _createAudioSource(playableSong, skipHeaders: true),
+                  initialPosition: startPos,
+                ).timeout(const Duration(seconds: 12));
+                streamLoaded = true;
+              } catch (_) {}
+            }
+
+            if (!streamLoaded) {
+              final fallback = streamInfo.getFallbackFor(streamInfo.audio);
+              if (fallback != null && fallback.url != streamAudioUrl) {
+                printINFO(
+                    "Primary audio failed with $loadErr, switching to fallback stream (${fallback.itag}) for ${currentSong.id}");
+                final fallbackSong = playableSong.copyWith(extras: {
+                  ...Map<String, dynamic>.from(playableSong.extras ?? {}),
+                  'url': fallback.url,
+                  'size': fallback.size,
+                  'codec': fallback.audioCodec.name,
+                });
+                currentSongUrl = fallback.url;
+                if (currentIndex < queue.value.length) {
+                  queue.value[currentIndex] = fallbackSong;
+                }
+                mediaItem.add(fallbackSong);
+                DataUsageTracker.instance.recordAudioStream(
+                  title: fallbackSong.title,
+                  artist: fallbackSong.artist ?? '',
+                  itag: fallback.itag,
+                  codec: fallback.audioCodec.name,
+                  bitrate: fallback.bitrate,
+                  sizeBytes: fallback.size,
+                  durationSeconds: fallbackSong.duration?.inSeconds ?? 0,
+                  source: fallback.url.contains('googlevideo.com')
+                      ? ((fallback.itag == 18 || fallback.itag == 22)
+                          ? 'YouTube (Muxed Fallback)'
+                          : 'YouTube (Pure Audio)')
+                      : 'Direct Audio',
+                  isCached: false,
+                );
+                try {
+                  await _player.setAudioSource(
+                    _createAudioSource(fallbackSong),
+                    initialPosition: startPos,
+                  ).timeout(const Duration(seconds: 20));
+                } catch (_) {
+                  await _player.setAudioSource(
+                    _createAudioSource(fallbackSong, skipHeaders: true),
+                    initialPosition: startPos,
+                  ).timeout(const Duration(seconds: 20));
+                }
+              } else {
+                rethrow;
               }
-              mediaItem.add(fallbackSong);
-              DataUsageTracker.instance.recordAudioStream(
-                title: fallbackSong.title,
-                artist: fallbackSong.artist ?? '',
-                itag: fallback.itag,
-                codec: fallback.audioCodec.name,
-                bitrate: fallback.bitrate,
-                sizeBytes: fallback.size,
-                durationSeconds: fallbackSong.duration?.inSeconds ?? 0,
-                source: fallback.url.contains('googlevideo.com')
-                    ? ((fallback.itag == 18 || fallback.itag == 22)
-                        ? 'YouTube (Muxed Fallback)'
-                        : 'YouTube (Pure Audio)')
-                    : 'Direct Audio',
-                isCached: false,
-              );
-              await _player.setAudioSource(
-                _createAudioSource(fallbackSong),
-                initialPosition: startPos,
-              ).timeout(const Duration(seconds: 25));
-            } else {
-              rethrow;
             }
           }
 
@@ -1242,6 +1276,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             Hive.box("SongsUrlCache").delete(currentSong.id);
             if (currentSong.id.startsWith("sp_") ||
                 currentSong.id.startsWith("az_")) {
+              final matchedId =
+                  PlatformSearchService.getMatchedTrackId(currentSong.id);
+              if (matchedId != null) {
+                Hive.box("SongsUrlCache").delete(matchedId);
+              }
               PlatformSearchService.invalidateMatch(currentSong.id);
             }
             try {
@@ -1262,10 +1301,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   queue.value[currentIndex] = playableSong;
                 }
                 mediaItem.add(playableSong);
-                await _player.setAudioSource(
-                  _createAudioSource(playableSong),
-                  initialPosition: Duration.zero,
-                ).timeout(const Duration(seconds: 25));
+                try {
+                  await _player.setAudioSource(
+                    _createAudioSource(playableSong),
+                    initialPosition: Duration.zero,
+                  ).timeout(const Duration(seconds: 20));
+                } catch (_) {
+                  await _player.setAudioSource(
+                    _createAudioSource(playableSong, skipHeaders: true),
+                    initialPosition: Duration.zero,
+                  ).timeout(const Duration(seconds: 20));
+                }
                 isSongLoading = false;
                 try {
                   final session = await AudioSession.instance;
@@ -1469,40 +1515,63 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               printINFO("setSourceNPlay setAudioSource interrupted for $reqId: $loadErr");
               return;
             }
-            final fallback = streamInfo.getFallbackFor(streamInfo.audio);
-            if (fallback != null && fallback.url != currentSongUrl) {
-              printINFO(
-                  "Primary audio failed with $loadErr, switching to fallback pure stream for ${currMed.id}");
-              final fallbackSong = playableSong.copyWith(extras: {
-                ...Map<String, dynamic>.from(playableSong.extras ?? {}),
-                'url': fallback.url,
-                'size': fallback.size,
-                'codec': fallback.audioCodec.name,
-              });
-              currentSongUrl = fallback.url;
-              queue.add([fallbackSong]);
-              mediaItem.add(fallbackSong);
-              DataUsageTracker.instance.recordAudioStream(
-                title: fallbackSong.title,
-                artist: fallbackSong.artist ?? '',
-                itag: fallback.itag,
-                codec: fallback.audioCodec.name,
-                bitrate: fallback.bitrate,
-                sizeBytes: fallback.size,
-                durationSeconds: fallbackSong.duration?.inSeconds ?? 0,
-                source: fallback.url.contains('googlevideo.com')
-                    ? ((fallback.itag == 18 || fallback.itag == 22)
-                        ? 'YouTube (Muxed Fallback)'
-                        : 'YouTube (Pure Audio)')
-                    : 'Direct Audio',
-                isCached: false,
-              );
-              await _player.setAudioSource(
-                _createAudioSource(fallbackSong),
-                initialPosition: Duration.zero,
-              ).timeout(const Duration(seconds: 25));
-            } else {
-              rethrow;
+
+            // Retry A: Try raw stream without custom headers (pure native player)
+            bool streamLoaded = false;
+            if (playableSong.extras?['url']?.toString().contains('googlevideo.com') == true) {
+              try {
+                printINFO("Primary audio failed with $loadErr, retrying raw stream without headers for ${currMed.id}");
+                await _player.setAudioSource(
+                  _createAudioSource(playableSong, skipHeaders: true),
+                  initialPosition: Duration.zero,
+                ).timeout(const Duration(seconds: 12));
+                streamLoaded = true;
+              } catch (_) {}
+            }
+
+            if (!streamLoaded) {
+              final fallback = streamInfo.getFallbackFor(streamInfo.audio);
+              if (fallback != null && fallback.url != currentSongUrl) {
+                printINFO(
+                    "Primary audio failed with $loadErr, switching to fallback stream (${fallback.itag}) for ${currMed.id}");
+                final fallbackSong = playableSong.copyWith(extras: {
+                  ...Map<String, dynamic>.from(playableSong.extras ?? {}),
+                  'url': fallback.url,
+                  'size': fallback.size,
+                  'codec': fallback.audioCodec.name,
+                });
+                currentSongUrl = fallback.url;
+                queue.add([fallbackSong]);
+                mediaItem.add(fallbackSong);
+                DataUsageTracker.instance.recordAudioStream(
+                  title: fallbackSong.title,
+                  artist: fallbackSong.artist ?? '',
+                  itag: fallback.itag,
+                  codec: fallback.audioCodec.name,
+                  bitrate: fallback.bitrate,
+                  sizeBytes: fallback.size,
+                  durationSeconds: fallbackSong.duration?.inSeconds ?? 0,
+                  source: fallback.url.contains('googlevideo.com')
+                      ? ((fallback.itag == 18 || fallback.itag == 22)
+                          ? 'YouTube (Muxed Fallback)'
+                          : 'YouTube (Pure Audio)')
+                      : 'Direct Audio',
+                  isCached: false,
+                );
+                try {
+                  await _player.setAudioSource(
+                    _createAudioSource(fallbackSong),
+                    initialPosition: Duration.zero,
+                  ).timeout(const Duration(seconds: 20));
+                } catch (_) {
+                  await _player.setAudioSource(
+                    _createAudioSource(fallbackSong, skipHeaders: true),
+                    initialPosition: Duration.zero,
+                  ).timeout(const Duration(seconds: 20));
+                }
+              } else {
+                rethrow;
+              }
             }
           }
           if (reqId != _activePlayRequestId) return;
@@ -1537,6 +1606,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             Hive.box("SongsUrlCache").delete(currMed.id);
             if (currMed.id.startsWith("sp_") ||
                 currMed.id.startsWith("az_")) {
+              final matchedId =
+                  PlatformSearchService.getMatchedTrackId(currMed.id);
+              if (matchedId != null) {
+                Hive.box("SongsUrlCache").delete(matchedId);
+              }
               PlatformSearchService.invalidateMatch(currMed.id);
             }
             try {
@@ -1555,10 +1629,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 });
                 queue.add([playableSong]);
                 mediaItem.add(playableSong);
-                await _player.setAudioSource(
-                  _createAudioSource(playableSong),
-                  initialPosition: Duration.zero,
-                ).timeout(const Duration(seconds: 25));
+                try {
+                  await _player.setAudioSource(
+                    _createAudioSource(playableSong),
+                    initialPosition: Duration.zero,
+                  ).timeout(const Duration(seconds: 20));
+                } catch (_) {
+                  await _player.setAudioSource(
+                    _createAudioSource(playableSong, skipHeaders: true),
+                    initialPosition: Duration.zero,
+                  ).timeout(const Duration(seconds: 20));
+                }
                 isSongLoading = false;
                 try {
                   final session = await AudioSession.instance;

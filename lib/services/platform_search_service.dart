@@ -31,6 +31,9 @@ class PlatformSearchService {
     printINFO("Cleared PlatformSearchService match cache");
   }
 
+  /// Get matched stream ID for a platform track ID
+  static String? getMatchedTrackId(String trackId) => _matchCache[trackId];
+
   /// Invalidate match cache when playback fails or match was dead
   static void invalidateMatch(String trackId) {
     _matchCache.remove(trackId);
