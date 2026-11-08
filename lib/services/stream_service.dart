@@ -31,11 +31,15 @@ class StreamProvider {
     try {
       Object? lastError;
 
-      // 1. Primary: Standard getManifest with official watchpage deciphering (100% playable 206 streams!)
+      // 1. Primary: androidSdkless client with fast direct manifest (pure audio 1-2 MB, no PO Token)
       try {
         final res = await yt.videos.streamsClient
-            .getManifest(videoId)
-            .timeout(const Duration(seconds: 8));
+            .getManifest(
+              videoId,
+              ytClients: [YoutubeApiClient.androidSdkless],
+              requireWatchPage: false,
+            )
+            .timeout(const Duration(seconds: 6));
 
         final List<Audio> formats = [];
         for (final a in res.audioOnly) {
@@ -70,7 +74,7 @@ class StreamProvider {
 
         if (formats.isNotEmpty) {
           printINFO(
-              "YouTube standard getManifest successfully fetched ${formats.length} streams for $videoId");
+              "YouTube androidSdkless fast manifest successfully fetched ${formats.length} streams for $videoId");
           return StreamProvider(
             playable: true,
             statusMSG: "OK",
@@ -79,7 +83,59 @@ class StreamProvider {
         }
       } catch (e) {
         lastError = e;
-        printINFO("YouTube standard getManifest failed for $videoId: $e, trying fallback clients...");
+        printINFO("YouTube androidSdkless fast manifest failed for $videoId: $e, trying watchPage fallback...");
+      }
+
+      // 2. Secondary fallback: androidSdkless with watchpage deciphering
+      try {
+        final res = await yt.videos.streamsClient
+            .getManifest(
+              videoId,
+              ytClients: [YoutubeApiClient.androidSdkless],
+              requireWatchPage: true,
+            )
+            .timeout(const Duration(seconds: 8));
+
+        final List<Audio> formats = [];
+        for (final a in res.audioOnly) {
+          formats.add(Audio(
+            itag: a.tag,
+            audioCodec:
+                a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
+            bitrate: a.bitrate.bitsPerSecond,
+            duration: 0,
+            loudnessDb: 0.0,
+            url: a.url.toString(),
+            size: a.size.totalBytes,
+          ));
+        }
+        if (formats.isEmpty) {
+          for (final m in res.muxed) {
+            if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+              formats.add(Audio(
+                itag: m.tag,
+                audioCodec: Codec.mp4a,
+                bitrate: 128000,
+                duration: 0,
+                loudnessDb: 0.0,
+                url: m.url.toString(),
+                size: m.size.totalBytes,
+              ));
+            }
+          }
+        }
+        if (formats.isNotEmpty) {
+          printINFO(
+              "YouTube androidSdkless (watchPage) fallback successfully fetched ${formats.length} streams for $videoId");
+          return StreamProvider(
+            playable: true,
+            statusMSG: "OK",
+            audioFormats: formats,
+          );
+        }
+      } catch (e) {
+        lastError = e;
+        printINFO("YouTube androidSdkless watchPage fallback failed for $videoId: $e, trying standard Android client...");
       }
 
       // 2. Secondary fallback: Android client with requireWatchPage: true

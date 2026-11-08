@@ -120,10 +120,12 @@ class LibrarySongsController extends GetxController {
       await (File(filePath)).delete();
     }
 
-    final thumbFile = File(
-        "${Get.find<SettingsScreenController>().supportDirPath}/thumbnails/${item.id}.png");
-    if (await thumbFile.exists()) {
-      await thumbFile.delete();
+    final supportDir = Get.find<SettingsScreenController>().supportDirPath;
+    if (supportDir.isNotEmpty) {
+      final thumbFile = File("$supportDir/thumbnails/${item.id}.png");
+      if (await thumbFile.exists()) {
+        await thumbFile.delete();
+      }
     }
   }
 

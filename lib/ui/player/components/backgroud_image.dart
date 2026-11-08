@@ -26,8 +26,11 @@ class BackgroudImage extends StatelessWidget {
                         '')
                     .contains('file')
                 ? Builder(builder: (context) {
+                    final supportDir =
+                        Get.find<SettingsScreenController>().supportDirPath;
+                    if (supportDir.isEmpty) return const SizedBox.expand();
                     final imgFile = File(
-                        "${Get.find<SettingsScreenController>().supportDirPath}/thumbnails/${playerController.currentSong.value!.id}.png");
+                        "$supportDir/thumbnails/${playerController.currentSong.value!.id}.png");
                     return FutureBuilder(
                       future: imgFile.exists(),
                       builder: (context, snapshot) {

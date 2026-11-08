@@ -181,9 +181,11 @@ class BackupDialogController extends GetxController {
           .toList();
       filesToExport.addAll(downlodedSongFilePaths);
       try {
-        filesToExport.addAll(await processDirectoryInIsolate(
-            "$supportDirPath/thumbnails",
-            extensionFilter: ".png"));
+        if (supportDirPath.isNotEmpty) {
+          filesToExport.addAll(await processDirectoryInIsolate(
+              "$supportDirPath/thumbnails",
+              extensionFilter: ".png"));
+        }
       } catch (e) {
         printERROR(e);
       }

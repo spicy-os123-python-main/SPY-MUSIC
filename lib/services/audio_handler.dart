@@ -819,6 +819,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     return AudioSource.uri(
       uri,
       tag: mediaItem,
+      headers: url.contains('googlevideo.com')
+          ? {
+              'User-Agent':
+                  'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US)',
+            }
+          : null,
     );
   }
 
@@ -2244,7 +2250,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           final midItag = streamInfoJson['midQualityAudio']?['itag'];
           final highItag = streamInfoJson['highQualityAudio']?['itag'];
           final fallbackItag = streamInfoJson['fallbackAudio']?['itag'];
-          // Evict old heavy video streams (itag 18 or 22) and blocked androidSdkless streams (&c=ANDROID)
+          // Evict old heavy video streams (itag 18 or 22) so data saver gets pure 1-2 MB audio
           final isHeavyVideo = (highItag == 18 ||
               lowItag == 18 ||
               midItag == 18 ||
@@ -2253,11 +2259,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               lowItag == 22 ||
               midItag == 22 ||
               fallbackItag == 22);
-          final isUnplayableAndroidStream = testUrl.contains('&c=ANDROID');
-          if (testUrl.contains('googlevideo.com') &&
-              (isHeavyVideo || isUnplayableAndroidStream)) {
+          if (testUrl.contains('googlevideo.com') && isHeavyVideo) {
             printINFO(
-                "Evicting invalid/video/blocked stream from cache for ($songId)");
+                "Evicting heavy video stream from cache for ($songId) to save data");
             songsUrlCacheBox.delete(songId);
           } else {
             printINFO("Got cached stream Url ($songId)");

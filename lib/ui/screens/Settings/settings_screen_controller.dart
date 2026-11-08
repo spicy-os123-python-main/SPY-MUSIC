@@ -34,7 +34,7 @@ enum DataSaverMode {
 }
 
 class SettingsScreenController extends GetxController {
-  late String _supportDir;
+  String _supportDir = "";
   final cacheSongs = false.obs;
   final setBox = Hive.box("AppPrefs");
   final themeModetype = ThemeType.dynamic.obs;
@@ -120,6 +120,7 @@ class SettingsScreenController extends GetxController {
 
   get currentVision => currentVersion;
   get isCurrentPathsupportDownDir =>
+      _supportDir.isNotEmpty &&
       "$_supportDir/Music" == downloadLocationPath.toString();
   String get supportDirPath => _supportDir;
 
@@ -196,12 +197,17 @@ class SettingsScreenController extends GetxController {
   }
 
   Future<String> _createInAppSongDownDir() async {
-    _supportDir = (await getApplicationSupportDirectory()).path;
-    final directory = Directory("$_supportDir/Music/");
-    if (!await directory.exists()) {
-      await directory.create(recursive: true);
+    try {
+      _supportDir = (await getApplicationSupportDirectory()).path;
+      final directory = Directory("$_supportDir/Music/");
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+      return "$_supportDir/Music";
+    } catch (e) {
+      printERROR("Failed to create in-app song down dir: $e");
+      return "";
     }
-    return "$_supportDir/Music";
   }
 
   Future<void> _setInitValue() async {
@@ -468,6 +474,7 @@ class SettingsScreenController extends GetxController {
   }
 
   void resetDownloadLocation() {
+    if (_supportDir.isEmpty) return;
     final defaultPath = "$_supportDir/Music";
     setBox.put("downloadLocationPath", defaultPath);
     downloadLocationPath.value = defaultPath;

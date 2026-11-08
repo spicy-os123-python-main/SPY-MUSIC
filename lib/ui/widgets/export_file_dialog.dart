@@ -126,10 +126,13 @@ class ExportFileDialogController extends GetxController {
 
   Future<void> scanFilesToExport() async {
     final supportDirPath = Get.find<SettingsScreenController>().supportDirPath;
-    final filesEntityList =
-        Directory("$supportDirPath/Music").listSync(recursive: false);
-    final filesPath = filesEntityList.map((entity) => entity.path).toList();
-    filesToExport.addAll(filesPath);
+    if (supportDirPath.isNotEmpty &&
+        Directory("$supportDirPath/Music").existsSync()) {
+      final filesEntityList =
+          Directory("$supportDirPath/Music").listSync(recursive: false);
+      final filesPath = filesEntityList.map((entity) => entity.path).toList();
+      filesToExport.addAll(filesPath);
+    }
     scanning.value = false;
     ready.value = true;
   }
