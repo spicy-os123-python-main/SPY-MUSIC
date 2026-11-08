@@ -716,6 +716,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       if (existingIdx != -1) {
         newQueue[existingIdx] = currentItem;
         currentIndex = existingIdx;
+      } else {
+        newQueue.insert(0, currentItem);
+        currentIndex = 0;
       }
     }
     this.queue.add(newQueue);
@@ -732,7 +735,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     queue.add(newQueue);
   }
 
-  AudioSource _createAudioSource(MediaItem mediaItem, {bool skipHeaders = false}) {
+  AudioSource _createAudioSource(MediaItem mediaItem, {bool skipHeaders = true}) {
     // 0. ABSOLUTE PRIORITY: Check SongDownloads FIRST!
     // If this song is downloaded, ALWAYS play the local file (0 KB mobile data!),
     // even if mediaItem.extras?['url'] contains a remote stream URL!
@@ -818,17 +821,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
 
     Map<String, String>? headers;
+    // Google Video pre-signed URLs stream directly and reliably without headers.
+    // If headers are explicitly requested on retry (!skipHeaders), supply only the matching mobile User-Agent.
+    // NEVER pass Origin or Referer to googlevideo.com on mobile clients, as this triggers CDN throttling/CORS stalls.
     if (!skipHeaders && url.contains('googlevideo.com')) {
       String ua = 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
       if (url.contains('c=IOS')) {
         ua = 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)';
-      } else if (url.contains('c=WEB')) {
-        ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0';
       }
       headers = {
         'User-Agent': ua,
-        'Origin': 'https://www.youtube.com',
-        'Referer': 'https://www.youtube.com',
       };
     }
 
@@ -1154,7 +1156,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           if (reqId != _activePlayRequestId) return;
           _isTriggeringNext = false;
 
-          final audioSource = _createAudioSource(playableSong);
+          final audioSource = _createAudioSource(playableSong, skipHeaders: true);
           final startPos = restoreSession
               ? Duration(milliseconds: extras['position'] ?? 0)
               : Duration.zero;
@@ -1164,10 +1166,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               audioSource,
               initialPosition: startPos,
             ).timeout(
-              const Duration(seconds: 20),
+              const Duration(seconds: 12),
               onTimeout: () {
                 throw TimeoutException(
-                    "Playback loading timed out after 20 seconds");
+                    "Playback loading timed out after 12 seconds");
               },
             );
           } catch (loadErr) {
@@ -1182,15 +1184,15 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               return;
             }
 
-            // Retry A: Try raw stream without custom headers (pure native player)
+            // Retry A: Try with matching User-Agent header
             bool streamLoaded = false;
             if (playableSong.extras?['url']?.toString().contains('googlevideo.com') == true) {
               try {
-                printINFO("Primary audio failed with $loadErr, retrying raw stream without headers for ${currentSong.id}");
+                printINFO("Initial stream failed with $loadErr, retrying with UA header for ${currentSong.id}");
                 await _player.setAudioSource(
-                  _createAudioSource(playableSong, skipHeaders: true),
+                  _createAudioSource(playableSong, skipHeaders: false),
                   initialPosition: startPos,
-                ).timeout(const Duration(seconds: 12));
+                ).timeout(const Duration(seconds: 10));
                 streamLoaded = true;
               } catch (_) {}
             }
@@ -1228,14 +1230,14 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 );
                 try {
                   await _player.setAudioSource(
-                    _createAudioSource(fallbackSong),
-                    initialPosition: startPos,
-                  ).timeout(const Duration(seconds: 20));
-                } catch (_) {
-                  await _player.setAudioSource(
                     _createAudioSource(fallbackSong, skipHeaders: true),
                     initialPosition: startPos,
-                  ).timeout(const Duration(seconds: 20));
+                  ).timeout(const Duration(seconds: 12));
+                } catch (_) {
+                  await _player.setAudioSource(
+                    _createAudioSource(fallbackSong, skipHeaders: false),
+                    initialPosition: startPos,
+                  ).timeout(const Duration(seconds: 10));
                 }
               } else {
                 rethrow;
@@ -1303,14 +1305,14 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 mediaItem.add(playableSong);
                 try {
                   await _player.setAudioSource(
-                    _createAudioSource(playableSong),
-                    initialPosition: Duration.zero,
-                  ).timeout(const Duration(seconds: 20));
-                } catch (_) {
-                  await _player.setAudioSource(
                     _createAudioSource(playableSong, skipHeaders: true),
                     initialPosition: Duration.zero,
-                  ).timeout(const Duration(seconds: 20));
+                  ).timeout(const Duration(seconds: 12));
+                } catch (_) {
+                  await _player.setAudioSource(
+                    _createAudioSource(playableSong, skipHeaders: false),
+                    initialPosition: Duration.zero,
+                  ).timeout(const Duration(seconds: 10));
                 }
                 isSongLoading = false;
                 try {
@@ -1492,16 +1494,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           playbackState.add(playbackState.value.copyWith(queueIndex: 0));
           if (reqId != _activePlayRequestId) return;
           _isTriggeringNext = false;
-          final audioSource = _createAudioSource(playableSong);
+          final audioSource = _createAudioSource(playableSong, skipHeaders: true);
           try {
             await _player.setAudioSource(
               audioSource,
               initialPosition: Duration.zero,
             ).timeout(
-              const Duration(seconds: 25),
+              const Duration(seconds: 12),
               onTimeout: () {
                 throw TimeoutException(
-                    "Playback loading timed out after 25 seconds");
+                    "Playback loading timed out after 12 seconds");
               },
             );
           } catch (loadErr) {
@@ -1516,15 +1518,15 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               return;
             }
 
-            // Retry A: Try raw stream without custom headers (pure native player)
+            // Retry A: Try with matching User-Agent header
             bool streamLoaded = false;
             if (playableSong.extras?['url']?.toString().contains('googlevideo.com') == true) {
               try {
-                printINFO("Primary audio failed with $loadErr, retrying raw stream without headers for ${currMed.id}");
+                printINFO("Initial stream failed with $loadErr, retrying with UA header for ${currMed.id}");
                 await _player.setAudioSource(
-                  _createAudioSource(playableSong, skipHeaders: true),
+                  _createAudioSource(playableSong, skipHeaders: false),
                   initialPosition: Duration.zero,
-                ).timeout(const Duration(seconds: 12));
+                ).timeout(const Duration(seconds: 10));
                 streamLoaded = true;
               } catch (_) {}
             }
@@ -1560,14 +1562,14 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 );
                 try {
                   await _player.setAudioSource(
-                    _createAudioSource(fallbackSong),
-                    initialPosition: Duration.zero,
-                  ).timeout(const Duration(seconds: 20));
-                } catch (_) {
-                  await _player.setAudioSource(
                     _createAudioSource(fallbackSong, skipHeaders: true),
                     initialPosition: Duration.zero,
-                  ).timeout(const Duration(seconds: 20));
+                  ).timeout(const Duration(seconds: 12));
+                } catch (_) {
+                  await _player.setAudioSource(
+                    _createAudioSource(fallbackSong, skipHeaders: false),
+                    initialPosition: Duration.zero,
+                  ).timeout(const Duration(seconds: 10));
                 }
               } else {
                 rethrow;
@@ -1631,14 +1633,14 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 mediaItem.add(playableSong);
                 try {
                   await _player.setAudioSource(
-                    _createAudioSource(playableSong),
-                    initialPosition: Duration.zero,
-                  ).timeout(const Duration(seconds: 20));
-                } catch (_) {
-                  await _player.setAudioSource(
                     _createAudioSource(playableSong, skipHeaders: true),
                     initialPosition: Duration.zero,
-                  ).timeout(const Duration(seconds: 20));
+                  ).timeout(const Duration(seconds: 12));
+                } catch (_) {
+                  await _player.setAudioSource(
+                    _createAudioSource(playableSong, skipHeaders: false),
+                    initialPosition: Duration.zero,
+                  ).timeout(const Duration(seconds: 10));
                 }
                 isSongLoading = false;
                 try {

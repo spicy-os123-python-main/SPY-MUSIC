@@ -31,15 +31,15 @@ class StreamProvider {
     try {
       Object? lastError;
 
-      // 1. Primary: androidSdkless client with fast direct manifest (pure audio 1-2 MB, no PO Token)
+      // 1. Primary: iOS + androidSdkless client fast direct manifest (pure audio 1-3 MB, no PO Token, no deciphering)
       try {
         final res = await yt.videos.streamsClient
             .getManifest(
               videoId,
-              ytClients: [YoutubeApiClient.androidSdkless],
+              ytClients: [YoutubeApiClient.ios, YoutubeApiClient.androidSdkless],
               requireWatchPage: false,
             )
-            .timeout(const Duration(seconds: 6));
+            .timeout(const Duration(seconds: 7));
 
         final List<Audio> formats = [];
         // 1. Add pure audio streams
@@ -56,7 +56,7 @@ class StreamProvider {
           ));
         }
 
-        // 2. Unconditionally add itag 18 muxed stream as reliable unthrottled ratebypass stream
+        // 2. Add itag 18 muxed stream only as emergency ratebypass fallback
         for (final m in res.muxed) {
           if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
             formats.add(Audio(
@@ -73,7 +73,7 @@ class StreamProvider {
 
         if (formats.isNotEmpty) {
           printINFO(
-              "YouTube androidSdkless fast manifest successfully fetched ${formats.length} streams for $videoId");
+              "YouTube iOS+androidSdkless fast manifest successfully fetched ${formats.length} streams for $videoId");
           return StreamProvider(
             playable: true,
             statusMSG: "OK",
@@ -82,7 +82,7 @@ class StreamProvider {
         }
       } catch (e) {
         lastError = e;
-        printINFO("YouTube androidSdkless fast manifest failed for $videoId: $e, trying watchPage fallback...");
+        printINFO("YouTube fast manifest failed for $videoId: $e, trying watchPage fallback...");
       }
 
       // 2. Secondary fallback: androidSdkless with watchpage deciphering
@@ -90,7 +90,7 @@ class StreamProvider {
         final res = await yt.videos.streamsClient
             .getManifest(
               videoId,
-              ytClients: [YoutubeApiClient.androidSdkless],
+              ytClients: [YoutubeApiClient.androidSdkless, YoutubeApiClient.android],
               requireWatchPage: true,
             )
             .timeout(const Duration(seconds: 8));
@@ -274,26 +274,26 @@ class StreamProvider {
   Audio? get highestQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // 1. Guaranteed unthrottled rate-bypass progressive stream (itag 18 - 360p MP4 audio/video)
-    final rateBypass = audioFormats!.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
-
-    // 2. High-quality pure AAC stream (itag 140 ~128k)
+    // 1. High-quality pure AAC stream (itag 140 ~128k, ~3 MB) - standard, crystal clear, native hw-accelerated
     final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
     if (aac140 != null) return aac140;
 
-    // 3. High-bitrate pure Opus (itag 251 ~160k)
+    // 2. High-bitrate pure Opus (itag 251 ~160k, ~3 MB)
     final highOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
     if (highOpus != null) return highOpus;
 
-    // 4. Medium Opus (itag 250 ~70k)
+    // 3. Medium Opus (itag 250 ~70k, ~1.8 MB)
     final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
     if (midOpus != null) return midOpus;
 
-    // 5. Low AAC (itag 139 ~48k)
+    // 4. Low AAC (itag 139 ~48k, ~1.2 MB)
     final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
     if (lowAac != null) return lowAac;
+
+    // 5. Rate-bypass progressive stream (itag 18) - ONLY as emergency fallback if no pure audio streams exist
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
 
     if (audioFormats!.isNotEmpty) {
       final sorted = List<Audio>.from(audioFormats!)
@@ -306,21 +306,29 @@ class StreamProvider {
 
   Audio? get fallbackAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
+    // Alternative pure audio format with different codec/itag
+    final op251 = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
+    if (op251 != null) return op251;
+    final op250 = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
+    if (op250 != null) return op250;
     final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (aac140 != null) return aac140;
+    final aac139 = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
+    if (aac139 != null) return aac139;
     final rateBypass = audioFormats!.firstWhereOrNull(
         (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    return aac140 ?? rateBypass ?? audioFormats!.first;
+    return rateBypass ?? audioFormats!.first;
   }
 
   Audio? get highestBitrateMp4aAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
     final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
     if (aac140 != null) return aac140;
+    final aac139 = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
+    if (aac139 != null) return aac139;
     final rateBypass = audioFormats!.firstWhereOrNull(
         (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
     if (rateBypass != null) return rateBypass;
-    final aac139 = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
-    if (aac139 != null) return aac139;
     return audioFormats!
             .firstWhereOrNull((item) => item.audioCodec == Codec.mp4a) ??
         audioFormats!.first;
@@ -356,12 +364,7 @@ class StreamProvider {
     final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
     if (midOpus != null) return midOpus;
 
-    // 4. Rate-bypass stream (itag 18)
-    final rateBypass = audioFormats!.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
-
-    // 5. Standard pure AAC (itag 140 ~128k)
+    // 4. Standard pure AAC (itag 140 ~128k)
     final midAac = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
     if (midAac != null) return midAac;
 
@@ -371,18 +374,17 @@ class StreamProvider {
   Audio? get midQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // 1. Guaranteed unthrottled rate-bypass stream (itag 18)
-    final rateBypass = audioFormats!.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
-
-    // 2. Pure AAC 140 (~128k)
+    // 1. Pure AAC 140 (~128k, ~3 MB)
     final midAac = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
     if (midAac != null) return midAac;
 
-    // 3. 70 kbps Opus (itag 250 ~1.8 MB per song)
+    // 2. 70 kbps Opus (itag 250 ~1.8 MB per song)
     final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
     if (midOpus != null) return midOpus;
+
+    // 3. 160 kbps Opus (itag 251 ~3 MB per song)
+    final highOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
+    if (highOpus != null) return highOpus;
 
     return lowQualityAudio;
   }
