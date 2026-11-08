@@ -111,7 +111,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         handleInterruptions: false,
         androidApplyAudioAttributes: true,
         handleAudioSessionActivation: false,
-        useProxyForRequestHeaders: false,
+        useProxyForRequestHeaders: true,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
           minBufferDuration: Duration(seconds: 8),

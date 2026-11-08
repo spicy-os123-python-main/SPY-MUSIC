@@ -23,21 +23,27 @@ enum AudioQuality {
 }
 
 class MusicServices extends getx.GetxService {
+  static const String androidMusicUa =
+      'com.google.android.apps.youtube.music/6.41.52 (Linux; U; Android 14; de_DE)';
+  static const String androidMusicClientVer = '6.41.52';
+
   final Map<String, String> _headers = {
-    'user-agent': userAgent,
+    'User-Agent': androidMusicUa,
     'accept': '*/*',
     'accept-encoding': 'gzip, deflate',
     'content-type': 'application/json',
-    'origin': domain,
-    'X-YouTube-Client-Name': '67',
-    'X-YouTube-Client-Version': '1.20241028.01.00',
+    'X-YouTube-Client-Name': '21',
+    'X-YouTube-Client-Version': androidMusicClientVer,
   };
 
   final Map<String, dynamic> _context = {
     'context': {
       'client': {
-        "clientName": "WEB_REMIX",
-        "clientVersion": "1.20230213.01.00",
+        "clientName": "ANDROID_MUSIC",
+        "clientVersion": androidMusicClientVer,
+        "androidSdkVersion": 34,
+        "hl": "de",
+        "gl": "DE",
       },
       'user': {}
     }
@@ -52,69 +58,17 @@ class MusicServices extends getx.GetxService {
   final dio = Dio();
 
   Future<void> init({bool forceRefresh = false}) async {
-    //check visitor id in data base, if not generate one , set lang code
-    final date = DateTime.now();
-    final clientVer =
-        "1.${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}.01.00";
-    _context['context']['client']['clientVersion'] = clientVer;
-    _headers['X-YouTube-Client-Version'] = clientVer;
-    final signatureTimestamp = getDatestamp() - 1;
-    _context['playbackContext'] = {
-      'contentPlaybackContext': {'signatureTimestamp': signatureTimestamp},
-    };
-
     final appPrefsBox = Hive.box('AppPrefs');
-    hlCode = appPrefsBox.get('contentLanguage') ?? "en";
-
-    if (forceRefresh) {
-      await appPrefsBox.delete('visitorId');
-      _headers.remove('X-Goog-Visitor-Id');
-    } else if (appPrefsBox.containsKey('visitorId')) {
-      final visitorData = appPrefsBox.get("visitorId");
-      if (visitorData != null && !isExpired(epoch: visitorData['exp'])) {
-        _headers['X-Goog-Visitor-Id'] = visitorData['id'];
-        appPrefsBox.put("visitorId", {
-          'id': visitorData['id'],
-          'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 2590200
-        });
-        printINFO("Got Visitor id (${visitorData['id']}) from Box");
-        return;
-      }
-    }
-
-    final visitorId = await genrateVisitorId();
-    if (visitorId != null) {
-      _headers['X-Goog-Visitor-Id'] = visitorId;
-      printINFO("New Visitor id generated ($visitorId)");
-      appPrefsBox.put("visitorId", {
-        'id': visitorId,
-        'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 2592000
-      });
-      return;
-    }
-    // If generation fails or returns null, remove the header so Innertube treats it as anonymous
-    _headers.remove('X-Goog-Visitor-Id');
+    hlCode = appPrefsBox.get('contentLanguage') ?? "de";
   }
 
   set hlCode(String code) {
     _context['context']['client']['hl'] = code;
+    _context['context']['client']['gl'] = code.toUpperCase();
   }
 
   Future<String?> genrateVisitorId() async {
-    try {
-      final response =
-          await dio.get(domain, options: Options(headers: _headers));
-      final reg = RegExp(r'ytcfg\.set\s*\(\s*({.+?})\s*\)\s*;');
-      final matches = reg.firstMatch(response.data.toString());
-      String? visitorId;
-      if (matches != null) {
-        final ytcfg = json.decode(matches.group(1).toString());
-        visitorId = ytcfg['VISITOR_DATA']?.toString();
-      }
-      return visitorId;
-    } catch (e) {
-      return null;
-    }
+    return null;
   }
 
   Future<Response> _sendRequest(String action, Map<dynamic, dynamic> data,

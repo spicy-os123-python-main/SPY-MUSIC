@@ -252,13 +252,15 @@ class PlatformSearchService {
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
+    bool musicServicesAvailable = true;
+
     // 1. YouTube Music - Studio Tracks with Clean Title + Primary Artist
     try {
       final musicServices = Get.find<MusicServices>();
       final q1 = '$cleanTitle $primaryArtist'.trim();
       final res = await musicServices
           .search(q1, filter: 'songs', limit: 8)
-          .timeout(const Duration(seconds: 6));
+          .timeout(const Duration(milliseconds: 3500));
       final ytTracks = _extractYtTracks(res);
       final match = findBestMatch(ytTracks, originalTrack);
       if (match != null) {
@@ -267,81 +269,84 @@ class PlatformSearchService {
         return match;
       }
     } catch (e) {
+      musicServicesAvailable = false;
       printINFO("YouTube Music primary search error for $trackId: $e");
     }
 
-    // 2. YouTube Music - Studio Tracks with All Artists if primary differed
-    if (allArtists.isNotEmpty && allArtists != primaryArtist) {
+    if (musicServicesAvailable) {
+      // 2. YouTube Music - Studio Tracks with All Artists if primary differed
+      if (allArtists.isNotEmpty && allArtists != primaryArtist) {
+        try {
+          final musicServices = Get.find<MusicServices>();
+          final q2 = '$cleanTitle $allArtists'.trim();
+          final res = await musicServices
+              .search(q2, filter: 'songs', limit: 8)
+              .timeout(const Duration(milliseconds: 3000));
+          final ytTracks = _extractYtTracks(res);
+          final match = findBestMatch(ytTracks, originalTrack);
+          if (match != null) {
+            _remember(trackId, match);
+            printINFO("Matched $trackId to YouTube Music (All Artists): '${match.title}' by '${match.artist}'");
+            return match;
+          }
+        } catch (e) {
+          printINFO("YouTube Music all-artists search error for $trackId: $e");
+        }
+      }
+
+      // 3. YouTube - Record Label Topic Releases ('- Topic' channels)
       try {
         final musicServices = Get.find<MusicServices>();
-        final q2 = '$cleanTitle $allArtists'.trim();
+        final q3 = '$cleanTitle $primaryArtist Topic'.trim();
         final res = await musicServices
-            .search(q2, filter: 'songs', limit: 8)
-            .timeout(const Duration(seconds: 6));
+            .search(q3, limit: 6)
+            .timeout(const Duration(milliseconds: 3000));
         final ytTracks = _extractYtTracks(res);
         final match = findBestMatch(ytTracks, originalTrack);
         if (match != null) {
           _remember(trackId, match);
-          printINFO("Matched $trackId to YouTube Music (All Artists): '${match.title}' by '${match.artist}'");
+          printINFO("Matched $trackId to YouTube Topic Release: '${match.title}' by '${match.artist}'");
           return match;
         }
       } catch (e) {
-        printINFO("YouTube Music all-artists search error for $trackId: $e");
+        printINFO("YouTube Topic search error for $trackId: $e");
       }
-    }
 
-    // 3. YouTube - Record Label Topic Releases ('- Topic' channels)
-    try {
-      final musicServices = Get.find<MusicServices>();
-      final q3 = '$cleanTitle $primaryArtist Topic'.trim();
-      final res = await musicServices
-          .search(q3, limit: 6)
-          .timeout(const Duration(seconds: 6));
-      final ytTracks = _extractYtTracks(res);
-      final match = findBestMatch(ytTracks, originalTrack);
-      if (match != null) {
-        _remember(trackId, match);
-        printINFO("Matched $trackId to YouTube Topic Release: '${match.title}' by '${match.artist}'");
-        return match;
+      // 4. YouTube - Official Audio label releases
+      try {
+        final musicServices = Get.find<MusicServices>();
+        final q4 = '$cleanTitle $primaryArtist official audio'.trim();
+        final res = await musicServices
+            .search(q4, limit: 6)
+            .timeout(const Duration(milliseconds: 3000));
+        final ytTracks = _extractYtTracks(res);
+        final match = findBestMatch(ytTracks, originalTrack);
+        if (match != null) {
+          _remember(trackId, match);
+          printINFO("Matched $trackId to YouTube Official Audio: '${match.title}' by '${match.artist}'");
+          return match;
+        }
+      } catch (e) {
+        printINFO("YouTube Official Audio search error for $trackId: $e");
       }
-    } catch (e) {
-      printINFO("YouTube Topic search error for $trackId: $e");
-    }
 
-    // 4. YouTube - Official Audio label releases
-    try {
-      final musicServices = Get.find<MusicServices>();
-      final q4 = '$cleanTitle $primaryArtist official audio'.trim();
-      final res = await musicServices
-          .search(q4, limit: 6)
-          .timeout(const Duration(seconds: 6));
-      final ytTracks = _extractYtTracks(res);
-      final match = findBestMatch(ytTracks, originalTrack);
-      if (match != null) {
-        _remember(trackId, match);
-        printINFO("Matched $trackId to YouTube Official Audio: '${match.title}' by '${match.artist}'");
-        return match;
+      // 5. YouTube - Clean Title + Primary Artist General Search (includes Videos & Cards)
+      try {
+        final musicServices = Get.find<MusicServices>();
+        final q5 = '$cleanTitle $primaryArtist'.trim();
+        final res = await musicServices
+            .search(q5, limit: 8)
+            .timeout(const Duration(milliseconds: 3000));
+        final ytTracks = _extractYtTracks(res);
+        final match = findBestMatch(ytTracks, originalTrack);
+        if (match != null) {
+          _remember(trackId, match);
+          printINFO("Matched $trackId to YouTube General Audio: '${match.title}' by '${match.artist}'");
+          return match;
+        }
+      } catch (e) {
+        printINFO("YouTube General search error for $trackId: $e");
       }
-    } catch (e) {
-      printINFO("YouTube Official Audio search error for $trackId: $e");
-    }
-
-    // 5. YouTube - Clean Title + Primary Artist General Search (includes Videos & Cards)
-    try {
-      final musicServices = Get.find<MusicServices>();
-      final q5 = '$cleanTitle $primaryArtist'.trim();
-      final res = await musicServices
-          .search(q5, limit: 8)
-          .timeout(const Duration(seconds: 6));
-      final ytTracks = _extractYtTracks(res);
-      final match = findBestMatch(ytTracks, originalTrack);
-      if (match != null) {
-        _remember(trackId, match);
-        printINFO("Matched $trackId to YouTube General Audio: '${match.title}' by '${match.artist}'");
-        return match;
-      }
-    } catch (e) {
-      printINFO("YouTube General search error for $trackId: $e");
     }
 
     // 6. Direct YouTube Search for Creator & Indie Tracks (e.g. Execute gaming songs, YouTube music videos)
@@ -350,7 +355,7 @@ class PlatformSearchService {
       try {
         final qYT = '$cleanTitle $primaryArtist'.trim();
         final searchResults =
-            await yt.search.search(qYT).timeout(const Duration(seconds: 7));
+            await yt.search.search(qYT).timeout(const Duration(seconds: 4));
         final ytCandidates = <MediaItem>[];
         try {
           for (final v in searchResults) {
