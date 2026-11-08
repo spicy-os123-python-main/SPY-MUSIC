@@ -64,18 +64,20 @@ class StreamProvider {
             ));
           }
 
-          // 2. Add itag 18 muxed stream as fallback stream
-          for (final m in res.muxed) {
-            if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
-              formats.add(Audio(
-                itag: m.tag,
-                audioCodec: Codec.mp4a,
-                bitrate: 128000,
-                duration: 0,
-                loudnessDb: 0.0,
-                url: m.url.toString(),
-                size: m.size.totalBytes,
-              ));
+          // 2. Only add itag 18 muxed stream if no pure audio streams exist at all
+          if (formats.isEmpty) {
+            for (final m in res.muxed) {
+              if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+                formats.add(Audio(
+                  itag: m.tag,
+                  audioCodec: Codec.mp4a,
+                  bitrate: 128000,
+                  duration: 0,
+                  loudnessDb: 0.0,
+                  url: m.url.toString(),
+                  size: m.size.totalBytes,
+                ));
+              }
             }
           }
 
@@ -112,17 +114,19 @@ class StreamProvider {
             size: a.size.totalBytes,
           ));
         }
-        for (final m in res.muxed) {
-          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
-            formats.add(Audio(
-              itag: m.tag,
-              audioCodec: Codec.mp4a,
-              bitrate: 128000,
-              duration: 0,
-              loudnessDb: 0.0,
-              url: m.url.toString(),
-              size: m.size.totalBytes,
-            ));
+        if (formats.isEmpty) {
+          for (final m in res.muxed) {
+            if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+              formats.add(Audio(
+                itag: m.tag,
+                audioCodec: Codec.mp4a,
+                bitrate: 128000,
+                duration: 0,
+                loudnessDb: 0.0,
+                url: m.url.toString(),
+                size: m.size.totalBytes,
+              ));
+            }
           }
         }
         if (formats.isNotEmpty) {

@@ -115,9 +115,7 @@ class DiscordService {
           connectGateway();
         } else if (isGatewayConnected && _currentIsPlaying && currentTitle != null) {
           // Keep Discord Rich Presence updated every 15s without wasting data during normal playback
-          if (_lastSentTitle != currentTitle || _lastSentIsPlaying != _currentIsPlaying) {
-            _sendPresencePayload(isPlaying: true, force: false);
-          }
+          _sendPresencePayload(isPlaying: true, force: true);
         }
       }
     });

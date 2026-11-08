@@ -65,13 +65,16 @@ class HMStreamingData {
       }
     }
 
-    // In Ultra Data Saver mode, NEVER fall back to heavy video streams (itag 18 or 22)
-    if (qualityIndex == 2) {
+    // In Ultra Data Saver and Mid Data Saver mode, NEVER fall back to heavy video streams (itag 18 or 22)
+    if (qualityIndex == 2 || qualityIndex == 1) {
       return null;
     }
 
-    // Otherwise, as an absolute last resort, return fallbackAudio if different
-    if (fallbackAudio != null && fallbackAudio!.url != currentUrl) {
+    // Otherwise, as an absolute last resort, return fallbackAudio if different and not heavy video
+    if (fallbackAudio != null &&
+        fallbackAudio!.url != currentUrl &&
+        fallbackAudio!.itag != 18 &&
+        fallbackAudio!.itag != 22) {
       return fallbackAudio;
     }
 

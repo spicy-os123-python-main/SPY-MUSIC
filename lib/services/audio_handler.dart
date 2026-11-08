@@ -141,18 +141,15 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _player.playerStateStream.listen((playerState) {
       if (mediaItem.value != null) {
         // Only update Discord on state changes when ready or completed, avoiding spam during loading/buffering
-        if (playerState.processingState == ProcessingState.ready ||
-            playerState.processingState == ProcessingState.completed) {
+        if (!isSongLoading &&
+            (playerState.processingState == ProcessingState.ready ||
+                playerState.processingState == ProcessingState.completed)) {
           DiscordService().updatePresence(
             mediaItem.value,
             isPlaying: playerState.playing,
             position: _player.position,
           );
         }
-      }
-      if (playerState.processingState == ProcessingState.completed) {
-        _checkAndRecordSongCompletion();
-        _triggerNext();
       }
     });
     _createCacheDir();
@@ -343,10 +340,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   void _notifyAudioHandlerAboutPlaybackEvents() {
     _player.playbackEventStream.listen((PlaybackEvent event) {
-      if (_player.processingState == ProcessingState.completed) {
-        _checkAndRecordSongCompletion();
-        _triggerNext();
-      }
       final playing = _player.playing;
       playbackState.add(playbackState.value.copyWith(
         controls: [
@@ -596,8 +589,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           _preloadNextSongStream();
         }
 
-        if (currentMs >= (totalMs - playerDurationOffset) ||
-            _player.processingState == ProcessingState.completed) {
+        final bool isNearEnd = currentMs >= (totalMs - playerDurationOffset);
+        final bool isCompletedAtEnd =
+            _player.processingState == ProcessingState.completed &&
+                currentMs >= (totalMs - 2500);
+        if (!isSongLoading &&
+            !_isTriggeringNext &&
+            (isNearEnd || isCompletedAtEnd)) {
           _checkAndRecordSongCompletion();
           await _triggerNext();
         }
@@ -951,7 +949,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     final index = _getNextSongIndex();
     if (index != currentIndex && index >= 0 && index < queue.value.length) {
       try {
-        await _player.stop();
+        if (_player.playing) {
+          await _player.pause();
+        }
       } catch (_) {}
       await customAction("playByIndex", {'index': index});
     } else {
@@ -979,7 +979,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _currentSongCompletedRecorded = false;
     _currentSongPlayedSeconds = 0;
     try {
-      await _player.stop();
+      if (_player.playing) {
+        await _player.pause();
+      }
     } catch (_) {}
     final index = _getPrevSongIndex();
     if (index != currentIndex && index >= 0 && index < queue.value.length) {
@@ -1047,7 +1049,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         try {
           isSongLoading = true;
           try {
-            await _player.stop();
+            if (_player.playing) {
+              await _player.pause();
+            }
           } catch (_) {}
           playbackState.add(playbackState.value.copyWith(
             playing: false,
@@ -1062,7 +1066,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             generateNewUrl: isNewUrlReq,
           ).timeout(const Duration(seconds: 30));
 
-          if (reqId != _activePlayRequestId || songIndex != currentIndex) {
+          if (reqId != _activePlayRequestId) {
             return;
           } else if (!streamInfo.playable) {
             currentSongUrl = null;
@@ -1074,8 +1078,15 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             playbackState.add(playbackState.value.copyWith(
                 processingState: AudioProcessingState.error,
                 errorCode: 404,
-                errorMessage: streamInfo.statusMSG));
+                errorMessage: streamInfo.statusMSG,
+                playing: false));
             return;
+          }
+
+          final matchingQueueIdx =
+              queue.value.indexWhere((item) => item.id == currentSong.id);
+          if (matchingQueueIdx != -1) {
+            currentIndex = matchingQueueIdx;
           }
           final streamAudioUrl = streamInfo.audio?.url ?? '';
           currentSongUrl = streamAudioUrl;
@@ -1150,17 +1161,19 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             );
           } catch (loadErr) {
             final errStr = loadErr.toString().toLowerCase();
-            if (reqId != _activePlayRequestId ||
-                errStr.contains("abort") ||
-                errStr.contains("loading interrupted") ||
-                errStr.contains("connection aborted")) {
+            if (reqId != _activePlayRequestId) {
               return;
             }
-            final fallback =
-                streamInfo.getFallbackFor(streamInfo.audio) ?? streamInfo.fallbackAudio;
+            if (errStr.contains("abort") ||
+                errStr.contains("loading interrupted") ||
+                errStr.contains("connection aborted")) {
+              printINFO("playByIndex setAudioSource interrupted for $reqId: $loadErr");
+              return;
+            }
+            final fallback = streamInfo.getFallbackFor(streamInfo.audio);
             if (fallback != null && fallback.url != streamAudioUrl) {
               printINFO(
-                  "Primary audio failed with $loadErr, switching to fallback ratebypass stream for ${currentSong.id}");
+                  "Primary audio failed with $loadErr, switching to fallback pure stream for ${currentSong.id}");
               final fallbackSong = playableSong.copyWith(extras: {
                 ...Map<String, dynamic>.from(playableSong.extras ?? {}),
                 'url': fallback.url,
@@ -1168,8 +1181,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 'codec': fallback.audioCodec.name,
               });
               currentSongUrl = fallback.url;
-              if (songIndex < queue.value.length) {
-                queue.value[songIndex] = fallbackSong;
+              if (currentIndex < queue.value.length) {
+                queue.value[currentIndex] = fallbackSong;
               }
               mediaItem.add(fallbackSong);
               DataUsageTracker.instance.recordAudioStream(
@@ -1213,10 +1226,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
         } catch (e, st) {
           final errStr = e.toString().toLowerCase();
-          if (reqId != _activePlayRequestId ||
-              errStr.contains("abort") ||
+          if (reqId != _activePlayRequestId) {
+            return;
+          }
+          if (errStr.contains("abort") ||
               errStr.contains("loading interrupted") ||
               errStr.contains("connection aborted")) {
+            printINFO("playByIndex interrupted for $reqId: $e");
             return;
           }
           _isTriggeringNext = false;
@@ -1238,8 +1254,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   'size': freshInfo.audio!.size,
                   'codec': freshInfo.audio!.audioCodec.name,
                 });
-                if (songIndex < queue.value.length) {
-                  queue.value[songIndex] = playableSong;
+                if (currentIndex < queue.value.length) {
+                  queue.value[currentIndex] = playableSong;
                 }
                 mediaItem.add(playableSong);
                 await _player.setAudioSource(
@@ -1267,10 +1283,20 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             processingState: AudioProcessingState.error,
             errorCode: 500,
             errorMessage: msg,
+            playing: false,
           ));
         } finally {
           if (reqId == _activePlayRequestId) {
             isSongLoading = false;
+            _isTriggeringNext = false;
+            if (playbackState.value.processingState == AudioProcessingState.loading) {
+              playbackState.add(playbackState.value.copyWith(
+                processingState: _player.playing
+                    ? AudioProcessingState.ready
+                    : AudioProcessingState.idle,
+                playing: _player.playing,
+              ));
+            }
           }
         }
         break;
@@ -1319,7 +1345,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         final int reqId = ++_activePlayRequestId;
         try {
           try {
-            await _player.stop();
+            if (_player.playing) {
+              await _player.pause();
+            }
           } catch (_) {}
           playbackState.add(playbackState.value.copyWith(
             playing: false,
@@ -1428,17 +1456,19 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             );
           } catch (loadErr) {
             final errStr = loadErr.toString().toLowerCase();
-            if (reqId != _activePlayRequestId ||
-                errStr.contains("abort") ||
-                errStr.contains("loading interrupted") ||
-                errStr.contains("connection aborted")) {
+            if (reqId != _activePlayRequestId) {
               return;
             }
-            final fallback =
-                streamInfo.getFallbackFor(streamInfo.audio) ?? streamInfo.fallbackAudio;
+            if (errStr.contains("abort") ||
+                errStr.contains("loading interrupted") ||
+                errStr.contains("connection aborted")) {
+              printINFO("setSourceNPlay setAudioSource interrupted for $reqId: $loadErr");
+              return;
+            }
+            final fallback = streamInfo.getFallbackFor(streamInfo.audio);
             if (fallback != null && fallback.url != currentSongUrl) {
               printINFO(
-                  "Primary audio failed with $loadErr, switching to fallback ratebypass stream for ${currMed.id}");
+                  "Primary audio failed with $loadErr, switching to fallback pure stream for ${currMed.id}");
               final fallbackSong = playableSong.copyWith(extras: {
                 ...Map<String, dynamic>.from(playableSong.extras ?? {}),
                 'url': fallback.url,
@@ -1487,10 +1517,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           await _player.play();
         } catch (e, st) {
           final errStr = e.toString().toLowerCase();
-          if (reqId != _activePlayRequestId ||
-              errStr.contains("abort") ||
+          if (reqId != _activePlayRequestId) {
+            return;
+          }
+          if (errStr.contains("abort") ||
               errStr.contains("loading interrupted") ||
               errStr.contains("connection aborted")) {
+            printINFO("setSourceNPlay interrupted for $reqId: $e");
             return;
           }
           _isTriggeringNext = false;
@@ -1539,10 +1572,20 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             processingState: AudioProcessingState.error,
             errorCode: 500,
             errorMessage: msg,
+            playing: false,
           ));
         } finally {
           if (reqId == _activePlayRequestId) {
             isSongLoading = false;
+            _isTriggeringNext = false;
+            if (playbackState.value.processingState == AudioProcessingState.loading) {
+              playbackState.add(playbackState.value.copyWith(
+                processingState: _player.playing
+                    ? AudioProcessingState.ready
+                    : AudioProcessingState.idle,
+                playing: _player.playing,
+              ));
+            }
           }
         }
         break;
