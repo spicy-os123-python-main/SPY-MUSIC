@@ -230,7 +230,7 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
       requestSucceeded = true;
     }
   } catch (e) {
-    printERROR("GitHub releases/latest API error: $e");
+    printWarning("GitHub releases/latest API unavailable: $e");
     errorMsg = e.toString();
   }
 
@@ -239,8 +239,8 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
     try {
       final redirectDio = Dio(
         BaseOptions(
-          connectTimeout: const Duration(seconds: 20),
-          receiveTimeout: const Duration(seconds: 20),
+          connectTimeout: const Duration(seconds: 6),
+          receiveTimeout: const Duration(seconds: 6),
           headers: {'User-Agent': 'Mozilla/5.0 (Linux; Android 10)'},
         ),
       );
@@ -279,7 +279,7 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
         }
       }
     } catch (e) {
-      printERROR("GitHub web redirect fallback error: $e");
+      printWarning("GitHub web redirect fallback unavailable: $e");
       errorMsg ??= e.toString();
     }
   }
@@ -307,7 +307,7 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
         }
       }
     } catch (e) {
-      printERROR("GitHub tags fallback error: $e");
+      printWarning("GitHub tags fallback unavailable: $e");
       errorMsg ??= e.toString();
     }
   }
