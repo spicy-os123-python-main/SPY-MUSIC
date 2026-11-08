@@ -35,47 +35,35 @@ class HMStreamingData {
     }
   }
 
-  /// Get intelligent fallback stream respecting Data Saver mode and avoiding heavy video streams
+  /// Get intelligent fallback stream respecting unthrottled ratebypass stream
   Audio? getFallbackFor(Audio? currentAudio) {
     final currentUrl = currentAudio?.url;
     final currentItag = currentAudio?.itag;
 
-    // Preference order based on qualityIndex
+    // 1. Guaranteed unthrottled fallback: fallbackAudio (itag 18 with ratebypass=yes)
+    if (fallbackAudio != null &&
+        fallbackAudio!.url.isNotEmpty &&
+        fallbackAudio!.url != currentUrl) {
+      return fallbackAudio;
+    }
+
+    // 2. Try any other format that has a different URL/itag
     final candidates = <Audio?>[];
     if (qualityIndex == 2) {
-      // Ultra Data Saver: low -> mid -> high
       candidates.addAll([lowQualityAudio, midQualityAudio, highQualityAudio]);
     } else if (qualityIndex == 1) {
-      // Mid Data Saver: mid -> low -> high
       candidates.addAll([midQualityAudio, lowQualityAudio, highQualityAudio]);
     } else {
-      // Normal: high -> mid -> low
       candidates.addAll([highQualityAudio, midQualityAudio, lowQualityAudio]);
     }
 
-    // Try candidates that are pure audio (not itag 18/22) and different from current
     for (final cand in candidates) {
       if (cand != null &&
           cand.url.isNotEmpty &&
           cand.url != currentUrl &&
-          cand.itag != currentItag &&
-          cand.itag != 18 &&
-          cand.itag != 22) {
+          cand.itag != currentItag) {
         return cand;
       }
-    }
-
-    // In Ultra Data Saver and Mid Data Saver mode, NEVER fall back to heavy video streams (itag 18 or 22)
-    if (qualityIndex == 2 || qualityIndex == 1) {
-      return null;
-    }
-
-    // Otherwise, as an absolute last resort, return fallbackAudio if different and not heavy video
-    if (fallbackAudio != null &&
-        fallbackAudio!.url != currentUrl &&
-        fallbackAudio!.itag != 18 &&
-        fallbackAudio!.itag != 22) {
-      return fallbackAudio;
     }
 
     return null;

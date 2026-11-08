@@ -1240,6 +1240,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           if (!isNewUrlReq && _songErrorRetryCount == 0) {
             _songErrorRetryCount = 1;
             Hive.box("SongsUrlCache").delete(currentSong.id);
+            if (currentSong.id.startsWith("sp_") ||
+                currentSong.id.startsWith("az_")) {
+              PlatformSearchService.invalidateMatch(currentSong.id);
+            }
             try {
               final freshInfo = await checkNGetUrl(
                 currentSong.id,
@@ -1531,6 +1535,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           if (_songErrorRetryCount == 0) {
             _songErrorRetryCount = 1;
             Hive.box("SongsUrlCache").delete(currMed.id);
+            if (currMed.id.startsWith("sp_") ||
+                currMed.id.startsWith("az_")) {
+              PlatformSearchService.invalidateMatch(currMed.id);
+            }
             try {
               final freshInfo = await checkNGetUrl(
                 currMed.id,
@@ -2246,27 +2254,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         final midUrl = streamInfoJson['midQualityAudio']?['url'];
         final testUrl = highUrl ?? lowUrl ?? midUrl;
         if (testUrl != null && !isExpired(url: testUrl)) {
-          final lowItag = streamInfoJson['lowQualityAudio']?['itag'];
-          final midItag = streamInfoJson['midQualityAudio']?['itag'];
-          final highItag = streamInfoJson['highQualityAudio']?['itag'];
-          final fallbackItag = streamInfoJson['fallbackAudio']?['itag'];
-          // Evict old heavy video streams (itag 18 or 22) so data saver gets pure 1-2 MB audio
-          final isHeavyVideo = (highItag == 18 ||
-              lowItag == 18 ||
-              midItag == 18 ||
-              fallbackItag == 18 ||
-              highItag == 22 ||
-              lowItag == 22 ||
-              midItag == 22 ||
-              fallbackItag == 22);
-          if (testUrl.contains('googlevideo.com') && isHeavyVideo) {
-            printINFO(
-                "Evicting heavy video stream from cache for ($songId) to save data");
-            songsUrlCacheBox.delete(songId);
-          } else {
-            printINFO("Got cached stream Url ($songId)");
-            streamInfo = HMStreamingData.fromJson(streamInfoJson);
-          }
+          printINFO("Got cached stream Url ($songId)");
+          streamInfo = HMStreamingData.fromJson(streamInfoJson);
         } else {
           songsUrlCacheBox.delete(songId);
         }
