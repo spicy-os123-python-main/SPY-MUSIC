@@ -150,6 +150,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           );
         }
       }
+      if (playerState.processingState == ProcessingState.completed) {
+        _checkAndRecordSongCompletion();
+        _triggerNext();
+      }
     });
     _createCacheDir();
     _notifyAudioHandlerAboutPlaybackEvents();
@@ -341,6 +345,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _player.playbackEventStream.listen((PlaybackEvent event) {
       if (_player.processingState == ProcessingState.completed) {
         _checkAndRecordSongCompletion();
+        _triggerNext();
       }
       final playing = _player.playing;
       playbackState.add(playbackState.value.copyWith(
@@ -569,10 +574,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   void _listenToPlaybackForNextSong() {
     final playerDurationOffset = GetPlatform.isWindows
-        ? 200
+        ? 300
         : GetPlatform.isLinux
             ? 700
-            : 0;
+            : 400;
     _player.positionStream.listen((value) async {
       if (_player.duration != null && _player.duration?.inSeconds != 0) {
         final totalMs = _player.duration!.inMilliseconds;
@@ -591,7 +596,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           _preloadNextSongStream();
         }
 
-        if (currentMs >= (totalMs - playerDurationOffset)) {
+        if (currentMs >= (totalMs - playerDurationOffset) ||
+            _player.processingState == ProcessingState.completed) {
           _checkAndRecordSongCompletion();
           await _triggerNext();
         }
@@ -704,8 +710,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   @override
   Future<void> updateQueue(List<MediaItem> queue) async {
-    final newQueue = this.queue.value
-      ..replaceRange(0, this.queue.value.length, queue);
+    final currentItem = mediaItem.value;
+    final List<MediaItem> newQueue = List<MediaItem>.from(queue);
+    if (currentItem != null) {
+      final existingIdx =
+          newQueue.indexWhere((item) => item.id == currentItem.id);
+      if (existingIdx != -1) {
+        newQueue[existingIdx] = currentItem;
+        currentIndex = existingIdx;
+      }
+    }
     this.queue.add(newQueue);
   }
 
@@ -935,12 +949,21 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _currentSongCompletedRecorded = false;
     _currentSongPlayedSeconds = 0;
     final index = _getNextSongIndex();
-    if (index != currentIndex) {
+    if (index != currentIndex && index >= 0 && index < queue.value.length) {
       try {
-        _player.pause();
+        await _player.stop();
       } catch (_) {}
       await customAction("playByIndex", {'index': index});
     } else {
+      try {
+        if (Get.isRegistered<PlayerController>()) {
+          final pc = Get.find<PlayerController>();
+          if (pc.isRadioModeOn || pc.radioInitiatorItem != null) {
+            await pc.startRadio(mediaItem.value);
+            return;
+          }
+        }
+      } catch (_) {}
       _player.seek(Duration.zero);
       _player.pause();
     }
@@ -956,10 +979,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _currentSongCompletedRecorded = false;
     _currentSongPlayedSeconds = 0;
     try {
-      _player.pause();
+      await _player.stop();
     } catch (_) {}
     final index = _getPrevSongIndex();
-    if (index != currentIndex) {
+    if (index != currentIndex && index >= 0 && index < queue.value.length) {
       await customAction("playByIndex", {'index': index});
     }
   }
@@ -1024,9 +1047,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         try {
           isSongLoading = true;
           try {
-            if (_player.playing) {
-              await _player.pause();
-            }
+            await _player.stop();
           } catch (_) {}
           playbackState.add(playbackState.value.copyWith(
             playing: false,
@@ -1130,7 +1151,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           } catch (loadErr) {
             final errStr = loadErr.toString().toLowerCase();
             if (reqId != _activePlayRequestId ||
-                errStr.contains("loading interrupted")) {
+                errStr.contains("abort") ||
+                errStr.contains("loading interrupted") ||
+                errStr.contains("connection aborted")) {
               return;
             }
             final fallback =
@@ -1191,7 +1214,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         } catch (e, st) {
           final errStr = e.toString().toLowerCase();
           if (reqId != _activePlayRequestId ||
-              errStr.contains("loading interrupted")) {
+              errStr.contains("abort") ||
+              errStr.contains("loading interrupted") ||
+              errStr.contains("connection aborted")) {
             return;
           }
           _isTriggeringNext = false;
@@ -1244,7 +1269,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             errorMessage: msg,
           ));
         } finally {
-          isSongLoading = false;
+          if (reqId == _activePlayRequestId) {
+            isSongLoading = false;
+          }
         }
         break;
 
@@ -1292,9 +1319,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         final int reqId = ++_activePlayRequestId;
         try {
           try {
-            if (_player.playing) {
-              await _player.pause();
-            }
+            await _player.stop();
           } catch (_) {}
           playbackState.add(playbackState.value.copyWith(
             playing: false,
@@ -1331,7 +1356,22 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           updatedExtras['size'] = streamInfo.audio!.size;
           updatedExtras['codec'] = streamInfo.audio!.audioCodec.name;
           final playableSong = currMed.copyWith(extras: updatedExtras);
-          queue.add([playableSong]);
+          if (queue.value.length > 1) {
+            final existingQueue = List<MediaItem>.from(queue.value);
+            final targetIdx =
+                existingQueue.indexWhere((item) => item.id == playableSong.id);
+            if (targetIdx != -1) {
+              existingQueue[targetIdx] = playableSong;
+              currentIndex = targetIdx;
+            } else {
+              existingQueue.insert(0, playableSong);
+              currentIndex = 0;
+            }
+            queue.add(existingQueue);
+          } else {
+            queue.add([playableSong]);
+            currentIndex = 0;
+          }
           mediaItem.add(playableSong);
           WatchtimeService.recordSongStart(playableSong);
           final dlBox = Hive.box("SongDownloads");
@@ -1389,7 +1429,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           } catch (loadErr) {
             final errStr = loadErr.toString().toLowerCase();
             if (reqId != _activePlayRequestId ||
-                errStr.contains("loading interrupted")) {
+                errStr.contains("abort") ||
+                errStr.contains("loading interrupted") ||
+                errStr.contains("connection aborted")) {
               return;
             }
             final fallback =
@@ -1446,7 +1488,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         } catch (e, st) {
           final errStr = e.toString().toLowerCase();
           if (reqId != _activePlayRequestId ||
-              errStr.contains("loading interrupted")) {
+              errStr.contains("abort") ||
+              errStr.contains("loading interrupted") ||
+              errStr.contains("connection aborted")) {
             return;
           }
           _isTriggeringNext = false;
@@ -1497,7 +1541,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             errorMessage: msg,
           ));
         } finally {
-          isSongLoading = false;
+          if (reqId == _activePlayRequestId) {
+            isSongLoading = false;
+          }
         }
         break;
 

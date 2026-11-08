@@ -29,9 +29,8 @@ class StreamProvider {
     final clients = <String, YoutubeApiClient>{
       'androidSdkless': YoutubeApiClient.androidSdkless,
       'android': YoutubeApiClient.android,
-      'ios': YoutubeApiClient.ios,
       'tv': YoutubeApiClient.tv,
-      'androidVr': YoutubeApiClient.androidVr,
+      'ios': YoutubeApiClient.ios,
     };
 
     try {
@@ -39,7 +38,7 @@ class StreamProvider {
       Object? lastError;
 
       for (final entry in clients.entries) {
-        if (clientWatch.elapsed > const Duration(seconds: 16)) break;
+        if (clientWatch.elapsed > const Duration(seconds: 14)) break;
         try {
           final res = await yt.videos.streamsClient
               .getManifest(
@@ -47,7 +46,7 @@ class StreamProvider {
                 ytClients: [entry.value],
                 requireWatchPage: false,
               )
-              .timeout(const Duration(seconds: 7));
+              .timeout(const Duration(seconds: 6));
 
           final List<Audio> formats = [];
 
@@ -65,7 +64,7 @@ class StreamProvider {
             ));
           }
 
-          // 2. Add itag 18 muxed stream as reliable fallback stream
+          // 2. Add itag 18 muxed stream as fallback stream
           for (final m in res.muxed) {
             if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
               formats.add(Audio(
@@ -80,54 +79,63 @@ class StreamProvider {
             }
           }
 
-          if (formats.isEmpty) continue;
-
-          // 3. Fast playability & 403 probe with official Android YouTube UA
-          final verifiedFormats = <Audio>[];
-          final client = HttpClient();
-          client.connectionTimeout = const Duration(seconds: 3);
-
-          final candidatesToTest = formats.take(4).toList();
-          final results = await Future.wait(candidatesToTest.map((f) async {
-            try {
-              final req = await client.getUrl(Uri.parse(f.url));
-              req.headers.set('User-Agent',
-                  'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US)');
-              req.headers.set('Range', 'bytes=0-1024');
-              final resp =
-                  await req.close().timeout(const Duration(seconds: 3));
-              final ok = resp.statusCode == 200 || resp.statusCode == 206;
-              await resp.drain();
-              return ok ? f : null;
-            } catch (_) {
-              return null;
-            }
-          }));
-          client.close();
-
-          for (final r in results) {
-            if (r != null) verifiedFormats.add(r);
-          }
-
-          if (verifiedFormats.isNotEmpty) {
-            for (final f in formats.skip(4)) {
-              verifiedFormats.add(f);
-            }
+          if (formats.isNotEmpty) {
             printINFO(
-                "YouTube client ${entry.key} successfully verified with pure audio for $videoId");
+                "YouTube client ${entry.key} successfully fetched ${formats.length} streams for $videoId");
             return StreamProvider(
               playable: true,
               statusMSG: "OK",
-              audioFormats: verifiedFormats,
+              audioFormats: formats,
             );
-          } else {
-            printINFO(
-                "YouTube client ${entry.key} streams blocked with HTTP 403 for $videoId, trying next client...");
           }
         } catch (e) {
           lastError = e;
-          printERROR("YouTube client ${entry.key} failed for $videoId: $e");
+          printINFO("YouTube client ${entry.key} encountered $e for $videoId, trying next...");
         }
+      }
+
+      // Final fallback: standard getManifest with watchpage deciphering
+      try {
+        final res = await yt.videos.streamsClient
+            .getManifest(videoId)
+            .timeout(const Duration(seconds: 6));
+        final List<Audio> formats = [];
+        for (final a in res.audioOnly) {
+          formats.add(Audio(
+            itag: a.tag,
+            audioCodec:
+                a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
+            bitrate: a.bitrate.bitsPerSecond,
+            duration: 0,
+            loudnessDb: 0.0,
+            url: a.url.toString(),
+            size: a.size.totalBytes,
+          ));
+        }
+        for (final m in res.muxed) {
+          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+            formats.add(Audio(
+              itag: m.tag,
+              audioCodec: Codec.mp4a,
+              bitrate: 128000,
+              duration: 0,
+              loudnessDb: 0.0,
+              url: m.url.toString(),
+              size: m.size.totalBytes,
+            ));
+          }
+        }
+        if (formats.isNotEmpty) {
+          printINFO(
+              "YouTube standard fallback successfully fetched ${formats.length} streams for $videoId");
+          return StreamProvider(
+            playable: true,
+            statusMSG: "OK",
+            audioFormats: formats,
+          );
+        }
+      } catch (e) {
+        lastError = e;
       }
 
       throw lastError ??
