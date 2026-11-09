@@ -70,12 +70,28 @@ jobs:
           path: output/*.apk
           retention-days: 30
 
-      - name: Attach APK to GitHub Release
+      - name: Extract App Version
+        id: app_version
+        run: |
+          VERSION=$(grep '^version: ' pubspec.yaml | sed 's/version: //' | cut -d '+' -f 1 | tr -d '[:space:]')
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: v$VERSION"
+
+      - name: Attach APK to GitHub Release (Version Tag)
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        with:
+          tag_name: ${{ steps.app_version.outputs.version }}
+          files: output/*.apk
+          name: "SPY MUSIC ${{ steps.app_version.outputs.version }} (Android APK)"
+          generate_release_notes: true
+          make_latest: true
+
+      - name: Attach APK to GitHub Release (Legacy v1.0.0)
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
         with:
           tag_name: v1.0.0
           files: output/*.apk
           name: "SPY MUSIC v1.0.0 (Android APK)"
-          generate_release_notes: true
-          make_latest: true
+          make_latest: false

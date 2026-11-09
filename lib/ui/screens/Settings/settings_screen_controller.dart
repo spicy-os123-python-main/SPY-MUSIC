@@ -7,6 +7,7 @@ import 'package:spymusic/services/permission_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../utils/update_check_flag_file.dart';
 import '/services/piped_service.dart';
@@ -67,7 +68,7 @@ class SettingsScreenController extends GetxController {
   final keepScreenAwake = false.obs;
   final restorePlaybackSession = false.obs;
   final cacheHomeScreenData = true.obs;
-  final currentVersion = "v1.0.0";
+  String currentVersion = "v1.12.73";
 
   int _devTapCount = 0;
   DateTime? _lastDevTapTime;
@@ -113,9 +114,20 @@ class SettingsScreenController extends GetxController {
   @override
   void onInit() {
     _setInitValue();
-    if (updateCheckFlag) _checkNewVersion();
+    _loadAppVersion();
     _createInAppSongDownDir();
     super.onInit();
+  }
+
+  void _loadAppVersion() {
+    PackageInfo.fromPlatform().then((info) {
+      if (info.version.isNotEmpty) {
+        currentVersion = "v${info.version}";
+      }
+      if (updateCheckFlag) _checkNewVersion();
+    }).catchError((_) {
+      if (updateCheckFlag) _checkNewVersion();
+    });
   }
 
   get currentVision => currentVersion;
