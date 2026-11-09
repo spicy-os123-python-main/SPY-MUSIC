@@ -18,6 +18,7 @@ import '/models/album.dart';
 import '/models/artist.dart';
 import '/models/media_Item_builder.dart';
 import '/models/playlist.dart';
+import '../../../services/device_music_service.dart';
 
 class LibrarySongsController extends GetxController {
   late RxList<MediaItem> librarySongsList = RxList();
@@ -74,6 +75,9 @@ class LibrarySongsController extends GetxController {
         .toList());
     isSongFetched.value = true;
 
+    // Trigger background device scan (e.g. Samsung Music / local storage)
+    DeviceMusicService.instance.scanDeviceSongs();
+
     //Remove deleted songs and expired songUrl from database
     startHouseKeeping();
   }
@@ -116,7 +120,9 @@ class LibrarySongsController extends GetxController {
       filePath = "$cacheDir/cachedSongs/${item.id}.mp3";
     }
 
-    if (await (File(filePath)).exists()) {
+    final bool isDeviceSong =
+        item.extras?['isDeviceSong'] == true || item.id.startsWith('dev_');
+    if (!isDeviceSong && filePath.isNotEmpty && await (File(filePath)).exists()) {
       await (File(filePath)).delete();
     }
 

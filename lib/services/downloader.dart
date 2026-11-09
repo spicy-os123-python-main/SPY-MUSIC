@@ -5,7 +5,6 @@ import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:audiotags/audiotags.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 
@@ -182,9 +181,15 @@ class Downloader extends GetxService {
       return complete.future;
     }
 
-    Audio requiredAudioStream = downloadingFormat == "opus"
-        ? playerResponse.highestBitrateOpusAudio!
-        : playerResponse.highestBitrateMp4aAudio!;
+    Audio? selectedStream = downloadingFormat == "opus"
+        ? (playerResponse.highestBitrateOpusAudio ?? playerResponse.highestQualityAudio)
+        : (playerResponse.highestQualityAudio ?? playerResponse.highestBitrateMp4aAudio);
+    selectedStream ??= playerResponse.highestQualityAudio;
+    if (selectedStream == null) {
+      complete.complete();
+      return complete.future;
+    }
+    final Audio requiredAudioStream = selectedStream;
 
     final dirPath = settingsScreenController.downloadLocationPath.string;
     final actualDownformat =
@@ -235,7 +240,22 @@ class Downloader extends GetxService {
             thumbDir.createSync(recursive: true);
           }
           thumbnailPath = "$supportDir/thumbnails/${song.id}.png";
-          final artUriStr = song.artUri?.toString() ?? '';
+          String artUriStr = song.artUri?.toString() ?? '';
+          if (artUriStr.isEmpty || artUriStr == 'null') {
+            artUriStr = (song.extras?['thumbnailUrl'] ??
+                song.extras?['artworkUrl'] ??
+                '') as String;
+          }
+          if (artUriStr.isEmpty &&
+              song.extras?['thumbnails'] is List &&
+              (song.extras!['thumbnails'] as List).isNotEmpty) {
+            final first = (song.extras!['thumbnails'] as List).first;
+            if (first is Map && first['url'] != null) {
+              artUriStr = first['url'].toString();
+            } else if (first is String) {
+              artUriStr = first;
+            }
+          }
           if (artUriStr.isNotEmpty &&
               (artUriStr.startsWith('http://') ||
                   artUriStr.startsWith('https://'))) {
@@ -262,6 +282,10 @@ class Downloader extends GetxService {
         if (hasLocalThumb) {
           songJson['artUri'] = "file://$thumbnailPath";
           songJson['localThumbnail'] = thumbnailPath;
+          songJson['artworkUrl'] = "file://$thumbnailPath";
+          songJson['thumbnails'] = [
+            {'url': "file://$thumbnailPath"}
+          ];
         }
         final streamInfoJson = requiredAudioStream.toJson();
         streamInfoJson['url'] = filePath;
@@ -288,8 +312,14 @@ class Downloader extends GetxService {
         final int? totalTracks = int.tryParse(trackDetails?[1] ?? "");
 
         try {
-          /// Reverted -- Removed AudioTags as using this package, app is flagged as TROJ_GEN.R002V01K623 by TrendMicro-HouseCall
-          final imageUrl = song.artUri!.toString();
+          List<Picture> pictures = [];
+          if (hasLocalThumb) {
+            final thumbBytes = await File(thumbnailPath).readAsBytes();
+            pictures.add(Picture(
+                bytes: thumbBytes,
+                mimeType: MimeType.png,
+                pictureType: PictureType.coverFront));
+          }
           Tag tag = Tag(
               title: song.title,
               trackArtist: song.artist,
@@ -299,15 +329,7 @@ class Downloader extends GetxService {
               trackTotal: totalTracks,
               albumArtist: song.artist,
               genre: song.genre,
-              pictures: [
-                Picture(
-                    bytes: (await NetworkAssetBundle(Uri.parse((imageUrl)))
-                            .load(imageUrl))
-                        .buffer
-                        .asUint8List(),
-                    mimeType: MimeType.png,
-                    pictureType: PictureType.coverFront)
-              ]);
+              pictures: pictures);
 
           await AudioTags.write(filePath, tag);
         } catch (e) {

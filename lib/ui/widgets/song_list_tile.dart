@@ -48,6 +48,9 @@ class _SongListTileState extends State<SongListTile>
     final p = song.extras?['platform']?.toString();
     if (p != null && p.isNotEmpty && p.toLowerCase() != 'null') {
       final pLow = p.toLowerCase();
+      if (pLow == 'gerät' || pLow == 'device' || pLow == 'local' || pLow == 'samsung music') {
+        return 'Gerät';
+      }
       if (pLow == 'yt' || pLow == 'youtube music' || pLow == 'youtube') {
         return 'YouTube';
       }
@@ -57,6 +60,11 @@ class _SongListTileState extends State<SongListTile>
         return 'Amazon Music';
       }
       return p;
+    }
+    if (song.id.startsWith('dev_') ||
+        song.extras?['isDeviceSong'] == true ||
+        song.extras?['isLocal'] == true) {
+      return 'Gerät';
     }
     if (song.id.startsWith('sc_') || song.extras?['isSoundCloud'] == true) {
       return 'SoundCloud';
@@ -75,7 +83,10 @@ class _SongListTileState extends State<SongListTile>
     IconData badgeIcon;
 
     final lower = platform.toLowerCase();
-    if (lower.contains('youtube') || lower == 'yt') {
+    if (lower.contains('gerät') || lower.contains('device') || lower.contains('local')) {
+      badgeColor = const Color(0xFF00E676);
+      badgeIcon = Icons.smartphone_rounded;
+    } else if (lower.contains('youtube') || lower == 'yt') {
       badgeColor = const Color(0xFFFF0055);
       badgeIcon = Icons.play_arrow_rounded;
     } else if (lower.contains('soundcloud') || lower == 'sc') {
@@ -390,7 +401,7 @@ class _SongListTileState extends State<SongListTile>
                             ),
                   title: Row(
                     children: [
-                      Expanded(
+                      Flexible(
                         child: Marquee(
                           delay: const Duration(milliseconds: 300),
                           duration: const Duration(seconds: 5),
@@ -415,6 +426,35 @@ class _SongListTileState extends State<SongListTile>
                           ),
                         ),
                       ),
+                      // Prominent green checkmark badge behind downloaded/device song
+                      ValueListenableBuilder<Box>(
+                        valueListenable: Hive.box("SongDownloads")
+                            .listenable(keys: [widget.song.id]),
+                        builder: (context, box, _) {
+                          final isDownloaded =
+                              box.containsKey(widget.song.id) ||
+                              widget.song.extras?['isDeviceSong'] == true ||
+                              (widget.song.extras?['url'] != null &&
+                                  (widget.song.extras!['url'].toString().startsWith('/') ||
+                                   widget.song.extras!['url'].toString().startsWith('file:')));
+                          if (!isDownloaded) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Container(
+                              padding: const EdgeInsets.all(2.5),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF1DB954), // Spotify Green
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check,
+                                size: 10,
+                                color: Colors.white,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                       if (isCurrent) ...[
                         const SizedBox(width: 6),
                         MiniEqualizer(isPlaying: isPlaying, height: 12),
@@ -429,7 +469,11 @@ class _SongListTileState extends State<SongListTile>
                             .listenable(keys: [widget.song.id]),
                         builder: (context, box, _) {
                           final isDownloaded =
-                              box.containsKey(widget.song.id);
+                              box.containsKey(widget.song.id) ||
+                              widget.song.extras?['isDeviceSong'] == true ||
+                              (widget.song.extras?['url'] != null &&
+                                  (widget.song.extras!['url'].toString().startsWith('/') ||
+                                   widget.song.extras!['url'].toString().startsWith('file:')));
                           if (!isDownloaded) return const SizedBox.shrink();
                           return Container(
                             margin: const EdgeInsets.only(right: 6),
@@ -441,7 +485,7 @@ class _SongListTileState extends State<SongListTile>
                             child: const Icon(
                               Icons.check,
                               size: 10,
-                              color: Colors.black,
+                              color: Colors.white,
                             ),
                           );
                         },

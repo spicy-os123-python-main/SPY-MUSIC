@@ -1132,12 +1132,18 @@ class PlayerController extends GetxController
           isLyricsLoading.value = false;
           return;
         }
-        final related = await _musicServices.getWatchPlaylist(
-            videoId: currentSong.value!.id, onlyRelated: true);
-        final relatedLyricsId = related['lyrics'];
-        if (relatedLyricsId != null) {
-          final lyrics_ = await _musicServices.getLyrics(relatedLyricsId);
-          lyrics.value = {"synced": "", "plainLyrics": lyrics_};
+        final songId = currentSong.value!.id;
+        if (!songId.startsWith('dev_') &&
+            currentSong.value?.extras?['isDeviceSong'] != true) {
+          final related = await _musicServices.getWatchPlaylist(
+              videoId: songId, onlyRelated: true);
+          final relatedLyricsId = related['lyrics'];
+          if (relatedLyricsId != null) {
+            final lyrics_ = await _musicServices.getLyrics(relatedLyricsId);
+            lyrics.value = {"synced": "", "plainLyrics": lyrics_};
+          } else {
+            lyrics.value = {"synced": "", "plainLyrics": "NA"};
+          }
         } else {
           lyrics.value = {"synced": "", "plainLyrics": "NA"};
         }

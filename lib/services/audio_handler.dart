@@ -470,7 +470,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
     if (Hive.box("SongsUrlCache").containsKey(nextSong.id) ||
         Hive.box("SongDownloads").containsKey(nextSong.id) ||
-        Hive.box("SongsCache").containsKey(nextSong.id)) {
+        Hive.box("SongsCache").containsKey(nextSong.id) ||
+        nextSong.id.startsWith("dev_") ||
+        nextSong.extras?['isDeviceSong'] == true ||
+        (nextSong.extras?['url'] != null &&
+            !nextSong.extras!['url'].toString().startsWith('http'))) {
       return;
     }
 
@@ -1126,8 +1130,28 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           final bool isLocalFile = isDownloaded ||
               isFromDiskCache ||
               streamAudioUrl.startsWith('file:') ||
-              playableSong.extras?['url']?.toString().startsWith('file:') == true;
+              playableSong.extras?['isDeviceSong'] == true ||
+              playableSong.extras?['url']?.toString().startsWith('file:') == true ||
+              playableSong.extras?['url']?.toString().startsWith('/') == true;
           _currentSongCachedToDisk = isLocalFile;
+
+          String streamSource;
+          if (isDownloaded) {
+            streamSource = 'Downloaded Songs (0 MB)';
+          } else if (playableSong.extras?['isDeviceSong'] == true) {
+            streamSource = 'Device Music (0 MB)';
+          } else if (isFromDiskCache) {
+            streamSource = 'Device Cache (0 MB)';
+          } else if (streamAudioUrl.contains('googlevideo.com')) {
+            streamSource = (streamInfo.audio?.itag == 18 || streamInfo.audio?.itag == 22)
+                ? 'YouTube (Muxed Fallback)'
+                : 'YouTube (Pure Audio)';
+          } else if (streamAudioUrl.contains('sndcdn')) {
+            streamSource = 'SoundCloud';
+          } else {
+            streamSource = 'Direct Audio';
+          }
+
           DataUsageTracker.instance.recordAudioStream(
             title: playableSong.title,
             artist: playableSong.artist ?? '',
@@ -1136,18 +1160,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             bitrate: streamInfo.audio?.bitrate ?? 0,
             sizeBytes: isLocalFile ? 0 : (streamInfo.audio?.size ?? 0),
             durationSeconds: playableSong.duration?.inSeconds ?? 0,
-            source: isDownloaded
-                ? 'Downloaded Songs (0 MB)'
-                : (isFromDiskCache
-                    ? 'Device Cache (0 MB)'
-                    : (streamAudioUrl.contains('googlevideo.com')
-                        ? ((streamInfo.audio?.itag == 18 ||
-                                streamInfo.audio?.itag == 22)
-                            ? 'YouTube (Muxed Fallback)'
-                            : 'YouTube (Pure Audio)')
-                        : (streamAudioUrl.contains('sndcdn')
-                            ? 'SoundCloud'
-                            : 'Direct Audio'))),
+            source: streamSource,
             isCached: isLocalFile,
           );
           playbackState
@@ -1487,8 +1500,28 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           final bool isLocalFile = isDownloaded ||
               isFromDiskCache ||
               currentSongUrl!.startsWith('file:') ||
-              playableSong.extras?['url']?.toString().startsWith('file:') == true;
+              playableSong.extras?['isDeviceSong'] == true ||
+              playableSong.extras?['url']?.toString().startsWith('file:') == true ||
+              playableSong.extras?['url']?.toString().startsWith('/') == true;
           _currentSongCachedToDisk = isLocalFile;
+
+          String streamSource;
+          if (isDownloaded) {
+            streamSource = 'Downloaded Songs (0 MB)';
+          } else if (playableSong.extras?['isDeviceSong'] == true) {
+            streamSource = 'Device Music (0 MB)';
+          } else if (isFromDiskCache) {
+            streamSource = 'Device Cache (0 MB)';
+          } else if (currentSongUrl!.contains('googlevideo.com')) {
+            streamSource = (streamInfo.audio?.itag == 18 || streamInfo.audio?.itag == 22)
+                ? 'YouTube (Muxed Fallback)'
+                : 'YouTube (Pure Audio)';
+          } else if (currentSongUrl!.contains('sndcdn')) {
+            streamSource = 'SoundCloud';
+          } else {
+            streamSource = 'Direct Audio';
+          }
+
           DataUsageTracker.instance.recordAudioStream(
             title: playableSong.title,
             artist: playableSong.artist ?? '',
@@ -1497,18 +1530,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             bitrate: streamInfo.audio?.bitrate ?? 0,
             sizeBytes: isLocalFile ? 0 : (streamInfo.audio?.size ?? 0),
             durationSeconds: playableSong.duration?.inSeconds ?? 0,
-            source: isDownloaded
-                ? 'Downloaded Songs (0 MB)'
-                : (isFromDiskCache
-                    ? 'Device Cache (0 MB)'
-                    : (currentSongUrl!.contains('googlevideo.com')
-                        ? ((streamInfo.audio?.itag == 18 ||
-                                streamInfo.audio?.itag == 22)
-                            ? 'YouTube (Muxed Fallback)'
-                            : 'YouTube (Pure Audio)')
-                        : (currentSongUrl!.contains('sndcdn')
-                            ? 'SoundCloud'
-                            : 'Direct Audio'))),
+            source: streamSource,
             isCached: isLocalFile,
           );
 
@@ -2116,7 +2138,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     // If this song is downloaded locally, NEVER touch the network,
     // NEVER search Spotify/SoundCloud/YouTube, and NEVER consume mobile data!
     final songDownloadsBox = Hive.box("SongDownloads");
-    if (!offlineReplacementUrl && songDownloadsBox.containsKey(songId)) {
+    if (songDownloadsBox.containsKey(songId)) {
       final song = songDownloadsBox.get(songId);
       final rawPath = song is Map ? (song['url']?.toString() ?? '') : '';
       final filePath = rawPath.replaceFirst("file://", "");
@@ -2150,6 +2172,62 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             lowQualityAudio: audio,
           );
         }
+      }
+    }
+
+    // 0.1 Check if targetSong directly has a local file path
+    final rawTargetUrl = (targetSong?.extras?['url'] ?? '').toString();
+    if (rawTargetUrl.isNotEmpty &&
+        (!rawTargetUrl.startsWith('http://') &&
+            !rawTargetUrl.startsWith('https://'))) {
+      final localPath = rawTargetUrl.replaceFirst("file://", "");
+      final localFile = File(localPath);
+      if (localFile.existsSync() && localFile.lengthSync() > 1024) {
+        printINFO(
+            "checkNGetUrl: Song ($songId) has direct local file -> Playing offline with 0 mobile data: $localPath");
+        final audio = Audio(
+          itag: 140,
+          audioCodec: Codec.mp4a,
+          bitrate: 0,
+          duration: targetSong?.duration?.inMilliseconds ?? 0,
+          loudnessDb: 0,
+          url: "file://$localPath",
+          size: localFile.lengthSync(),
+        );
+        return HMStreamingData(
+          playable: true,
+          statusMSG: "OK",
+          highQualityAudio: audio,
+          midQualityAudio: audio,
+          lowQualityAudio: audio,
+        );
+      }
+    }
+
+    // 0.2 Check if song is a Device Song (e.g. from Samsung Music / phone storage)
+    if (songId.startsWith("dev_") ||
+        targetSong?.extras?['isDeviceSong'] == true ||
+        targetSong?.extras?['isLocal'] == true) {
+      final devPath = (targetSong?.extras?['url'] ?? '')
+          .toString()
+          .replaceFirst("file://", "");
+      if (devPath.isNotEmpty && File(devPath).existsSync()) {
+        final audio = Audio(
+          itag: 140,
+          audioCodec: Codec.mp4a,
+          bitrate: 0,
+          duration: targetSong?.duration?.inMilliseconds ?? 0,
+          loudnessDb: 0,
+          url: "file://$devPath",
+          size: File(devPath).lengthSync(),
+        );
+        return HMStreamingData(
+          playable: true,
+          statusMSG: "OK",
+          highQualityAudio: audio,
+          midQualityAudio: audio,
+          lowQualityAudio: audio,
+        );
       }
     }
 

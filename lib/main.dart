@@ -25,6 +25,7 @@ import 'ui/screens/Library/library_controller.dart';
 import 'utils/system_tray.dart';
 import 'utils/update_check_flag_file.dart';
 import 'services/playlist_repair_service.dart';
+import 'services/device_music_service.dart';
 import 'utils/helper.dart';
 
 Future<void> main() async {
@@ -78,6 +79,11 @@ Future<void> main() async {
       await PlaylistRepairService().autoRepairOnLaunch();
     } catch (e) {
       debugPrint('Auto repair: $e');
+    }
+    try {
+      await DeviceMusicService.instance.scanDeviceSongs();
+    } catch (e) {
+      debugPrint('Device music scan on launch: $e');
     }
   });
 }
@@ -159,6 +165,7 @@ Future<void> startApplicationServices() async {
   Get.lazyPut(() => LibraryArtistsController(), fenix: true);
   Get.lazyPut(() => SettingsScreenController(), fenix: true);
   Get.lazyPut(() => Downloader(), fenix: true);
+  Get.lazyPut(() => DeviceMusicService(), fenix: true);
   Get.lazyPut(() => DiscordService(), fenix: true);
   if (GetPlatform.isDesktop) {
     Get.lazyPut(() => SearchScreenController(), fenix: true);

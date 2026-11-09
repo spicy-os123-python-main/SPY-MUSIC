@@ -9,6 +9,7 @@ import '/models/playling_from.dart';
 import '/models/thumbnail.dart';
 import '/ui/widgets/playlist_album_scroll_behaviour.dart';
 import '../../../services/downloader.dart';
+import '../../../services/device_music_service.dart';
 import '../../../services/playlist_repair_service.dart';
 import '../../navigator.dart';
 import '../../player/player_controller.dart';
@@ -355,11 +356,34 @@ class PlaylistScreen extends StatelessWidget {
                                                     .titleMedium!
                                                     .color,
                                               )),
-                                          // Download button
+                                          // Download or Scan button
                                           GetX<Downloader>(
                                               builder: (controller) {
                                             final id = playlistController
                                                 .playlist.value.playlistId;
+                                            if (id == "SongDownloads") {
+                                              return Obx(() {
+                                                final isScanning = DeviceMusicService
+                                                    .instance.isScanning.value;
+                                                return IconButton(
+                                                  tooltip: "Gerätemusik scannen (z.B. Samsung Music)",
+                                                  onPressed: isScanning
+                                                      ? null
+                                                      : () => playlistController
+                                                          .scanDevice(),
+                                                  icon: isScanning
+                                                      ? const SizedBox(
+                                                          width: 20,
+                                                          height: 20,
+                                                          child: CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                            color: Color(0xFF1DB954),
+                                                          ),
+                                                        )
+                                                      : const Icon(Icons.refresh_rounded),
+                                                );
+                                              });
+                                            }
                                             return IconButton(
                                               tooltip: "downloadPlaylist".tr,
                                               onPressed: () {

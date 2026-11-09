@@ -65,15 +65,37 @@ class ImageWidget extends StatelessWidget {
     final String supportDir = Get.isRegistered<SettingsScreenController>()
         ? Get.find<SettingsScreenController>().supportDirPath
         : '';
-    final File localThumbFile = (song != null && supportDir.isNotEmpty)
+    File localThumbFile = (song != null && supportDir.isNotEmpty)
         ? File("$supportDir/thumbnails/${song!.id}.png")
         : File("");
+    if ((!localThumbFile.existsSync() || localThumbFile.lengthSync() < 100) &&
+        song?.extras?['localThumbnail'] != null) {
+      final extraThumb = File(song!.extras!['localThumbnail']
+          .toString()
+          .replaceFirst('file://', ''));
+      if (extraThumb.existsSync() && extraThumb.lengthSync() > 100) {
+        localThumbFile = extraThumb;
+      }
+    }
+    final bool isDownloaded =
+        song != null && Hive.box("SongDownloads").containsKey(song!.id);
+    if ((!localThumbFile.existsSync() || localThumbFile.lengthSync() < 100) &&
+        isDownloaded) {
+      final dlItem = Hive.box("SongDownloads").get(song!.id);
+      if (dlItem is Map) {
+        final rawDlThumb =
+            (dlItem['localThumbnail'] ?? dlItem['artUri'])?.toString() ?? '';
+        if (rawDlThumb.startsWith('file:') || rawDlThumb.startsWith('/')) {
+          final dlThumb = File(rawDlThumb.replaceFirst('file://', ''));
+          if (dlThumb.existsSync() && dlThumb.lengthSync() > 100) {
+            localThumbFile = dlThumb;
+          }
+        }
+      }
+    }
     final bool hasLocalThumb = localThumbFile.path.isNotEmpty &&
         localThumbFile.existsSync() &&
         localThumbFile.lengthSync() > 100;
-
-    final bool isDownloaded =
-        song != null && Hive.box("SongDownloads").containsKey(song!.id);
     final bool isArtUriLocal =
         song?.artUri?.toString().startsWith("file:") ?? false;
 

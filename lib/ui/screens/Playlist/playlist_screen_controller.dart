@@ -16,6 +16,7 @@ import '../../../mixins/additional_opeartion_mixin.dart';
 import '../../../models/album.dart' show Album;
 import '../../../models/media_Item_builder.dart';
 import '../../../models/playlist.dart';
+import '../../../services/device_music_service.dart';
 import '../../../services/music_service.dart';
 import '../../../services/piped_service.dart';
 import '../Home/home_screen_controller.dart';
@@ -120,6 +121,14 @@ class PlaylistScreenController extends PlaylistAlbumScreenControllerBase
 
       Future.delayed(
           const Duration(seconds: 1), () => _updatePlaylistThumbSongBased());
+
+      if (playlistId == "SongDownloads") {
+        DeviceMusicService.instance.scanDeviceSongs().then((count) {
+          if (count > 0) {
+            fetchSongsfromDatabase(playlistId);
+          }
+        });
+      }
 
       return;
     }
@@ -286,6 +295,19 @@ class PlaylistScreenController extends PlaylistAlbumScreenControllerBase
 
     // update the playlist thumbnail based on the first song's thumbnail
     _updatePlaylistThumbSongBased();
+  }
+
+  Future<void> scanDevice() async {
+    final count = await DeviceMusicService.instance.scanDeviceSongs(forceRescan: true);
+    fetchSongsfromDatabase(playlist.value.playlistId);
+    if (Get.context != null) {
+      ScaffoldMessenger.of(Get.context!).showSnackBar(snackbar(
+        Get.context!,
+        count > 0 ? "$count neue Gerätesongs gefunden!" : "Gerätesongs sind auf aktuellem Stand",
+        size: SanckBarSize.BIG,
+        duration: const Duration(seconds: 2),
+      ));
+    }
   }
 
   @override
