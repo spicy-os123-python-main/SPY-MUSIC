@@ -180,10 +180,16 @@ List<Map<String, dynamic>> parseMixedContent(List<dynamic> rows) {
           }
         } else {
           data = nav(result, [mrlir]);
-          content = parseSongFlat(data);
+          if (data != null && data is Map) {
+            content = parseSongFlat(Map<String, dynamic>.from(data));
+          } else {
+            content = null;
+          }
         }
 
-        contents.add(content);
+        if (content != null) {
+          contents.add(content);
+        }
       }
 
       items.add({'title': title, 'contents': contents});
@@ -736,7 +742,7 @@ List<dynamic> parseSearchResults(List<dynamic> results,
         return parseSearchResult(result['musicResponsiveListItemRenderer'],
             searchResultTypes, resultType, category);
       })
-      .whereType<dynamic>()
+      .where((e) => e != null)
       .toList();
 }
 

@@ -145,11 +145,15 @@ class ListWidget extends StatelessWidget with RemoveSongFromPlaylistMixin {
           itemCount: playlists.length,
           itemExtent: 120,
           physics: const BouncingScrollPhysics(),
-          itemBuilder: (context, index) => wideListTile(context,
-              playlist: playlists[index],
-              title: playlists[index].title,
-              subtitle: playlists[index]?.description ?? "NA",
-              subtitle2: "")),
+          itemBuilder: (context, index) {
+            final p = playlists[index];
+            if (p == null) return const SizedBox.shrink();
+            return wideListTile(context,
+                playlist: p,
+                title: p.title ?? "Unbekannt",
+                subtitle: p.description ?? "NA",
+                subtitle2: "");
+          }),
     );
   }
 
@@ -165,23 +169,30 @@ class ListWidget extends StatelessWidget with RemoveSongFromPlaylistMixin {
           itemExtent: 120,
           physics: const BouncingScrollPhysics(),
           itemBuilder: (context, index) {
+            final a = albums[index];
+            if (a == null) return const SizedBox.shrink();
             String artistName = "";
             try {
-              for (dynamic items in (albums[index].artists).sublist(1)) {
-                artistName = "${artistName + items['name']},";
+              if (a.artists != null && a.artists is List && a.artists.length > 1) {
+                for (dynamic items in (a.artists as List).sublist(1)) {
+                  artistName = "${artistName + (items['name'] ?? '')},";
+                }
               }
             // ignore: empty_catches
             } catch (e) {}
             artistName = artistName.length > 16
                 ? artistName.substring(0, 16)
                 : artistName;
+            final firstArtist = (a.artists != null && a.artists is List && (a.artists as List).isNotEmpty)
+                ? (a.artists[0]['name'] ?? '')
+                : '';
             return wideListTile(context,
-                album: albums[index],
-                title: albums[index].title,
+                album: a,
+                title: a.title ?? "Unbekannt",
                 subtitle: artistName,
-                subtitle2: albums[index].artists.isEmpty
-                    ? "${albums[index].year}"
-                    : "${(albums[index].artists[0]['name'])} • ${albums[index].year}");
+                subtitle2: firstArtist.isEmpty
+                    ? "${a.year ?? ''}"
+                    : "$firstArtist • ${a.year ?? ''}");
           }),
     );
   }

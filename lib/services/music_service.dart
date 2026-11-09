@@ -23,25 +23,25 @@ enum AudioQuality {
 }
 
 class MusicServices extends getx.GetxService {
-  static const String androidMusicUa =
-      'com.google.android.apps.youtube.music/6.41.52 (Linux; U; Android 14; de_DE)';
-  static const String androidMusicClientVer = '6.41.52';
+  static const String webRemixUa =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  static const String webRemixClientVer = '1.20241028.01.00';
 
   final Map<String, String> _headers = {
-    'User-Agent': androidMusicUa,
+    'user-agent': webRemixUa,
     'accept': '*/*',
     'accept-encoding': 'gzip, deflate',
     'content-type': 'application/json',
-    'X-YouTube-Client-Name': '21',
-    'X-YouTube-Client-Version': androidMusicClientVer,
+    'origin': 'https://music.youtube.com',
+    'X-YouTube-Client-Name': '67',
+    'X-YouTube-Client-Version': webRemixClientVer,
   };
 
   final Map<String, dynamic> _context = {
     'context': {
       'client': {
-        "clientName": "ANDROID_MUSIC",
-        "clientVersion": androidMusicClientVer,
-        "androidSdkVersion": 34,
+        "clientName": "WEB_REMIX",
+        "clientVersion": webRemixClientVer,
         "hl": "de",
         "gl": "DE",
       },
@@ -104,25 +104,7 @@ class MusicServices extends getx.GetxService {
       if ((sCode == 401 || sCode == 403) && retryCount < 2) {
         _headers.remove('cookie');
         _headers.remove('X-Goog-Visitor-Id');
-        final requestData = Map<dynamic, dynamic>.from(data);
-        // Immediately switch to official ANDROID_MUSIC client to bypass web-based Google bot/captcha filters
-        _headers['User-Agent'] =
-            'com.google.android.apps.youtube.music/6.41.52 (Linux; U; Android 14; de_DE)';
-        _headers['X-YouTube-Client-Name'] = '21';
-        _headers['X-YouTube-Client-Version'] = '6.41.52';
-        _headers.remove('origin');
-        if (requestData.containsKey('context') &&
-            requestData['context'] is Map &&
-            requestData['context']['client'] is Map) {
-          final clientMap = Map<String, dynamic>.from(requestData['context']['client']);
-          clientMap['clientName'] = 'ANDROID_MUSIC';
-          clientMap['clientVersion'] = '6.41.52';
-          clientMap['androidSdkVersion'] = 34;
-          final contextMap = Map<String, dynamic>.from(requestData['context']);
-          contextMap['client'] = clientMap;
-          requestData['context'] = contextMap;
-        }
-        return _sendRequest(action, requestData,
+        return _sendRequest(action, data,
             additionalParams: additionalParams, retryCount: retryCount + 1);
       }
       throw NetworkError();
