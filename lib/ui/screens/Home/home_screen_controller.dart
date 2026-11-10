@@ -51,7 +51,6 @@ class HomeScreenController extends GetxController {
     }
 
     isContentFetched.value = false;
-    final stopwatch = Stopwatch()..start();
     try {
       List<MediaItem> tracks = [];
       String title = "";
@@ -89,10 +88,6 @@ class HomeScreenController extends GetxController {
     } catch (e) {
       printERROR("Platform filter error: $e");
     } finally {
-      final elapsed = stopwatch.elapsedMilliseconds;
-      if (elapsed < 2000) {
-        await Future.delayed(Duration(milliseconds: 2000 - elapsed));
-      }
       isContentFetched.value = true;
     }
   }

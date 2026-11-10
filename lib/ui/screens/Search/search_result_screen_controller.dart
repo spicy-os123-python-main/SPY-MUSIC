@@ -87,10 +87,18 @@ class SearchResultScreenController extends GetxController
               Get.find<PlatformSelectorController>().selectedSource.value;
         }
 
-        if (selectedPlatform == MusicSource.soundcloud ||
-            selectedPlatform == MusicSource.spotify ||
-            selectedPlatform == MusicSource.amazon) {
-          separatedResultContent[tabName] = [];
+        if (selectedPlatform == MusicSource.soundcloud) {
+          separatedResultContent[tabName] = tabName == 'Songs'
+              ? await SoundCloudService().searchTracks(queryString.value)
+              : [];
+        } else if (selectedPlatform == MusicSource.spotify) {
+          separatedResultContent[tabName] = tabName == 'Songs'
+              ? await PlatformSearchService.searchSpotify(queryString.value)
+              : [];
+        } else if (selectedPlatform == MusicSource.amazon) {
+          separatedResultContent[tabName] = tabName == 'Songs'
+              ? await PlatformSearchService.searchAmazon(queryString.value)
+              : [];
         } else {
           final itemCount =
               (tabName == 'Songs' || tabName == 'Videos') ? 25 : 10;
@@ -247,19 +255,18 @@ class SearchResultScreenController extends GetxController
 
         final merged = Map<String, dynamic>.from(responses[0] as Map);
         final rawYtSongs = List.from((merged["Songs"] as List?) ?? const []);
-        final ytSongs = rawYtSongs.map((song) {
-          if (song is MediaItem) {
-            final extras = Map<String, dynamic>.from(song.extras ?? {});
-            extras['platform'] = 'YouTube';
-            return song.copyWith(extras: extras);
-          }
-          return song;
+        final ytSongs = rawYtSongs.whereType<MediaItem>().map((song) {
+          final extras = Map<String, dynamic>.from(song.extras ?? {});
+          extras['platform'] = 'YouTube';
+          return song.copyWith(extras: extras);
         }).toList();
+        final scSongs = (responses[1] as List).whereType<MediaItem>().toList();
+        final spSongs = (responses[2] as List).whereType<MediaItem>().toList();
         final songs = _interleave([
           ytSongs,
-          responses[1] as List,
-          responses[2] as List,
-        ]);
+          scSongs,
+          spSongs,
+        ]).whereType<MediaItem>().toList();
         if (songs.isNotEmpty) merged["Songs"] = songs;
         resultContent.value = merged;
       }

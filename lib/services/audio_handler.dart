@@ -107,11 +107,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     }
     _mediaLibrary = MediaLibrary();
     _player = AudioPlayer(
-        userAgent: 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
         handleInterruptions: false,
         androidApplyAudioAttributes: true,
         handleAudioSessionActivation: false,
-        useProxyForRequestHeaders: true,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
           minBufferDuration: Duration(seconds: 8),
@@ -779,26 +777,23 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
     }
 
-    // Direct HLS stream for SoundCloud or any HLS source (.m3u8 or /stream/hls)
+    // Direct stream for SoundCloud (HLS/m3u8 or progressive) or Deezer/Spotify (MP3) or Amazon
     if (url.contains('.m3u8') ||
         url.contains('/stream/hls') ||
-        url.contains('/hls')) {
-      printINFO(
-          "Playing HLS stream via HlsAudioSource: ${url.substring(0, min(80, url.length))}...");
-      isPlayingUsingLockCachingSource = false;
-      return HlsAudioSource(
-        Uri.parse(url),
-        tag: mediaItem,
-      );
-    }
-
-    // Direct AudioSource.uri for SoundCloud progressive or other non-YouTube streams
-    if (url.contains('soundcloud') ||
+        url.contains('/hls') ||
+        url.contains('soundcloud') ||
         url.contains('sndcdn') ||
+        url.contains('dzcdn.net') ||
+        url.contains('deezer') ||
         mediaItem.id.startsWith("sc_") ||
-        (mediaItem.extras?['isSoundCloud'] == true)) {
+        mediaItem.id.startsWith("sp_") ||
+        mediaItem.id.startsWith("az_") ||
+        (mediaItem.extras?['isSoundCloud'] == true) ||
+        (mediaItem.extras?['isSpotify'] == true) ||
+        (mediaItem.extras?['streamSource'] == 'deezer') ||
+        (mediaItem.extras?['streamSource'] == 'itunes')) {
       printINFO(
-          "Playing direct stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
+          "Playing direct platform stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
       isPlayingUsingLockCachingSource = false;
       return AudioSource.uri(
         Uri.parse(url),
@@ -2103,25 +2098,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     return super.stop();
   }
 
-  void _applyMatchedDuration(MediaItem? song, MediaItem matched) {
-    if (song == null) return;
-    final missing = song.duration == null || song.duration!.inSeconds == 0;
-    final matchedDuration = matched.duration;
-    if (!missing ||
-        matchedDuration == null ||
-        matchedDuration <= Duration.zero) {
-      return;
-    }
-    final updated = song.copyWith(duration: matchedDuration);
-    final index = currentIndex;
-    if (index != null &&
-        index < queue.value.length &&
-        queue.value[index].id == song.id) {
-      queue.value[index] = updated;
-    }
-    mediaItem.add(updated);
-  }
-
 // Work around used [useNewInstanceOfExplode = false] to Fix Connection closed before full header was received issue
   Future<HMStreamingData> checkNGetUrl(String songId,
       {MediaItem? targetMediaItem,
@@ -2285,77 +2261,56 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       );
     }
 
-    // Spotify or Amazon Native Track Stream Matching
+    // Spotify (Deezer Engine) or Amazon Native Track Stream Resolution
+    // Strictly uses Deezer (or iTunes fallback for Amazon) - ZERO YouTube fallback!
     if (songId.startsWith("sp_") || songId.startsWith("az_")) {
-      printINFO("Resolving Spotify/Amazon track stream for: $songId");
-      if (generateNewUrl) {
-        PlatformSearchService.invalidateMatch(songId);
-      }
+      printINFO("Resolving Spotify/Deezer track stream for: $songId");
       final artistName = getSafeSongArtist(targetSong, fallback: '');
       final query = (targetSong?.extras?['searchQuery'] as String?) ??
           ('${targetSong?.title ?? ''} $artistName').trim();
-      var matchedTrack = await PlatformSearchService.resolveMatchedTrack(
-          songId, query,
-          originalTrack: targetSong);
 
-      for (var attempt = 0; attempt < 2 && matchedTrack != null; attempt++) {
-        _applyMatchedDuration(targetSong, matchedTrack);
+      String? streamUrl;
+      final existingUrl = targetSong?.extras?['previewUrl']?.toString() ??
+          targetSong?.extras?['url']?.toString();
+      if (!generateNewUrl && existingUrl != null && existingUrl.startsWith('http')) {
+        streamUrl = existingUrl;
+      }
 
-        if (!matchedTrack.id.startsWith("sc_")) {
-          final res = await checkNGetUrl(matchedTrack.id,
-              targetMediaItem: targetSong,
-              generateNewUrl: generateNewUrl,
-              allowFallback: true);
-          if (res.playable) return res;
+      if (streamUrl == null || streamUrl.isEmpty) {
+        streamUrl = await PlatformSearchService.getDeezerStreamUrl(songId, query: query);
+      }
 
-          // If YouTube failed, invalidate match and retry
-          PlatformSearchService.invalidateMatch(songId);
-          matchedTrack = await PlatformSearchService.resolveMatchedTrack(
-              songId, query,
-              originalTrack: targetSong, skipSoundCloud: false);
-          continue;
+      if (streamUrl != null && streamUrl.isNotEmpty) {
+        int durationMs = targetSong?.duration?.inMilliseconds ?? 0;
+        if (durationMs == 0 && targetSong?.extras?['duration'] != null) {
+          final dur = targetSong!.extras!['duration'];
+          if (dur is num) durationMs = (dur * 1000).toInt();
         }
 
-        final scStreamUrl = await SoundCloudService.resolveStreamUrl(
-          matchedTrack.id,
-          transcodingUrl: matchedTrack.extras?['transcodingUrl'] as String?,
-          trackAuthorization:
-              matchedTrack.extras?['track_authorization'] as String?,
+        final audio = Audio(
+          audioCodec: Codec.mp4a,
+          bitrate: 128000,
+          loudnessDb: 0,
+          duration: durationMs,
+          size: 0,
+          url: streamUrl,
+          itag: 140,
         );
-        if (scStreamUrl != null && scStreamUrl.isNotEmpty) {
-          final audio = Audio(
-            audioCodec: Codec.mp4a,
-            bitrate: 160000,
-            loudnessDb: 0,
-            duration: targetSong?.duration?.inMilliseconds ??
-                (matchedTrack.duration?.inMilliseconds ?? 0),
-            size: 0,
-            url: scStreamUrl,
-            itag: 140,
-          );
-          return HMStreamingData(
-            playable: true,
-            statusMSG: "OK",
-            lowQualityAudio: audio,
-            highQualityAudio: audio,
-          );
-        }
 
-        // The SoundCloud match had no usable stream, look for a YouTube Music match instead
-        SoundCloudService.invalidateStreamCache(matchedTrack.id);
-        PlatformSearchService.invalidateMatch(songId);
-        matchedTrack = await PlatformSearchService.resolveMatchedTrack(
-            songId, query,
-            originalTrack: targetSong, skipSoundCloud: true);
+        return HMStreamingData(
+          playable: true,
+          statusMSG: "OK",
+          lowQualityAudio: audio,
+          highQualityAudio: audio,
+        );
       }
 
       // DO NOT fall through to YouTube code!
-      PlatformSearchService.invalidateMatch(songId);
       return HMStreamingData(
         playable: false,
         statusMSG: _isGerman
-            ? "Audio-Stream für '${targetSong?.title ?? songId}' ist derzeit nicht verfügbar."
-            : "Audio stream for '${targetSong?.title ?? songId}' is currently unavailable.",
+            ? "Audio-Stream für '${targetSong?.title ?? songId}' ist auf Deezer/Spotify derzeit nicht verfügbar."
+            : "Audio stream for '${targetSong?.title ?? songId}' is currently unavailable on Deezer/Spotify.",
       );
     }
 

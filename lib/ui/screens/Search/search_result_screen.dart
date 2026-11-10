@@ -6,6 +6,7 @@ import '/ui/screens/Settings/settings_screen_controller.dart';
 import '../../navigator.dart';
 import '../../widgets/animated_screen_transition.dart';
 import '../../widgets/loader.dart';
+import '../../widgets/platform_selector_widget.dart';
 import '../../widgets/search_related_widgets.dart';
 import '../../widgets/separate_tab_item_widget.dart';
 import 'search_result_screen_controller.dart';
@@ -77,19 +78,32 @@ class SearchResultScreen extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  child: GetX<SearchResultScreenController>(
-                    builder: (controller) => AnimatedScreenTransition(
-                      enabled: Get.find<SettingsScreenController>()
-                          .isTransitionAnimationDisabled
-                          .isFalse,
-                      resverse: controller.isTabTransitionReversed,
-                      child: Center(
-                        key: ValueKey<int>(
-                            controller.navigationRailCurrentIndex.toInt() * 8),
-                        child: Body(
-                            searchResScrController: searchResScrController),
+                  child: Column(
+                    children: [
+                      const Padding(
+                        padding:
+                            EdgeInsets.only(top: 25.0, left: 8.0, right: 8.0),
+                        child: PlatformSelectorWidget(),
                       ),
-                    ),
+                      Expanded(
+                        child: GetX<SearchResultScreenController>(
+                          builder: (controller) => AnimatedScreenTransition(
+                            enabled: Get.find<SettingsScreenController>()
+                                .isTransitionAnimationDisabled
+                                .isFalse,
+                            resverse: controller.isTabTransitionReversed,
+                            child: Center(
+                              key: ValueKey<int>(controller
+                                      .navigationRailCurrentIndex.toInt() *
+                                  8),
+                              child: Body(
+                                  searchResScrController:
+                                      searchResScrController),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 )
               ],
@@ -134,7 +148,7 @@ class Body extends StatelessWidget {
             ),
           );
         } else if (searchResScrController.isResultContentFetced.isTrue) {
-          return const ResultWidget();
+          return const ResultWidget(isv2Used: true);
         } else {
           return const Center(
             child: LoadingIndicator(),
@@ -143,7 +157,7 @@ class Body extends StatelessWidget {
       });
     } else {
       if (searchResScrController.isResultContentFetced.isTrue) {
-        final topPadding = context.isLandscape ? 50.0 : 80.0;
+        final topPadding = context.isLandscape ? 10.0 : 15.0;
         final name = searchResScrController.railItems[
             searchResScrController.navigationRailCurrentIndex.value - 1];
         return SeparateTabItemWidget(

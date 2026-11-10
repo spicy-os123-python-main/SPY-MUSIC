@@ -274,23 +274,75 @@ class Downloader extends GetxService {
     final String filePath = "${downloadDir.path}/$fileName";
     printINFO("Downloading filePath: $filePath from stream: ${streamUrl.substring(0, min(60, streamUrl.length))}...");
 
-    _dio.download(
-      streamUrl,
-      filePath,
-      options: Options(
-        receiveTimeout: const Duration(minutes: 5),
-        headers: {
-          'accept': '*/*',
-          'accept-encoding': 'gzip, deflate',
-        },
-      ),
-      onReceiveProgress: (count, total) {
-        if (total <= 0) return;
-        songDownloadingProgress.value = ((count / total) * 100).toInt();
-      },
-    ).then(
-      (value) async {
-        printINFO(value.data);
+    final downloadHeaders = <String, String>{
+      'accept': '*/*',
+      'accept-encoding': 'gzip, deflate',
+    };
+    if (streamUrl.contains('googlevideo.com')) {
+      downloadHeaders['User-Agent'] = streamUrl.contains('c=IOS')
+          ? 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)'
+          : 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
+    }
+
+    Future<void> performDownload() async {
+      if (streamUrl.contains('.m3u8') || streamUrl.contains('/stream/hls')) {
+        // Download and assemble HLS stream segments directly into audio file
+        final m3u8Res = await _dio.get(streamUrl,
+            options: Options(headers: downloadHeaders));
+        final lines = m3u8Res.data.toString().split('\n');
+        String? initUrl;
+        final segmentUrls = <String>[];
+        for (var line in lines) {
+          line = line.trim();
+          if (line.startsWith('#EXT-X-MAP:URI=')) {
+            final match = RegExp(r'URI="([^"]+)"').firstMatch(line);
+            if (match != null) initUrl = match.group(1);
+          } else if (line.isNotEmpty && !line.startsWith('#')) {
+            segmentUrls.add(line);
+          }
+        }
+        final file = File(filePath);
+        final sink = file.openWrite();
+        try {
+          if (initUrl != null) {
+            final initRes = await _dio.get<List<int>>(initUrl,
+                options: Options(
+                    responseType: ResponseType.bytes, headers: downloadHeaders));
+            if (initRes.data != null) sink.add(initRes.data!);
+          }
+          final total = segmentUrls.length;
+          for (var i = 0; i < total; i++) {
+            final segRes = await _dio.get<List<int>>(segmentUrls[i],
+                options: Options(
+                    responseType: ResponseType.bytes, headers: downloadHeaders));
+            if (segRes.data != null) sink.add(segRes.data!);
+            if (total > 0) {
+              songDownloadingProgress.value = (((i + 1) / total) * 100).toInt();
+            }
+          }
+        } finally {
+          await sink.flush();
+          await sink.close();
+        }
+      } else {
+        await _dio.download(
+          streamUrl,
+          filePath,
+          options: Options(
+            receiveTimeout: const Duration(minutes: 5),
+            headers: downloadHeaders,
+          ),
+          onReceiveProgress: (count, total) {
+            if (total <= 0) return;
+            songDownloadingProgress.value = ((count / total) * 100).toInt();
+          },
+        );
+      }
+    }
+
+    performDownload().then(
+      (_) async {
+        printINFO("Download completed for: $filePath");
 
         String? year;
         try {

@@ -64,44 +64,56 @@ class ResultWidget extends StatelessWidget {
     if (content.containsKey("Artists") &&
         content["Artists"] is List &&
         (content["Artists"] as List).isNotEmpty) {
-      list.add(SeparateTabItemWidget(
-        items: List<Artist>.from(content["Artists"]),
-        title: "Artists",
-        isCompleteList: false,
-      ));
+      final artists = (content["Artists"] as List).whereType<Artist>().toList();
+      if (artists.isNotEmpty) {
+        list.add(SeparateTabItemWidget(
+          items: artists,
+          title: "Artists",
+          isCompleteList: false,
+        ));
+      }
     }
 
     // 2. Songs
     if (content.containsKey("Songs") &&
         content["Songs"] is List &&
         (content["Songs"] as List).isNotEmpty) {
-      list.add(SeparateTabItemWidget(
-        items: List<MediaItem>.from(content["Songs"]),
-        title: "Songs",
-        isCompleteList: false,
-      ));
+      final songs = (content["Songs"] as List).whereType<MediaItem>().toList();
+      if (songs.isNotEmpty) {
+        list.add(SeparateTabItemWidget(
+          items: songs,
+          title: "Songs",
+          isCompleteList: false,
+        ));
+      }
     }
 
     // 3. Videos
     if (content.containsKey("Videos") &&
         content["Videos"] is List &&
         (content["Videos"] as List).isNotEmpty) {
-      list.add(SeparateTabItemWidget(
-        items: List<MediaItem>.from(content["Videos"]),
-        title: "Videos",
-        isCompleteList: false,
-      ));
+      final videos = (content["Videos"] as List).whereType<MediaItem>().toList();
+      if (videos.isNotEmpty) {
+        list.add(SeparateTabItemWidget(
+          items: videos,
+          title: "Videos",
+          isCompleteList: false,
+        ));
+      }
     }
 
     // 4. Albums
     if (content.containsKey("Albums") &&
         content["Albums"] is List &&
         (content["Albums"] as List).isNotEmpty) {
-      list.add(ContentListWidget(
-        content: AlbumContent(
-            title: "Albums", albumList: List<Album>.from(content["Albums"])),
-        isHomeContent: false,
-      ));
+      final albums = (content["Albums"] as List).whereType<Album>().toList();
+      if (albums.isNotEmpty) {
+        list.add(ContentListWidget(
+          content: AlbumContent(
+              title: "Albums", albumList: albums),
+          isHomeContent: false,
+        ));
+      }
     }
 
     // 5. Playlists (Community and Featured)
@@ -109,13 +121,16 @@ class ResultWidget extends StatelessWidget {
       if (content.containsKey(key) &&
           content[key] is List &&
           (content[key] as List).isNotEmpty) {
-        list.add(ContentListWidget(
-          content: PlaylistContent(
-            title: key,
-            playlistList: List<Playlist>.from(content[key]),
-          ),
-          isHomeContent: false,
-        ));
+        final playlists = (content[key] as List).whereType<Playlist>().toList();
+        if (playlists.isNotEmpty) {
+          list.add(ContentListWidget(
+            content: PlaylistContent(
+              title: key,
+              playlistList: playlists,
+            ),
+            isHomeContent: false,
+          ));
+        }
       }
     }
 

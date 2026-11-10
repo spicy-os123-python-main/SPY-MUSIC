@@ -48,6 +48,7 @@ class PlatformSearchService {
     final album = item['album']?['title']?.toString() ?? '$platform Track';
     final cover = item['album']?['cover_big']?.toString() ??
         item['album']?['cover_medium']?.toString();
+    final preview = item['preview']?.toString() ?? '';
     final rawDuration = item['duration'];
     int durationSec = 0;
     if (rawDuration is num) {
@@ -73,6 +74,10 @@ class PlatformSearchService {
           {'name': artist, 'id': ''}
         ],
         'originalId': id,
+        'deezerId': id,
+        'url': preview.isNotEmpty ? preview : null,
+        'previewUrl': preview.isNotEmpty ? preview : null,
+        'streamSource': 'deezer',
         'duration': durationSec,
         'length':
             "${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}",
@@ -87,6 +92,7 @@ class PlatformSearchService {
     final album = item['collectionName']?.toString() ?? '$platform Track';
     final cover100 = item['artworkUrl100']?.toString();
     final cover = cover100?.replaceAll('100x100bb', '600x600bb') ?? cover100;
+    final preview = item['previewUrl']?.toString() ?? '';
     final durationMs = item['trackTimeMillis'] as int? ?? 180000;
     final durationSec = durationMs > 0 ? (durationMs / 1000).round() : 180;
 
@@ -106,11 +112,80 @@ class PlatformSearchService {
           {'name': artist, 'id': ''}
         ],
         'originalId': id,
+        'url': preview.isNotEmpty ? preview : null,
+        'previewUrl': preview.isNotEmpty ? preview : null,
+        'streamSource': 'itunes',
         'duration': durationSec,
         'length':
             "${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}",
       },
     );
+  }
+
+  /// Direct stream resolver for Deezer / Spotify tracks without any YouTube fallback
+  static Future<String?> getDeezerStreamUrl(String trackId, {String? query}) async {
+    final cleanId = trackId.startsWith('sp_')
+        ? trackId.substring(3)
+        : (trackId.startsWith('az_') ? trackId.substring(3) : trackId);
+
+    // 1. Direct Deezer track lookup by ID
+    if (RegExp(r'^\d+$').hasMatch(cleanId)) {
+      try {
+        final url = 'https://api.deezer.com/track/$cleanId';
+        final response = await _dio.get(url);
+        if (response.statusCode == 200 && response.data != null && response.data is Map) {
+          final preview = response.data['preview']?.toString();
+          if (preview != null && preview.isNotEmpty) {
+            printINFO("Deezer stream resolved by ID for $trackId: $preview");
+            return preview;
+          }
+        }
+      } catch (e) {
+        printINFO("Deezer track lookup by ID ($cleanId) failed: $e");
+      }
+    }
+
+    // 2. Deezer search by query
+    if (query != null && query.isNotEmpty) {
+      try {
+        final sUrl =
+            'https://api.deezer.com/search?q=${Uri.encodeComponent(query)}&limit=1';
+        final response = await _dio.get(sUrl);
+        if (response.statusCode == 200 && response.data != null && response.data is Map) {
+          final data = response.data['data'] as List? ?? [];
+          if (data.isNotEmpty && data[0] is Map) {
+            final preview = data[0]['preview']?.toString();
+            if (preview != null && preview.isNotEmpty) {
+              printINFO("Deezer stream resolved by query for $trackId: $preview");
+              return preview;
+            }
+          }
+        }
+      } catch (e) {
+        printINFO("Deezer search by query failed: $e");
+      }
+
+      // 3. iTunes fallback if Deezer returned no preview
+      try {
+        final iUrl =
+            'https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=1';
+        final response = await _dio.get(iUrl);
+        if (response.statusCode == 200 && response.data != null && response.data is Map) {
+          final results = response.data['results'] as List? ?? [];
+          if (results.isNotEmpty && results[0] is Map) {
+            final preview = results[0]['previewUrl']?.toString();
+            if (preview != null && preview.isNotEmpty) {
+              printINFO("iTunes stream resolved for $trackId: $preview");
+              return preview;
+            }
+          }
+        }
+      } catch (e) {
+        printINFO("iTunes fallback stream resolution failed: $e");
+      }
+    }
+
+    return null;
   }
 
   static Future<List<MediaItem>> _searchItunes(
