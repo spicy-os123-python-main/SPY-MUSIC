@@ -112,12 +112,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         handleAudioSessionActivation: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 8),
-          maxBufferDuration: Duration(seconds: 20),
+          minBufferDuration: Duration(seconds: 4),
+          maxBufferDuration: Duration(seconds: 12),
           bufferForPlaybackDuration: Duration(milliseconds: 500),
           bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1000),
           prioritizeTimeOverSizeThresholds: true,
-          backBufferDuration: Duration(seconds: 10),
+          backBufferDuration: Duration(seconds: 2),
         )));
     if (GetPlatform.isAndroid || GetPlatform.isIOS) {
       _initAudioSession();
@@ -583,6 +583,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         if (currentMs >= 10000 && !_currentSongCachedToDisk) {
           _currentSongCachedToDisk = true;
           _saveCurrentSongToDiskIfEnabled();
+        }
+
+        if (totalMs > 0 && !_currentSongCachedToDisk) {
+          DataUsageTracker.instance.recordListeningProgress(currentMs / totalMs);
         }
 
         // Preload next track's stream 25 seconds before the current song ends for seamless playback

@@ -101,6 +101,9 @@ class DataUsageTracker extends GetxService {
     } catch (_) {}
   }
 
+  int _currentTrackTotalBytes = 0;
+  int _currentTrackReportedBytes = 0;
+
   void recordAudioStream({
     required String title,
     required String artist,
@@ -113,6 +116,8 @@ class DataUsageTracker extends GetxService {
     bool isCached = false,
   }) {
     if (isCached) {
+      _currentTrackTotalBytes = 0;
+      _currentTrackReportedBytes = 0;
       sessionAudioCount.value += 1;
       totalAudioCount.value += 1;
       lastTrackTitle.value = title;
@@ -127,18 +132,23 @@ class DataUsageTracker extends GetxService {
       return;
     }
 
-    int effectiveBytes = sizeBytes;
-    if (effectiveBytes <= 0 && bitrate > 0) {
+    int totalBytes = sizeBytes;
+    if (totalBytes <= 0 && bitrate > 0) {
       final dur = durationSeconds > 0 ? durationSeconds : 210;
-      effectiveBytes = (bitrate * dur / 8).round();
+      totalBytes = (bitrate * dur / 8).round();
     }
-    if (effectiveBytes <= 0) {
-      effectiveBytes = 1250000;
+    if (totalBytes <= 0) {
+      totalBytes = 1250000;
     }
 
-    sessionAudioBytes.value += effectiveBytes;
+    // Realistic initial network buffer (~200 KB) when a track starts loading or skipping
+    final initialBurst = totalBytes > 200000 ? 200000 : totalBytes;
+    _currentTrackTotalBytes = totalBytes;
+    _currentTrackReportedBytes = initialBurst;
+
+    sessionAudioBytes.value += initialBurst;
     sessionAudioCount.value += 1;
-    totalAudioBytes.value += effectiveBytes;
+    totalAudioBytes.value += initialBurst;
     totalAudioCount.value += 1;
 
     lastTrackTitle.value = title;
@@ -146,11 +156,26 @@ class DataUsageTracker extends GetxService {
     lastTrackCodec.value = codec;
     lastTrackBitrate.value = bitrate;
     lastTrackItag.value = itag;
-    lastTrackBytes.value = effectiveBytes;
+    lastTrackBytes.value = initialBurst;
     lastTrackSource.value = source;
 
     _savePersistedStats();
     refreshDiskCaches();
+  }
+
+  /// Incremental stream consumption as the song is actually listened to
+  void recordListeningProgress(double fractionPlayed) {
+    if (_currentTrackTotalBytes <= 0 || fractionPlayed <= 0) return;
+    final targetBytes =
+        (_currentTrackTotalBytes * fractionPlayed.clamp(0.0, 1.0)).round();
+    if (targetBytes > _currentTrackReportedBytes) {
+      final delta = targetBytes - _currentTrackReportedBytes;
+      _currentTrackReportedBytes = targetBytes;
+      sessionAudioBytes.value += delta;
+      totalAudioBytes.value += delta;
+      lastTrackBytes.value = targetBytes;
+      _savePersistedStats();
+    }
   }
 
   void recordImageLoad({required String url, required int estimatedBytes}) {
