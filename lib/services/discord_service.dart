@@ -24,11 +24,17 @@ class DiscordService {
       'https://raw.githubusercontent.com/spicy-os123-python-main/SPY-MUSIC/main/assets/logo/spy_music_logo.png';
   static const String _gatewayQuery = '?v=10&encoding=json';
   static const String _defaultGatewayUrl = 'wss://gateway.discord.gg/$_gatewayQuery';
+  static const String _failedTokenPrefKey = 'discordFailedTokenSig';
+  static const String mobileUserAgent =
+      'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
 
   static final Dio _apiDio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 6),
     receiveTimeout: const Duration(seconds: 6),
     validateStatus: (code) => code != null && code < 500,
+    headers: const {
+      'User-Agent': mobileUserAgent,
+    },
   ));
 
   bool isEnabled = false;
@@ -83,7 +89,14 @@ class DiscordService {
   @visibleForTesting
   Future<String?> Function(String url)? externalAssetResolverOverride;
 
-  static String _sanitizeToken(String raw) {
+  @visibleForTesting
+  Future<bool?> Function(String token)? tokenVerifierOverride;
+
+  static final RegExp _standardTokenPattern =
+      RegExp(r'^[A-Za-z0-9_-]{18,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{15,}$');
+  static final RegExp _mfaTokenPattern = RegExp(r'^mfa\.[A-Za-z0-9_-]{20,}$');
+
+  static String sanitizeToken(String raw) {
     var cleaned = raw.trim();
     if (cleaned.toLowerCase().startsWith('bearer ')) {
       cleaned = cleaned.substring(7).trim();
@@ -95,11 +108,79 @@ class DiscordService {
     return cleaned.replaceAll(RegExp(r'[\r\n\s]+'), '');
   }
 
+  /// Checks whether [raw] matches Discord's user/MFA token structure so unrelated
+  /// WebView/Webpack strings cannot be mistaken for an auth token.
+  static bool looksLikeDiscordToken(String raw) {
+    final cleaned = sanitizeToken(raw);
+    return _standardTokenPattern.hasMatch(cleaned) ||
+        _mfaTokenPattern.hasMatch(cleaned);
+  }
+
+  static String _tokenSignature(String value) {
+    var h1 = 0x811c9dc5;
+    var h2 = 0x9e3779b9;
+    for (final code in value.codeUnits) {
+      h1 = ((h1 ^ code) * 0x01000193) & 0xffffffff;
+      h2 = ((h2 ^ (code + 31)) * 0x85ebca6b) & 0xffffffff;
+    }
+    return '${h1.toRadixString(16)}_${h2.toRadixString(16)}_${value.length}';
+  }
+
+  static bool _isTokenMarkedFailed(String t) {
+    if (t.isEmpty) return false;
+    try {
+      final stored = Hive.box('AppPrefs').get(_failedTokenPrefKey);
+      return stored == _tokenSignature(t);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static void _markTokenFailed(String t) {
+    if (t.isEmpty) return;
+    try {
+      Hive.box('AppPrefs').put(_failedTokenPrefKey, _tokenSignature(t));
+    } catch (_) {}
+  }
+
+  static void _clearFailedTokenMarker() {
+    try {
+      Hive.box('AppPrefs').delete(_failedTokenPrefKey);
+    } catch (_) {}
+  }
+
+  /// Verifies a Discord token against `/users/@me`.
+  /// Returns `true` if accepted, `false` if rejected (401/403), or `null` on
+  /// network/rate-limit errors so temporary connectivity issues do not fail auth.
+  Future<bool?> verifyToken(String candidate) async {
+    final cleaned = sanitizeToken(candidate);
+    if (cleaned.isEmpty) return false;
+
+    if (tokenVerifierOverride != null) {
+      return await tokenVerifierOverride!(cleaned);
+    }
+
+    try {
+      final response = await _apiDio.get(
+        'https://discord.com/api/v9/users/@me',
+        options: Options(headers: {
+          'Authorization': cleaned,
+          'User-Agent': mobileUserAgent,
+        }),
+      );
+      if (response.statusCode == 200) return true;
+      if (response.statusCode == 401 || response.statusCode == 403) return false;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   String get token {
     try {
       final raw =
           Hive.box('AppPrefs').get('discordUserToken', defaultValue: '') ?? '';
-      return _sanitizeToken(raw.toString());
+      return sanitizeToken(raw.toString());
     } catch (_) {
       return '';
     }
@@ -139,11 +220,19 @@ class DiscordService {
     try {
       final box = Hive.box('AppPrefs');
       isEnabled = box.get('discordRpcEnabled', defaultValue: true);
-      printINFO('Service initialized (enabled: $isEnabled, hasToken: ${token.isNotEmpty})',
+      final currentToken = token;
+      printINFO(
+          'Service initialized (enabled: $isEnabled, hasToken: ${currentToken.isNotEmpty})',
           tag: 'Discord');
       _startHealthCheck();
-      if (isEnabled && token.isNotEmpty) {
-        connectGateway();
+      if (isEnabled && currentToken.isNotEmpty) {
+        if (_isTokenMarkedFailed(currentToken)) {
+          _authFailed = true;
+          lastErrorMessage = 'Discord Token ungültig oder abgelaufen (4004)';
+          _updateStatusNotifier();
+        } else {
+          connectGateway();
+        }
       }
     } catch (e) {
       printERROR('Init error: $e', tag: 'Discord');
@@ -152,18 +241,26 @@ class DiscordService {
 
   void toggleStatus(bool enable) {
     isEnabled = enable;
-    _authFailed = false;
-    lastErrorMessage = null;
     try {
       Hive.box('AppPrefs').put('discordRpcEnabled', enable);
     } catch (_) {}
 
     if (enable) {
+      final currentToken = token;
+      if (_isTokenMarkedFailed(currentToken)) {
+        _authFailed = true;
+        lastErrorMessage = 'Discord Token ungültig oder abgelaufen (4004)';
+      } else {
+        _authFailed = false;
+        lastErrorMessage = null;
+      }
       _startHealthCheck();
-      if (token.isNotEmpty) {
+      if (currentToken.isNotEmpty && !_authFailed) {
         connectGateway();
       }
     } else {
+      _authFailed = false;
+      lastErrorMessage = null;
       _healthCheckTimer?.cancel();
       _healthCheckTimer = null;
       clearPresence();
@@ -173,11 +270,12 @@ class DiscordService {
   }
 
   void setToken(String newToken) {
-    final cleaned = _sanitizeToken(newToken);
+    final cleaned = sanitizeToken(newToken);
     try {
       Hive.box('AppPrefs').put('discordUserToken', cleaned);
     } catch (_) {}
 
+    _clearFailedTokenMarker();
     _authFailed = false;
     lastErrorMessage = null;
     _reconnectAttempts = 0;
@@ -236,6 +334,13 @@ class DiscordService {
       return;
     }
 
+    if (_isTokenMarkedFailed(currentToken)) {
+      _authFailed = true;
+      lastErrorMessage = 'Discord Token ungültig oder abgelaufen (4004)';
+      _updateStatusNotifier();
+      return;
+    }
+
     _isConnecting = true;
     _isSessionReady = false;
     _reconnectTimer?.cancel();
@@ -243,6 +348,27 @@ class DiscordService {
     _updateStatusNotifier();
 
     try {
+      if (gatewayUrlOverride == null || tokenVerifierOverride != null) {
+        final verified = await verifyToken(currentToken);
+        if (!isEnabled || token != currentToken) {
+          _isConnecting = false;
+          _updateStatusNotifier();
+          return;
+        }
+        if (verified == false) {
+          _markTokenFailed(currentToken);
+          _authFailed = true;
+          _isConnecting = false;
+          lastErrorMessage = 'Discord Token ungültig oder abgelaufen (4004)';
+          _clearSessionState();
+          _updateStatusNotifier();
+          printERROR(
+              'Gateway authentication failed (4004). Please re-login in Discord settings.',
+              tag: 'Discord');
+          return;
+        }
+      }
+
       final targetUrl = _buildResumeUrl();
       printINFO('Connecting to Discord Gateway ($targetUrl)...', tag: 'Discord');
       _socket = await WebSocket.connect(targetUrl)
@@ -280,6 +406,7 @@ class DiscordService {
 
   void _handleCloseCode(int? code, String reason) {
     if (code == 4004) {
+      _markTokenFailed(token);
       _authFailed = true;
       lastErrorMessage = 'Discord Token ungültig oder abgelaufen (4004)';
       printERROR(
@@ -377,6 +504,7 @@ class DiscordService {
           _resumeGatewayUrl = d['resume_gateway_url']?.toString();
           _isSessionReady = true;
           _authFailed = false;
+          _clearFailedTokenMarker();
           _reconnectAttempts = 0;
           lastErrorMessage = null;
           _resetSentCache();
@@ -388,6 +516,7 @@ class DiscordService {
         } else if (t == 'RESUMED') {
           _isSessionReady = true;
           _authFailed = false;
+          _clearFailedTokenMarker();
           _reconnectAttempts = 0;
           lastErrorMessage = null;
           _updateStatusNotifier();
@@ -494,27 +623,50 @@ class DiscordService {
     }
   }
 
+  @visibleForTesting
+  static Map<String, dynamic> buildIdentifyProperties({
+    bool? isAndroidOverride,
+    String? osOverride,
+    String? localeOverride,
+  }) {
+    final bool isAndroid = isAndroidOverride ?? Platform.isAndroid;
+    final String osName = osOverride ??
+        (isAndroid
+            ? 'Android'
+            : (Platform.isWindows
+                ? 'Windows'
+                : (Platform.isMacOS ? 'Mac OS X' : 'Linux')));
+    final rawLocale = (localeOverride ?? Platform.localeName).replaceAll('_', '-');
+    final systemLocale = rawLocale.isNotEmpty ? rawLocale : 'en-US';
+    if (isAndroid) {
+      return {
+        "os": "Android",
+        "browser": "Discord Android",
+        "device": "Discord Android",
+        "system_locale": systemLocale,
+      };
+    }
+    return {
+      "os": osName,
+      "browser": "Discord Client",
+      "device": osName,
+      "system_locale": systemLocale,
+    };
+  }
+
   void _sendIdentify() {
     if (!_isSocketOpen) return;
     final currentToken = token;
     if (currentToken.isEmpty) return;
 
-    final String osName = Platform.isAndroid
-        ? 'Android'
-        : (Platform.isWindows ? 'Windows' : (Platform.isMacOS ? 'Mac OS X' : 'Linux'));
-
     final identifyPayload = {
       "op": 2,
       "d": {
         "token": currentToken,
-        "capabilities": 65,
+        "capabilities": 16381,
         "compress": false,
         "large_threshold": 100,
-        "properties": {
-          "os": osName,
-          "browser": "Discord Client",
-          "device": "SPY MUSIC",
-        },
+        "properties": buildIdentifyProperties(),
         "presence": _buildPresencePayload(
           title: currentTitle,
           artist: currentArtist,

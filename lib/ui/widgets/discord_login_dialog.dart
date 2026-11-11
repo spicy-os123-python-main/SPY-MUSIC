@@ -17,6 +17,8 @@ class _DiscordLoginDialogState extends State<DiscordLoginDialog> {
   bool _isLoading = true;
   Timer? _tokenCheckTimer;
   bool _tokenFound = false;
+  bool _isCheckingToken = false;
+  final Set<String> _rejectedTokens = {};
 
   @override
   void initState() {
@@ -27,9 +29,7 @@ class _DiscordLoginDialogState extends State<DiscordLoginDialog> {
   void _initWebView() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent(
-        "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-      )
+      ..setUserAgent(DiscordService.mobileUserAgent)
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (url) {
@@ -43,45 +43,35 @@ class _DiscordLoginDialogState extends State<DiscordLoginDialog> {
             return NavigationDecision.navigate;
           },
         ),
-      )
-      ..loadRequest(Uri.parse('https://discord.com/login'));
+      );
 
-    // Periodically poll for login token
-    _tokenCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (!_tokenFound) {
-        _checkForToken();
-      }
+    // Clear stale WebView cookies/storage first so a revoked session is not
+    // immediately re-read instead of letting the user sign in fresh.
+    Future(() async {
+      try {
+        await WebViewCookieManager().clearCookies();
+      } catch (_) {}
+      try {
+        await _controller.clearLocalStorage();
+      } catch (_) {}
+      if (!mounted) return;
+      await _controller.loadRequest(Uri.parse('https://discord.com/login'));
+      _tokenCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        if (!_tokenFound && !_isCheckingToken) {
+          _checkForToken();
+        }
+      });
     });
   }
 
   Future<void> _checkForToken() async {
-    if (_tokenFound) return;
+    if (_tokenFound || _isCheckingToken) return;
+    _isCheckingToken = true;
 
     try {
-      // JavaScript snippet to extract token from Discord Web client (supports minified exports & iframe fallback)
+      // Check localStorage/iframe first (written upon real login), then webpack TokenStore.
       const jsCode = """
       (function() {
-        try {
-          var mods = [];
-          webpackChunkdiscord_app.push([[''],{},function(e){
-            for (var c in e.c) mods.push(e.c[c]);
-          }]);
-          for (var i = 0; i < mods.length; i++) {
-            var exp = mods[i] && mods[i].exports;
-            if (!exp) continue;
-            if (exp.default && typeof exp.default.getToken === 'function') {
-              var t1 = exp.default.getToken();
-              if (t1 && t1.length > 20) return t1;
-            }
-            var vals = Object.values(exp);
-            for (var j = 0; j < vals.length; j++) {
-              if (vals[j] && typeof vals[j].getToken === 'function') {
-                var t2 = vals[j].getToken();
-                if (t2 && t2.length > 20) return t2;
-              }
-            }
-          }
-        } catch(e) {}
         try {
           var ls = window.localStorage.getItem('token');
           if (ls) return ls.replace(/["']/g, '');
@@ -93,40 +83,67 @@ class _DiscordLoginDialogState extends State<DiscordLoginDialog> {
           f.remove();
           if (fls) return fls.replace(/["']/g, '');
         } catch(e) {}
+        try {
+          var mods = [];
+          webpackChunkdiscord_app.push([[''],{},function(e){
+            for (var c in e.c) mods.push(e.c[c]);
+          }]);
+          for (var i = 0; i < mods.length; i++) {
+            var exp = mods[i] && mods[i].exports;
+            if (!exp) continue;
+            if (exp.default && typeof exp.default.getToken === 'function') {
+              var t1 = exp.default.getToken();
+              if (typeof t1 === 'string' && t1.indexOf('.') !== -1 && t1.length > 30) return t1;
+            }
+            var vals = Object.values(exp);
+            for (var j = 0; j < vals.length; j++) {
+              if (vals[j] && typeof vals[j].getToken === 'function') {
+                var t2 = vals[j].getToken();
+                if (typeof t2 === 'string' && t2.indexOf('.') !== -1 && t2.length > 30) return t2;
+              }
+            }
+          }
+        } catch(e) {}
         return '';
       })();
       """;
 
       final result = await _controller.runJavaScriptReturningResult(jsCode);
-      var token = result.toString().trim();
-      // Unwrap JSON-quoted or escaped strings returned by Android WebView
-      while ((token.startsWith('"') && token.endsWith('"') && token.length > 2) ||
-          (token.startsWith("'") && token.endsWith("'") && token.length > 2)) {
-        token = token.substring(1, token.length - 1).trim();
-      }
-      token = token.replaceAll(r'\"', '').replaceAll('"', '').trim();
+      var rawToken = result.toString().replaceAll(r'\"', '');
+      final token = DiscordService.sanitizeToken(rawToken);
 
       if (token.isNotEmpty &&
           token != 'null' &&
           token != 'undefined' &&
-          token.length > 20) {
-        _tokenFound = true;
-        _tokenCheckTimer?.cancel();
+          !_rejectedTokens.contains(token) &&
+          DiscordService.looksLikeDiscordToken(token)) {
+        final verified = await DiscordService().verifyToken(token);
+        if (verified == false) {
+          _rejectedTokens.add(token);
+          return;
+        }
+        if (verified == true) {
+          _tokenFound = true;
+          _tokenCheckTimer?.cancel();
 
-        DiscordService().setToken(token);
+          DiscordService().setToken(token);
 
-        if (mounted) {
-          Navigator.of(context).pop(true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            snackbar(
-              context,
-              "discordLoginSuccess".tr,
-              size: SanckBarSize.BIG,
-            ),
-          );
+          if (mounted) {
+            Navigator.of(context).pop(true);
+            ScaffoldMessenger.of(context).showSnackBar(
+              snackbar(
+                context,
+                "discordLoginSuccess".tr,
+                size: SanckBarSize.BIG,
+              ),
+            );
+          }
         }
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _isCheckingToken = false;
+    }
   }
 
   @override

@@ -21,6 +21,11 @@ void main() {
     discord.disconnectGateway();
     discord.gatewayUrlOverride = null;
     discord.externalAssetResolverOverride = null;
+    discord.tokenVerifierOverride = null;
+    final box = Hive.box('AppPrefs');
+    await box.put('discordRpcEnabled', true);
+    await box.delete('discordFailedTokenSig');
+    await box.delete('discordUserToken');
   });
 
   tearDownAll(() async {
@@ -199,6 +204,65 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 250));
       expect(discord.connectionStatusNotifier.value, 'auth_failed');
       expect(connectionCount, 1);
+
+      // Re-initializing with the exact same failed token must NOT reconnect or spam 4004.
+      await Hive.box('AppPrefs').put('discordRpcEnabled', true);
+      discord.init();
+      await Future.delayed(const Duration(milliseconds: 200));
+      expect(discord.isEnabled, isTrue);
+      expect(connectionCount, 1);
+      expect(discord.connectionStatusNotifier.value, 'auth_failed');
+    } finally {
+      await server.close(force: true);
+    }
+  });
+
+  test('validates token format, Identify properties, and skips Gateway on 401',
+      () async {
+    const syntheticStandard =
+        '${'test_user_id_part123'}.${'tsPart'}.${'hmac_part_1234567890'}';
+    const syntheticMfa = 'mfa.${'synthetic_test_segment_12345'}';
+    expect(DiscordService.looksLikeDiscordToken(syntheticStandard), isTrue);
+    expect(DiscordService.looksLikeDiscordToken(syntheticMfa), isTrue);
+    expect(
+        DiscordService.looksLikeDiscordToken('not_a_real_webpack_string_12345'),
+        isFalse);
+
+    final androidProps = DiscordService.buildIdentifyProperties(
+      isAndroidOverride: true,
+      localeOverride: 'de_DE',
+    );
+    expect(androidProps['os'], 'Android');
+    expect(androidProps['browser'], 'Discord Android');
+    expect(androidProps['device'], 'Discord Android');
+    expect(androidProps['system_locale'], 'de-DE');
+
+    int socketAttempts = 0;
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.transform(WebSocketTransformer()).listen((WebSocket ws) {
+      socketAttempts++;
+      ws.close();
+    });
+
+    try {
+      final discord = DiscordService();
+      discord.gatewayUrlOverride = 'ws://127.0.0.1:${server.port}';
+      discord.tokenVerifierOverride = (_) async => false;
+      discord.isEnabled = true;
+
+      discord.setToken('revoked_token_123456789012');
+      await Future.delayed(const Duration(milliseconds: 150));
+
+      expect(discord.connectionStatusNotifier.value, 'auth_failed');
+      expect(socketAttempts, 0);
+
+      // Restarting or toggling RPC stays auth_failed without touching Gateway.
+      await Hive.box('AppPrefs').put('discordRpcEnabled', true);
+      discord.init();
+      discord.toggleStatus(true);
+      await Future.delayed(const Duration(milliseconds: 150));
+      expect(discord.isEnabled, isTrue);
+      expect(socketAttempts, 0);
     } finally {
       await server.close(force: true);
     }
