@@ -418,10 +418,9 @@ class HomeScreenController extends GetxController {
   void whenHomeScreenOnTop() {
     if (Get.find<SettingsScreenController>().isBottomNavBarEnabled.isTrue) {
       isHomeSreenOnTop.value = true;
-      final playerCon = Get.find<PlayerController>();
-      if (!playerCon.initFlagForPlayer) {
-        playerCon.playerPanelMinHeight.value = 75.0;
-      }
+      Get.find<PlayerController>().syncPlayerPanelMinHeight(
+        isBottomNavBarEnabled: true,
+      );
     }
   }
 

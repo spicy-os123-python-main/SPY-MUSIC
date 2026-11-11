@@ -563,6 +563,47 @@ class PlayerController extends GetxController
     }
   }
 
+  /// Computes the collapsed MiniPlayer height for the current layout.
+  ///
+  /// When the bottom navigation bar is enabled, [Home] renders [BottomNavBar]
+  /// below [SlidingUpPanel] and already applies bottom system insets on every
+  /// nested route, so [MiniPlayer] must not add [bottomPadding] a second time.
+  static double computeMiniPlayerMinHeight({
+    required double screenWidth,
+    required bool isBottomNavBarEnabled,
+    required double bottomPadding,
+  }) {
+    if (isBottomNavBarEnabled) {
+      return 75.0;
+    }
+    final baseHeight = screenWidth > 800 ? 105.0 : 75.0;
+    return baseHeight + (bottomPadding > 0 ? bottomPadding : 0.0);
+  }
+
+  /// Keeps [playerPanelMinHeight] synchronized when layout metrics or bottom
+  /// navigation bar visibility change after player initialization.
+  void syncPlayerPanelMinHeight({
+    double? screenWidth,
+    double? bottomPadding,
+    bool? isBottomNavBarEnabled,
+  }) {
+    if (initFlagForPlayer) return;
+    final ctx = Get.context;
+    final resolvedWidth = screenWidth ?? (ctx != null ? Get.size.width : 400.0);
+    final resolvedBottomPadding =
+        bottomPadding ?? (ctx != null ? Get.mediaQuery.padding.bottom : 0.0);
+    final navEnabled = isBottomNavBarEnabled ??
+        Get.find<SettingsScreenController>().isBottomNavBarEnabled.isTrue;
+    final targetHeight = computeMiniPlayerMinHeight(
+      screenWidth: resolvedWidth,
+      isBottomNavBarEnabled: navEnabled,
+      bottomPadding: resolvedBottomPadding,
+    );
+    if ((playerPanelMinHeight.value - targetHeight).abs() > 0.01) {
+      playerPanelMinHeight.value = targetHeight;
+    }
+  }
+
   void _playerPanelCheck({bool restoreSession = false}) {
     final isWideScreen = Get.size.width > 800;
     final autoOpenPlayer = Hive.box("AppPrefs").get("autoOpenPlayer") ?? true;
@@ -572,15 +613,8 @@ class PlayerController extends GetxController
     }
 
     if (initFlagForPlayer) {
-      final miniPlayerHeight = isWideScreen ? 105.0 : 75.0;
-      if (Get.find<SettingsScreenController>().isBottomNavBarEnabled.isFalse ||
-          getCurrentRouteName() != '/homeScreen') {
-        playerPanelMinHeight.value =
-            miniPlayerHeight + Get.mediaQuery.viewPadding.bottom;
-      } else {
-        playerPanelMinHeight.value = miniPlayerHeight;
-      }
       initFlagForPlayer = false;
+      syncPlayerPanelMinHeight(screenWidth: Get.size.width);
     }
   }
 

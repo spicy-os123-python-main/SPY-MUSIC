@@ -211,7 +211,14 @@ class PlaylistScreen extends StatelessWidget {
                                   : landscape
                                       ? 150
                                       : 200,
-                              bottom: 200,
+                              bottom: playerController.playerPanelMinHeight
+                                          .value +
+                                      125.0 >
+                                  200.0
+                                  ? playerController
+                                          .playerPanelMinHeight.value +
+                                      125.0
+                                  : 200.0,
                             ),
                             itemCount: playlistController.songList.isEmpty ||
                                     playlistController.isContentFetched.isFalse
