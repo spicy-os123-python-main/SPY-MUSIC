@@ -215,6 +215,19 @@ class Body extends StatelessWidget {
                                     homeScreenController.quickPicks.value,
                                 scrollController: scrollController);
                           }),
+                          Obx(() {
+                            final spContent =
+                                homeScreenController.spotifyQuickPicks.value;
+                            if (spContent.songList.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            final scrollController = ScrollController();
+                            homeScreenController.contentScrollControllers
+                                .add(scrollController);
+                            return QuickPicksWidget(
+                                content: spContent,
+                                scrollController: scrollController);
+                          }),
                           ...getWidgetList(
                               homeScreenController.middleContent,
                               homeScreenController),

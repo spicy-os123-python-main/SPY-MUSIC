@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
@@ -11,12 +13,31 @@ class PlatformSearchService {
     connectTimeout: const Duration(seconds: 8),
     receiveTimeout: const Duration(seconds: 8),
     headers: {
-      'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'application/json, text/plain, */*',
+      'User-Agent': 'SPYMUSIC/1.12 (Android)',
+      'Accept': 'application/json',
       'Accept-Language': 'en-US,en;q=0.9,de;q=0.8',
     },
   ));
+
+  /// Decode Map responses even when APIs (e.g. Apple iTunes `text/javascript`)
+  /// return JSON as a raw String rather than `application/json`.
+  static Map<String, dynamic>? _decodeJsonMap(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    if (raw is String) {
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) return null;
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is Map<String, dynamic>) return decoded;
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
 
   /// Cache of matched stream IDs for Spotify/Amazon tracks
   static final Map<String, String> _matchCache = {};
@@ -123,7 +144,8 @@ class PlatformSearchService {
   }
 
   /// Direct stream resolver for Deezer / Spotify tracks without any YouTube fallback
-  static Future<String?> getDeezerStreamUrl(String trackId, {String? query}) async {
+  static Future<String?> getDeezerStreamUrl(String trackId,
+      {String? query}) async {
     final cleanId = trackId.startsWith('sp_')
         ? trackId.substring(3)
         : (trackId.startsWith('az_') ? trackId.substring(3) : trackId);
@@ -131,10 +153,12 @@ class PlatformSearchService {
     // 1. Direct Deezer track lookup by ID
     if (RegExp(r'^\d+$').hasMatch(cleanId)) {
       try {
-        final url = 'https://api.deezer.com/track/$cleanId';
-        final response = await _dio.get(url);
-        if (response.statusCode == 200 && response.data != null && response.data is Map) {
-          final preview = response.data['preview']?.toString();
+        final response =
+            await _dio.get('https://api.deezer.com/track/$cleanId');
+        final map =
+            response.statusCode == 200 ? _decodeJsonMap(response.data) : null;
+        if (map != null && map['error'] == null) {
+          final preview = map['preview']?.toString();
           if (preview != null && preview.isNotEmpty) {
             printINFO("Deezer stream resolved by ID for $trackId: $preview");
             return preview;
@@ -151,10 +175,12 @@ class PlatformSearchService {
         final sUrl =
             'https://api.deezer.com/search?q=${Uri.encodeComponent(query)}&limit=1';
         final response = await _dio.get(sUrl);
-        if (response.statusCode == 200 && response.data != null && response.data is Map) {
-          final data = response.data['data'] as List? ?? [];
+        final map =
+            response.statusCode == 200 ? _decodeJsonMap(response.data) : null;
+        if (map != null && map['error'] == null) {
+          final data = map['data'] as List? ?? [];
           if (data.isNotEmpty && data[0] is Map) {
-            final preview = data[0]['preview']?.toString();
+            final preview = (data[0] as Map)['preview']?.toString();
             if (preview != null && preview.isNotEmpty) {
               printINFO("Deezer stream resolved by query for $trackId: $preview");
               return preview;
@@ -170,10 +196,12 @@ class PlatformSearchService {
         final iUrl =
             'https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=1';
         final response = await _dio.get(iUrl);
-        if (response.statusCode == 200 && response.data != null && response.data is Map) {
-          final results = response.data['results'] as List? ?? [];
+        final map =
+            response.statusCode == 200 ? _decodeJsonMap(response.data) : null;
+        if (map != null) {
+          final results = map['results'] as List? ?? [];
           if (results.isNotEmpty && results[0] is Map) {
-            final preview = results[0]['previewUrl']?.toString();
+            final preview = (results[0] as Map)['previewUrl']?.toString();
             if (preview != null && preview.isNotEmpty) {
               printINFO("iTunes stream resolved for $trackId: $preview");
               return preview;
@@ -195,103 +223,178 @@ class PlatformSearchService {
       final url =
           'https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=$limit';
       final response = await _dio.get(url);
-      if (response.statusCode == 200 && response.data != null) {
-        final rawData = response.data;
-        final list = rawData is Map
-            ? (rawData['results'] as List? ?? [])
-            : [];
+      final rawData =
+          response.statusCode == 200 ? _decodeJsonMap(response.data) : null;
+      if (rawData != null) {
+        final list = rawData['results'] as List? ?? [];
         return list
             .whereType<Map>()
+            .where((item) => item['trackName'] != null)
             .map((item) => _mapItunesTrack(item, prefix, platform))
             .toList();
       }
-    } catch (_) {}
+    } catch (e) {
+      printINFO("iTunes search error: $e");
+    }
     return [];
+  }
+
+  static MediaItem? _mapItunesRssEntry(
+      Map entry, String prefix, String platform) {
+    final id = entry['id']?['attributes']?['im:id']?.toString() ?? '';
+    final title = entry['im:name']?['label']?.toString() ?? '';
+    if (title.isEmpty) return null;
+    final artist = entry['im:artist']?['label']?.toString() ?? '$platform Artist';
+    final album = entry['im:collection']?['im:name']?['label']?.toString() ??
+        '$platform Charts';
+
+    String? cover;
+    final images = entry['im:image'] as List? ?? [];
+    if (images.isNotEmpty && images.last is Map) {
+      final rawUrl = (images.last as Map)['label']?.toString();
+      if (rawUrl != null && rawUrl.isNotEmpty) {
+        cover = rawUrl.replaceAll(RegExp(r'\d+x\d+bb'), '600x600bb');
+      }
+    }
+
+    String preview = '';
+    final links = entry['link'] as List? ?? [];
+    for (final link in links) {
+      if (link is Map && link['attributes']?['rel'] == 'enclosure') {
+        preview = link['attributes']?['href']?.toString() ?? '';
+        if (preview.isNotEmpty) break;
+      }
+    }
+
+    const durationSec = 180;
+    return MediaItem(
+      id: '${prefix}_${id.isNotEmpty ? id : title.hashCode}',
+      title: title,
+      artist: artist,
+      album: album,
+      duration: const Duration(seconds: durationSec),
+      artUri: cover != null ? Uri.tryParse(cover) : null,
+      extras: {
+        'platform': platform,
+        'is$platform': true,
+        'searchQuery': '$title $artist',
+        'artist': artist,
+        'artists': [
+          {'name': artist, 'id': ''}
+        ],
+        'originalId': id,
+        'url': preview.isNotEmpty ? preview : null,
+        'previewUrl': preview.isNotEmpty ? preview : null,
+        'streamSource': 'itunes',
+        'duration': durationSec,
+        'length': '3:00',
+      },
+    );
+  }
+
+  static Future<List<MediaItem>> _getItunesTopSongs(
+      String prefix, String platform,
+      {int limit = 25, String country = 'de'}) async {
+    try {
+      final safeLimit = limit.clamp(1, 50);
+      final url =
+          'https://itunes.apple.com/$country/rss/topsongs/limit=$safeLimit/json';
+      final response = await _dio.get(url);
+      final map =
+          response.statusCode == 200 ? _decodeJsonMap(response.data) : null;
+      final feed = map?['feed'];
+      final entries = (feed is Map ? feed['entry'] : null) as List? ?? [];
+      return entries
+          .whereType<Map>()
+          .map((e) => _mapItunesRssEntry(e, prefix, platform))
+          .whereType<MediaItem>()
+          .toList();
+    } catch (e) {
+      printINFO("iTunes RSS top songs error ($country): $e");
+      return [];
+    }
+  }
+
+  static Future<List<MediaItem>> _searchCatalog(
+      String query, String prefix, String platform,
+      {int limit = 25}) async {
+    try {
+      final url =
+          'https://api.deezer.com/search?q=${Uri.encodeComponent(query)}&limit=$limit';
+      final response = await _dio.get(url);
+      final map =
+          response.statusCode == 200 ? _decodeJsonMap(response.data) : null;
+      if (map != null && map['error'] == null) {
+        final data = map['data'] as List? ?? [];
+        if (data.isNotEmpty) {
+          return data
+              .whereType<Map>()
+              .map((item) => _mapDeezerTrack(item, prefix, platform))
+              .toList();
+        }
+      } else if (map?['error'] != null) {
+        printINFO("Deezer search returned error: ${map!['error']}");
+      }
+    } catch (e) {
+      printINFO("Deezer search unavailable, using iTunes fallback: $e");
+    }
+
+    // High-reliability fallback (iTunes Search API, no 403 blocks)
+    return await _searchItunes(query, prefix, platform, limit: limit);
+  }
+
+  static Future<List<MediaItem>> _getChartTracks(
+      String prefix, String platform,
+      {int limit = 25,
+      int index = 0,
+      String country = 'de',
+      String fallbackQuery = '2025 Hits'}) async {
+    try {
+      final url =
+          'https://api.deezer.com/chart/0/tracks?limit=$limit${index > 0 ? '&index=$index' : ''}';
+      final response = await _dio.get(url);
+      final map =
+          response.statusCode == 200 ? _decodeJsonMap(response.data) : null;
+      if (map != null && map['error'] == null) {
+        final data = map['data'] as List? ?? [];
+        final items = data
+            .whereType<Map>()
+            .map((item) => _mapDeezerTrack(item, prefix, platform))
+            .toList();
+        if (items.isNotEmpty) return items;
+      } else if (map?['error'] != null) {
+        printINFO("Deezer chart returned error: ${map!['error']}");
+      }
+    } catch (e) {
+      printINFO("Deezer chart error ($platform): $e");
+    }
+
+    final rssItems =
+        await _getItunesTopSongs(prefix, platform, limit: limit, country: country);
+    if (rssItems.isNotEmpty) return rssItems;
+
+    return await _searchCatalog(fallbackQuery, prefix, platform, limit: limit);
   }
 
   /// Search specifically for Spotify tracks
   static Future<List<MediaItem>> searchSpotify(String query,
-      {int limit = 25}) async {
-    try {
-      final url =
-          'https://api.deezer.com/search?q=${Uri.encodeComponent(query)}&limit=$limit';
-      final response = await _dio.get(url);
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data['data'] as List? ?? [];
-        if (data.isNotEmpty) {
-          return data
-              .whereType<Map>()
-              .map((item) => _mapDeezerTrack(item, 'sp', 'Spotify'))
-              .toList();
-        }
-      }
-    } catch (e) {
-      printINFO("Deezer search unavailable, using iTunes fallback: $e");
-    }
-
-    // High-reliability fallback (iTunes Search API, no 403 blocks)
-    return await _searchItunes(query, 'sp', 'Spotify', limit: limit);
-  }
+      {int limit = 25}) =>
+      _searchCatalog(query, 'sp', 'Spotify', limit: limit);
 
   /// Search specifically for Amazon Music tracks
   static Future<List<MediaItem>> searchAmazon(String query,
-      {int limit = 25}) async {
-    try {
-      final url =
-          'https://api.deezer.com/search?q=${Uri.encodeComponent(query)}&limit=$limit';
-      final response = await _dio.get(url);
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data['data'] as List? ?? [];
-        if (data.isNotEmpty) {
-          return data
-              .whereType<Map>()
-              .map((item) => _mapDeezerTrack(item, 'az', 'Amazon'))
-              .toList();
-        }
-      }
-    } catch (e) {
-      printINFO("Deezer search unavailable, using iTunes fallback: $e");
-    }
-
-    // High-reliability fallback (iTunes Search API, no 403 blocks)
-    return await _searchItunes(query, 'az', 'Amazon', limit: limit);
-  }
+      {int limit = 25}) =>
+      _searchCatalog(query, 'az', 'Amazon', limit: limit);
 
   /// Get current Spotify Top Hits for Home Screen
-  static Future<List<MediaItem>> getSpotifyTopHits({int limit = 25}) async {
-    try {
-      final url = 'https://api.deezer.com/chart/0/tracks?limit=$limit';
-      final response = await _dio.get(url);
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data['data'] as List? ?? [];
-        final items = data
-            .whereType<Map>()
-            .map((item) => _mapDeezerTrack(item, 'sp', 'Spotify'))
-            .toList();
-        if (items.isNotEmpty) return items;
-      }
-    } catch (_) {}
-    return await searchSpotify('Top Hits', limit: limit);
-  }
+  static Future<List<MediaItem>> getSpotifyTopHits({int limit = 25}) =>
+      _getChartTracks('sp', 'Spotify',
+          limit: limit, country: 'de', fallbackQuery: '2025 Hits');
 
   /// Get current Amazon Music Top Tracks for Home Screen
-  static Future<List<MediaItem>> getAmazonTopTracks({int limit = 25}) async {
-    try {
-      final url = 'https://api.deezer.com/chart/0/tracks?limit=$limit&index=25';
-      final response = await _dio.get(url);
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data['data'] as List? ?? [];
-        final items = data
-            .whereType<Map>()
-            .map((item) => _mapDeezerTrack(item, 'az', 'Amazon'))
-            .toList();
-        if (items.isNotEmpty) return items;
-      }
-    } catch (e) {
-      printERROR("getAmazonTopTracks error: $e");
-    }
-    return await searchAmazon('Popular Hits', limit: limit);
-  }
+  static Future<List<MediaItem>> getAmazonTopTracks({int limit = 25}) =>
+      _getChartTracks('az', 'Amazon',
+          limit: limit, index: 25, country: 'us', fallbackQuery: 'Popular Hits');
 
   /// Spotify and Amazon tracks carry official studio metadata (from Deezer/Spotify),
   /// so the audio is matched against official studio releases on YouTube Music FIRST.

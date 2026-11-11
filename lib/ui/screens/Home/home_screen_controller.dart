@@ -26,6 +26,7 @@ class HomeScreenController extends GetxController {
   final tabIndex = 0.obs;
   final networkError = false.obs;
   final quickPicks = QuickPicks([]).obs;
+  final spotifyQuickPicks = QuickPicks([], title: "🟢 Spotify Top Hits").obs;
   final middleContent = [].obs;
   final fixedContent = [].obs;
   final showVersionDialog = true.obs;
@@ -33,23 +34,56 @@ class HomeScreenController extends GetxController {
   final isHomeSreenOnTop = true.obs;
   final List<ScrollController> contentScrollControllers = [];
   bool reverseAnimationtransiton = false;
+  List<MediaItem> _cachedSpotifyHits = const [];
+  int _platformRequestId = 0;
+  MusicSource _activeSource = MusicSource.all;
 
   @override
   onInit() {
     super.onInit();
     loadContent();
+    _loadSpotifyHomeShelf();
     if (updateCheckFlag) _checkNewVersion();
     Future.delayed(const Duration(seconds: 4), () {
       BackupService().checkAndRunAutoBackup();
     });
   }
 
+  Future<List<MediaItem>> _getSpotifyHitsCached({int limit = 25}) async {
+    if (_cachedSpotifyHits.isNotEmpty) {
+      return _cachedSpotifyHits.take(limit).toList();
+    }
+    final tracks = await PlatformSearchService.getSpotifyTopHits(limit: 25);
+    if (tracks.isNotEmpty) {
+      _cachedSpotifyHits = tracks;
+    }
+    return tracks.take(limit).toList();
+  }
+
+  Future<void> _loadSpotifyHomeShelf({int? requestId}) async {
+    try {
+      final tracks = await _getSpotifyHitsCached(limit: 12);
+      if (_activeSource != MusicSource.all) return;
+      if (requestId != null && requestId != _platformRequestId) return;
+      spotifyQuickPicks.value =
+          QuickPicks(tracks, title: "🟢 Spotify Top Hits");
+    } catch (e) {
+      printERROR("Spotify home shelf error: $e");
+    }
+  }
+
   Future<void> filterByPlatform(MusicSource source) async {
+    final requestId = ++_platformRequestId;
+    _activeSource = source;
+    networkError.value = false;
+
     if (source == MusicSource.all) {
       loadContentFromNetwork();
+      _loadSpotifyHomeShelf(requestId: requestId);
       return;
     }
 
+    spotifyQuickPicks.value = QuickPicks([], title: "🟢 Spotify Top Hits");
     isContentFetched.value = false;
     try {
       List<MediaItem> tracks = [];
@@ -61,7 +95,7 @@ class HomeScreenController extends GetxController {
           title = "☁️ SoundCloud Viral & Remixes";
           break;
         case MusicSource.spotify:
-          tracks = await PlatformSearchService.getSpotifyTopHits(limit: 25);
+          tracks = await _getSpotifyHitsCached(limit: 25);
           title = "🟢 Spotify Top 50 Hits";
           break;
         case MusicSource.amazon:
@@ -81,6 +115,7 @@ class HomeScreenController extends GetxController {
           break;
       }
 
+      if (requestId != _platformRequestId) return;
       // Only the selected platform is shown, even if it returned nothing
       quickPicks.value = QuickPicks(tracks, title: title);
       middleContent.clear();
@@ -88,7 +123,9 @@ class HomeScreenController extends GetxController {
     } catch (e) {
       printERROR("Platform filter error: $e");
     } finally {
-      isContentFetched.value = true;
+      if (requestId == _platformRequestId) {
+        isContentFetched.value = true;
+      }
     }
   }
 

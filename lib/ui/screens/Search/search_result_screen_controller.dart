@@ -50,8 +50,13 @@ class SearchResultScreenController extends GetxController
     resultContent.clear();
     separatedResultContent.clear();
     railItems.clear();
-    tabController?.dispose();
+    final oldTabController = tabController;
     tabController = null;
+    if (oldTabController != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        oldTabController.dispose();
+      });
+    }
     await _getInitSearchResult();
   }
 
@@ -221,9 +226,13 @@ class SearchResultScreenController extends GetxController
       } else if (selectedPlatform == MusicSource.spotify) {
         printINFO("Exclusive Spotify Search for: $finalQuery");
         final spTracks = await PlatformSearchService.searchSpotify(finalQuery);
-        resultContent.value = {
-          "Songs": spTracks,
-        };
+        if (spTracks.isNotEmpty) {
+          resultContent.value = {
+            "Songs": spTracks,
+          };
+        } else {
+          resultContent.value = {};
+        }
       } else if (selectedPlatform == MusicSource.amazon) {
         printINFO("Exclusive Amazon Search for: $finalQuery");
         final azTracks = await PlatformSearchService.searchAmazon(finalQuery);
