@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.media.audiofx.AudioEffect
+import android.media.audiofx.LoudnessEnhancer
+import android.os.Build
 import androidx.annotation.Keep
 
 @Keep
@@ -32,6 +34,7 @@ class Equalizer {
             AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION,
             context
         )
+        applyLoudnessBoost(sessionId)
         println("Sent AudioEffect intent for opening")
     }
 
@@ -91,5 +94,54 @@ class Equalizer {
             e.printStackTrace()
         }
         return false
+    }
+
+    companion object {
+        // +2.5 dB (250 mB) (~33% linear amplitude / ~25% perceived loudness boost)
+        // using Android's native LoudnessEnhancer compressor/limiter so peaks
+        // stay clean without clipping or distortion.
+        private const val DEFAULT_LOUDNESS_BOOST_MB = 250
+        private val loudnessLock = Any()
+        private var loudnessEnhancer: LoudnessEnhancer? = null
+        private var loudnessSessionId: Int = AudioEffect.ERROR_BAD_VALUE
+
+        private fun applyLoudnessBoost(sessionId: Int) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT || sessionId <= 0) {
+                return
+            }
+            synchronized(loudnessLock) {
+                try {
+                    val existing = loudnessEnhancer
+                    if (existing != null && loudnessSessionId == sessionId) {
+                        existing.setTargetGain(DEFAULT_LOUDNESS_BOOST_MB)
+                        existing.setEnabled(true)
+                        return
+                    }
+                    releaseLoudnessBoostLocked()
+                    val enhancer = LoudnessEnhancer(sessionId).apply {
+                        setTargetGain(DEFAULT_LOUDNESS_BOOST_MB)
+                        setEnabled(true)
+                    }
+                    loudnessEnhancer = enhancer
+                    loudnessSessionId = sessionId
+                } catch (t: Throwable) {
+                    t.printStackTrace()
+                    releaseLoudnessBoostLocked()
+                }
+            }
+        }
+
+        private fun releaseLoudnessBoostLocked() {
+            try {
+                loudnessEnhancer?.setEnabled(false)
+            } catch (_: Throwable) {
+            }
+            try {
+                loudnessEnhancer?.release()
+            } catch (_: Throwable) {
+            }
+            loudnessEnhancer = null
+            loudnessSessionId = AudioEffect.ERROR_BAD_VALUE
+        }
     }
 }
