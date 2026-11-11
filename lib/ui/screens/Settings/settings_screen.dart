@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:spymusic/utils/lang_mapping.dart';
@@ -19,6 +21,7 @@ import '../../themes/interaction_animations/interaction_animation_types.dart';
 import '../../themes/components/spy_button_animation.dart';
 import 'components/custom_expansion_tile.dart';
 import 'components/auto_backup_settings_widget.dart';
+import 'components/support_links_bar.dart';
 import 'settings_screen_controller.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -30,7 +33,9 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settingsController = Get.find<SettingsScreenController>();
-    final topPadding = context.isLandscape ? 50.0 : 90.0;
+    final safeTop = MediaQuery.paddingOf(context).top;
+    final baseTop = context.isLandscape ? 50.0 : 90.0;
+    final topPadding = math.max(safeTop + 6.0, baseTop - 24.0);
     final isDesktop = GetPlatform.isDesktop;
     return Padding(
       padding: isBottomNavActive
@@ -39,12 +44,26 @@ class SettingsScreen extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              "settings".tr,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "settings".tr,
+                      maxLines: 1,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const SupportLinksBar(),
+            ],
           ),
           Expanded(
               child: ListView(
