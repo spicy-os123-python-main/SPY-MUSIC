@@ -58,18 +58,40 @@ class _DiscordLoginDialogState extends State<DiscordLoginDialog> {
     if (_tokenFound) return;
 
     try {
-      // JavaScript snippet to extract token from Discord Web client
+      // JavaScript snippet to extract token from Discord Web client (supports minified exports & iframe fallback)
       const jsCode = """
       (function() {
         try {
-          var t = (webpackChunkdiscord_app.push([[''],{},e=>{m=[];for(let c in e.c)m.push(e.c[c])}]),m)
-                  .find(m => m?.exports?.default?.getToken !== void 0)
-                  ?.exports?.default?.getToken();
-          if (t && t.length > 20) return t;
+          var mods = [];
+          webpackChunkdiscord_app.push([[''],{},function(e){
+            for (var c in e.c) mods.push(e.c[c]);
+          }]);
+          for (var i = 0; i < mods.length; i++) {
+            var exp = mods[i] && mods[i].exports;
+            if (!exp) continue;
+            if (exp.default && typeof exp.default.getToken === 'function') {
+              var t1 = exp.default.getToken();
+              if (t1 && t1.length > 20) return t1;
+            }
+            var vals = Object.values(exp);
+            for (var j = 0; j < vals.length; j++) {
+              if (vals[j] && typeof vals[j].getToken === 'function') {
+                var t2 = vals[j].getToken();
+                if (t2 && t2.length > 20) return t2;
+              }
+            }
+          }
         } catch(e) {}
         try {
           var ls = window.localStorage.getItem('token');
-          if (ls) return ls.replace(/"/g, '');
+          if (ls) return ls.replace(/["']/g, '');
+        } catch(e) {}
+        try {
+          var f = document.createElement('iframe');
+          document.body.appendChild(f);
+          var fls = f.contentWindow && f.contentWindow.localStorage.getItem('token');
+          f.remove();
+          if (fls) return fls.replace(/["']/g, '');
         } catch(e) {}
         return '';
       })();
@@ -77,12 +99,17 @@ class _DiscordLoginDialogState extends State<DiscordLoginDialog> {
 
       final result = await _controller.runJavaScriptReturningResult(jsCode);
       var token = result.toString().trim();
-      // Remove any surrounding quotes from JS evaluation
-      if (token.startsWith('"') && token.endsWith('"') && token.length > 2) {
-        token = token.substring(1, token.length - 1);
+      // Unwrap JSON-quoted or escaped strings returned by Android WebView
+      while ((token.startsWith('"') && token.endsWith('"') && token.length > 2) ||
+          (token.startsWith("'") && token.endsWith("'") && token.length > 2)) {
+        token = token.substring(1, token.length - 1).trim();
       }
+      token = token.replaceAll(r'\"', '').replaceAll('"', '').trim();
 
-      if (token.isNotEmpty && token != 'null' && token != '""' && token.length > 20) {
+      if (token.isNotEmpty &&
+          token != 'null' &&
+          token != 'undefined' &&
+          token.length > 20) {
         _tokenFound = true;
         _tokenCheckTimer?.cancel();
 

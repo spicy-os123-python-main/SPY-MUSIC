@@ -1,21 +1,35 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:audio_service/audio_service.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
-import 'package:audio_service/audio_service.dart';
+import '../utils/helper.dart';
 
 /// SPY MUSIC Discord Rich Presence & Activity Service
 /// Supports:
-/// 1. Direct Discord Gateway connection for Android & Mobile (live status)
-/// 2. Live progress timestamps (start & end) matching playback
-/// 3. Track artwork thumbnail (large_image) & SPY MUSIC badge (small_image)
-/// 4. Clickable interactive buttons ("Listen on SPY Music", "Get SPY Music")
-/// 5. Resilient Gateway connection with Opcode 6 Resume & rate-limit throttling
+/// 1. Direct Discord Gateway WebSocket connection with user token (Android & Desktop)
+/// 2. Official `mp:external/...` asset resolution via Discord's external-assets endpoint
+/// 3. Live progress timestamps (start & end), cover art, and interactive buttons
+/// 4. Session readiness guard (never sends op:3 before READY/RESUMED) + Opcode 6 Resume
 class DiscordService {
   static final DiscordService _instance = DiscordService._internal();
   factory DiscordService() => _instance;
   DiscordService._internal();
+
+  /// Public music RPC application ID required by Discord Gateway for assets & buttons.
+  static const String _applicationId = '962990036020756480';
+  static const String _logoUrl =
+      'https://raw.githubusercontent.com/spicy-os123-python-main/SPY-MUSIC/main/assets/logo/spy_music_logo.png';
+  static const String _gatewayQuery = '?v=10&encoding=json';
+  static const String _defaultGatewayUrl = 'wss://gateway.discord.gg/$_gatewayQuery';
+
+  static final Dio _apiDio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 6),
+    receiveTimeout: const Duration(seconds: 6),
+    validateStatus: (code) => code != null && code < 500,
+  ));
 
   bool isEnabled = false;
   String? currentTitle;
@@ -32,14 +46,22 @@ class DiscordService {
   String? _lastSentArtist;
   String? _lastSentArtUri;
   bool? _lastSentIsPlaying;
+  int _presenceDispatchSeq = 0;
+
+  // Resolved mp:external asset cache (saves requests and prevents raw URLs)
+  final Map<String, String> _externalAssetCache = {};
+  final Set<String> _failedAssetUrls = {};
 
   WebSocket? _socket;
   Timer? _heartbeatTimer;
+  Timer? _initialHeartbeatTimer;
   Timer? _reconnectTimer;
   Timer? _debounceTimer;
   Timer? _healthCheckTimer;
   Timer? _pauseGraceTimer;
   bool _isConnecting = false;
+  bool _isSessionReady = false;
+  bool _authFailed = false;
   bool _heartbeatAckReceived = true;
   int _reconnectAttempts = 0;
   int _heartbeatInterval = 41250;
@@ -49,32 +71,89 @@ class DiscordService {
   int? _lastSequence;
   String? _resumeGatewayUrl;
 
+  /// Reactive connection state for Settings UI:
+  /// 'disconnected' | 'connecting' | 'connected' | 'auth_failed'
+  final ValueNotifier<String> connectionStatusNotifier =
+      ValueNotifier<String>('disconnected');
+  String? lastErrorMessage;
+
+  @visibleForTesting
+  String? gatewayUrlOverride;
+
+  @visibleForTesting
+  Future<String?> Function(String url)? externalAssetResolverOverride;
+
+  static String _sanitizeToken(String raw) {
+    var cleaned = raw.trim();
+    if (cleaned.toLowerCase().startsWith('bearer ')) {
+      cleaned = cleaned.substring(7).trim();
+    }
+    while ((cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2) ||
+        (cleaned.startsWith("'") && cleaned.endsWith("'") && cleaned.length >= 2)) {
+      cleaned = cleaned.substring(1, cleaned.length - 1).trim();
+    }
+    return cleaned.replaceAll(RegExp(r'[\r\n\s]+'), '');
+  }
+
   String get token {
     try {
-      return Hive.box('AppPrefs').get('discordUserToken', defaultValue: '') ?? '';
+      final raw =
+          Hive.box('AppPrefs').get('discordUserToken', defaultValue: '') ?? '';
+      return _sanitizeToken(raw.toString());
     } catch (_) {
       return '';
     }
   }
 
-  bool get isGatewayConnected => _socket != null && _socket!.readyState == WebSocket.open;
+  bool get _isSocketOpen =>
+      _socket != null && _socket!.readyState == WebSocket.open;
+
+  bool get isGatewayConnected => _isSocketOpen && _isSessionReady;
+
+  void _updateStatusNotifier() {
+    if (_authFailed) {
+      connectionStatusNotifier.value = 'auth_failed';
+    } else if (isGatewayConnected) {
+      connectionStatusNotifier.value = 'connected';
+    } else if (_isConnecting || (_isSocketOpen && !_isSessionReady)) {
+      connectionStatusNotifier.value = 'connecting';
+    } else {
+      connectionStatusNotifier.value = 'disconnected';
+    }
+  }
+
+  void _resetSentCache() {
+    _lastSentTitle = null;
+    _lastSentArtist = null;
+    _lastSentArtUri = null;
+    _lastSentIsPlaying = null;
+  }
+
+  void _clearSessionState() {
+    _sessionId = null;
+    _lastSequence = null;
+    _resumeGatewayUrl = null;
+  }
 
   void init() {
     try {
       final box = Hive.box('AppPrefs');
       isEnabled = box.get('discordRpcEnabled', defaultValue: true);
-      debugPrint('[SPY MUSIC Discord] Service initialized. Enabled: $isEnabled');
+      printINFO('Service initialized (enabled: $isEnabled, hasToken: ${token.isNotEmpty})',
+          tag: 'Discord');
       _startHealthCheck();
       if (isEnabled && token.isNotEmpty) {
         connectGateway();
       }
     } catch (e) {
-      debugPrint('[SPY MUSIC Discord] Init error: $e');
+      printERROR('Init error: $e', tag: 'Discord');
     }
   }
 
   void toggleStatus(bool enable) {
     isEnabled = enable;
+    _authFailed = false;
+    lastErrorMessage = null;
     try {
       Hive.box('AppPrefs').put('discordRpcEnabled', enable);
     } catch (_) {}
@@ -90,88 +169,152 @@ class DiscordService {
       clearPresence();
       disconnectGateway();
     }
+    _updateStatusNotifier();
   }
 
   void setToken(String newToken) {
+    final cleaned = _sanitizeToken(newToken);
     try {
-      Hive.box('AppPrefs').put('discordUserToken', newToken.trim());
+      Hive.box('AppPrefs').put('discordUserToken', cleaned);
     } catch (_) {}
 
-    _sessionId = null;
-    _lastSequence = null;
-    _resumeGatewayUrl = null;
+    _authFailed = false;
+    lastErrorMessage = null;
+    _reconnectAttempts = 0;
+    _externalAssetCache.clear();
+    _failedAssetUrls.clear();
+    _clearSessionState();
     disconnectGateway();
-    if (isEnabled && newToken.trim().isNotEmpty) {
+    if (isEnabled && cleaned.isNotEmpty) {
       connectGateway();
     }
+    _updateStatusNotifier();
   }
 
   void _startHealthCheck() {
     _healthCheckTimer?.cancel();
-    _healthCheckTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (isEnabled && token.isNotEmpty) {
-        if (!isGatewayConnected && !_isConnecting) {
-          debugPrint('[SPY MUSIC Discord] Health check: Reconnecting inactive gateway...');
-          connectGateway();
-        } else if (isGatewayConnected && _currentIsPlaying && currentTitle != null) {
-          // Keep Discord Rich Presence updated every 15s without wasting data during normal playback
-          _sendPresencePayload(isPlaying: true, force: true);
-        }
+    _healthCheckTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      if (!isEnabled || token.isEmpty || _authFailed) return;
+      if (!_isSocketOpen && !_isConnecting) {
+        printINFO('Health check: Reconnecting inactive gateway...', tag: 'Discord');
+        connectGateway();
+      } else if (isGatewayConnected &&
+          _currentIsPlaying &&
+          currentTitle != null &&
+          (_lastSentTitle != currentTitle || _lastSentIsPlaying != true)) {
+        // Resend only if current state is out of sync (timestamps run client-side)
+        _sendPresencePayload(isPlaying: true);
       }
     });
+  }
+
+  String _buildResumeUrl() {
+    if (gatewayUrlOverride != null && gatewayUrlOverride!.isNotEmpty) {
+      return gatewayUrlOverride!;
+    }
+    if (_sessionId != null &&
+        _resumeGatewayUrl != null &&
+        _resumeGatewayUrl!.isNotEmpty) {
+      var base = _resumeGatewayUrl!.trim();
+      while (base.endsWith('/')) {
+        base = base.substring(0, base.length - 1);
+      }
+      if (base.contains('?')) return base;
+      return '$base/$_gatewayQuery';
+    }
+    return _defaultGatewayUrl;
   }
 
   /// Connect to Discord Gateway WebSocket
   Future<void> connectGateway() async {
     final currentToken = token;
-    if (!isEnabled || currentToken.isEmpty || _isConnecting || isGatewayConnected) return;
+    if (!isEnabled ||
+        currentToken.isEmpty ||
+        _isConnecting ||
+        _isSocketOpen ||
+        _authFailed) {
+      return;
+    }
 
     _isConnecting = true;
+    _isSessionReady = false;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _updateStatusNotifier();
 
     try {
-      final targetUrl = (_sessionId != null && _resumeGatewayUrl != null && _resumeGatewayUrl!.isNotEmpty)
-          ? '$_resumeGatewayUrl/?v=10&encoding=json'
-          : 'wss://gateway.discord.gg/?v=10&encoding=json';
-
-      debugPrint('[SPY MUSIC Discord] Connecting to Discord Gateway ($targetUrl)...');
-      _socket = await WebSocket.connect(targetUrl).timeout(const Duration(seconds: 8));
+      final targetUrl = _buildResumeUrl();
+      printINFO('Connecting to Discord Gateway ($targetUrl)...', tag: 'Discord');
+      _socket = await WebSocket.connect(targetUrl)
+          .timeout(const Duration(seconds: 10));
 
       _isConnecting = false;
-      _reconnectAttempts = 0;
       _heartbeatAckReceived = true;
-      debugPrint('[SPY MUSIC Discord] Gateway socket connected');
+      _updateStatusNotifier();
 
-      _socket!.listen(
+      final socketRef = _socket!;
+      socketRef.listen(
         (data) => _handleGatewayMessage(data),
         onError: (error) {
-          debugPrint('[SPY MUSIC Discord] Gateway socket error: $error');
+          if (_socket != socketRef) return;
+          printWarning('Gateway socket error: $error', tag: 'Discord');
           _scheduleReconnect();
         },
         onDone: () {
-          debugPrint('[SPY MUSIC Discord] Gateway socket closed');
-          _scheduleReconnect();
+          if (_socket != socketRef) return;
+          final code = socketRef.closeCode;
+          final reason = socketRef.closeReason ?? '';
+          _handleCloseCode(code, reason);
         },
         cancelOnError: true,
       );
     } catch (e) {
       _isConnecting = false;
-      debugPrint('[SPY MUSIC Discord] Gateway connect failed: $e');
+      _isSessionReady = false;
+      printWarning('Gateway connect failed: $e', tag: 'Discord');
       _resumeGatewayUrl = null;
+      _updateStatusNotifier();
       _scheduleReconnect();
     }
   }
 
+  void _handleCloseCode(int? code, String reason) {
+    if (code == 4004) {
+      _authFailed = true;
+      lastErrorMessage = 'Discord Token ungültig oder abgelaufen (4004)';
+      printERROR(
+          'Gateway authentication failed (4004). Please re-login in Discord settings.',
+          tag: 'Discord');
+      _clearSessionState();
+      _cleanSocket();
+      _updateStatusNotifier();
+      return;
+    }
+
+    if (code == 4007 || code == 4009 || code == 4010 || code == 4012) {
+      _clearSessionState();
+    }
+
+    if (code != null && code != 1000) {
+      printWarning(
+          'Gateway closed (code: $code${reason.isNotEmpty ? ', reason: $reason' : ''})',
+          tag: 'Discord');
+    } else {
+      printINFO('Gateway socket closed (code: ${code ?? 1000})', tag: 'Discord');
+    }
+    _scheduleReconnect();
+  }
+
   void _scheduleReconnect() {
     _cleanSocket();
-    if (!isEnabled || token.isEmpty) return;
+    _updateStatusNotifier();
+    if (!isEnabled || token.isEmpty || _authFailed) return;
 
     _reconnectTimer?.cancel();
     _reconnectAttempts++;
     final delaySeconds = (_reconnectAttempts <= 1)
         ? 2
-        : (_reconnectAttempts == 2 ? 5 : 12);
+        : (_reconnectAttempts == 2 ? 5 : (_reconnectAttempts <= 4 ? 12 : 30));
 
     _reconnectTimer = Timer(Duration(seconds: delaySeconds), () {
       connectGateway();
@@ -185,20 +328,23 @@ class DiscordService {
     _debounceTimer = null;
     _pauseGraceTimer?.cancel();
     _pauseGraceTimer = null;
-    _sessionId = null;
-    _lastSequence = null;
-    _resumeGatewayUrl = null;
+    _clearSessionState();
     _cleanSocket();
+    _updateStatusNotifier();
   }
 
   void _cleanSocket() {
+    _initialHeartbeatTimer?.cancel();
+    _initialHeartbeatTimer = null;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
-    try {
-      _socket?.close(1000, 'Closing');
-    } catch (_) {}
+    final oldSocket = _socket;
     _socket = null;
+    _isSessionReady = false;
     _isConnecting = false;
+    try {
+      oldSocket?.close(1000, 'Closing');
+    } catch (_) {}
   }
 
   void _handleGatewayMessage(dynamic rawData) {
@@ -218,7 +364,6 @@ class DiscordService {
         _heartbeatInterval = d['heartbeat_interval'] ?? 41250;
         _startHeartbeat(_heartbeatInterval);
 
-        // Try session resume if possible, otherwise identify
         if (_sessionId != null && _lastSequence != null) {
           _sendResume();
         } else {
@@ -228,14 +373,25 @@ class DiscordService {
       // Opcode 0: DISPATCH
       else if (op == 0) {
         if (t == 'READY' && d is Map) {
-          _sessionId = d['session_id'];
-          _resumeGatewayUrl = d['resume_gateway_url'];
-          debugPrint('[SPY MUSIC Discord] Session READY (id: $_sessionId)');
+          _sessionId = d['session_id']?.toString();
+          _resumeGatewayUrl = d['resume_gateway_url']?.toString();
+          _isSessionReady = true;
+          _authFailed = false;
+          _reconnectAttempts = 0;
+          lastErrorMessage = null;
+          _resetSentCache();
+          _updateStatusNotifier();
+          printINFO('Discord Gateway READY (session established)', tag: 'Discord');
           if (_currentIsPlaying && currentTitle != null) {
             _sendPresencePayload(isPlaying: true, force: true);
           }
         } else if (t == 'RESUMED') {
-          debugPrint('[SPY MUSIC Discord] Session RESUMED successfully');
+          _isSessionReady = true;
+          _authFailed = false;
+          _reconnectAttempts = 0;
+          lastErrorMessage = null;
+          _updateStatusNotifier();
+          printINFO('Discord Gateway RESUMED', tag: 'Discord');
           if (_currentIsPlaying && currentTitle != null) {
             _sendPresencePayload(isPlaying: true, force: true);
           }
@@ -247,60 +403,73 @@ class DiscordService {
       }
       // Opcode 1: Discord requests immediate heartbeat
       else if (op == 1) {
-        _sendHeartbeat();
+        _sendHeartbeatNow();
       }
       // Opcode 7: Reconnect request from Gateway
       else if (op == 7) {
-        debugPrint('[SPY MUSIC Discord] Received Opcode 7 Reconnect');
+        printINFO('Received Opcode 7 Reconnect from Discord', tag: 'Discord');
         _scheduleReconnect();
       }
       // Opcode 9: Invalid session
       else if (op == 9) {
         final bool canResume = d == true;
-        debugPrint('[SPY MUSIC Discord] Invalid session (canResume: $canResume)');
+        _isSessionReady = false;
+        _updateStatusNotifier();
+        printWarning('Gateway invalid session (canResume: $canResume)',
+            tag: 'Discord');
         if (!canResume) {
-          _sessionId = null;
-          _lastSequence = null;
-          _resumeGatewayUrl = null;
+          _clearSessionState();
         }
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (!canResume) {
-            _sendIdentify();
-          } else {
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (!_isSocketOpen) return;
+          if (canResume && _sessionId != null && _lastSequence != null) {
             _sendResume();
+          } else {
+            _sendIdentify();
           }
         });
       }
     } catch (e) {
-      debugPrint('[SPY MUSIC Discord] Message parse error: $e');
+      printWarning('Gateway message parse error: $e', tag: 'Discord');
     }
   }
 
   void _startHeartbeat(int intervalMs) {
+    _initialHeartbeatTimer?.cancel();
     _heartbeatTimer?.cancel();
     _heartbeatAckReceived = true;
-    _heartbeatTimer = Timer.periodic(
-      Duration(milliseconds: intervalMs),
-      (_) => _sendHeartbeat(),
-    );
-    _sendHeartbeat();
+
+    // Follow Discord jitter recommendation before first heartbeat so IDENTIFY settles cleanly
+    final firstDelayMs = (intervalMs * 0.25).round().clamp(1500, 15000);
+    _initialHeartbeatTimer = Timer(Duration(milliseconds: firstDelayMs), () {
+      _sendHeartbeatWithAckCheck();
+      _heartbeatTimer = Timer.periodic(
+        Duration(milliseconds: intervalMs),
+        (_) => _sendHeartbeatWithAckCheck(),
+      );
+    });
   }
 
-  void _sendHeartbeat() {
-    if (_socket == null || _socket!.readyState != WebSocket.open) return;
-    if (!_heartbeatAckReceived) {
-      debugPrint('[SPY MUSIC Discord] Heartbeat ACK missing, connection dead. Reconnecting...');
-      _scheduleReconnect();
-      return;
-    }
-    _heartbeatAckReceived = false;
+  void _sendHeartbeatNow() {
+    if (!_isSocketOpen) return;
     try {
       _socket!.add(jsonEncode({"op": 1, "d": _lastSequence}));
     } catch (_) {}
   }
 
+  void _sendHeartbeatWithAckCheck() {
+    if (!_isSocketOpen) return;
+    if (!_heartbeatAckReceived) {
+      printWarning('Heartbeat ACK missing, reconnecting gateway...', tag: 'Discord');
+      _scheduleReconnect();
+      return;
+    }
+    _heartbeatAckReceived = false;
+    _sendHeartbeatNow();
+  }
+
   void _sendResume() {
-    if (_socket == null || _socket!.readyState != WebSocket.open) return;
+    if (!_isSocketOpen) return;
     final currentToken = token;
     if (currentToken.isEmpty || _sessionId == null || _lastSequence == null) {
       _sendIdentify();
@@ -318,60 +487,155 @@ class DiscordService {
 
     try {
       _socket!.add(jsonEncode(resumePayload));
-      debugPrint('[SPY MUSIC Discord] Resume sent to Gateway (seq: $_lastSequence)');
+      printINFO('Gateway Resume sent (seq: $_lastSequence)', tag: 'Discord');
     } catch (e) {
-      debugPrint('[SPY MUSIC Discord] Resume failed: $e');
+      printWarning('Gateway Resume failed: $e', tag: 'Discord');
       _sendIdentify();
     }
   }
 
   void _sendIdentify() {
-    if (_socket == null || _socket!.readyState != WebSocket.open) return;
+    if (!_isSocketOpen) return;
     final currentToken = token;
     if (currentToken.isEmpty) return;
+
+    final String osName = Platform.isAndroid
+        ? 'Android'
+        : (Platform.isWindows ? 'Windows' : (Platform.isMacOS ? 'Mac OS X' : 'Linux'));
 
     final identifyPayload = {
       "op": 2,
       "d": {
         "token": currentToken,
-        "capabilities": 16381,
+        "capabilities": 65,
+        "compress": false,
+        "large_threshold": 100,
         "properties": {
-          "os": "Android",
-          "browser": "SPY MUSIC",
+          "os": osName,
+          "browser": "Discord Client",
           "device": "SPY MUSIC",
         },
         "presence": _buildPresencePayload(
           title: currentTitle,
           artist: currentArtist,
           album: currentAlbum,
-          artUri: currentArtUri,
           duration: currentDuration,
           position: currentPosition,
           isPlaying: _currentIsPlaying,
+          largeAsset: _lookupCachedAsset(currentArtUri),
+          smallAsset: _lookupCachedAsset(_logoUrl),
         ),
       }
     };
 
     try {
       _socket!.add(jsonEncode(identifyPayload));
-      debugPrint('[SPY MUSIC Discord] Identify sent to Gateway');
+      printINFO('Gateway Identify sent', tag: 'Discord');
     } catch (e) {
-      debugPrint('[SPY MUSIC Discord] Identify failed: $e');
+      printWarning('Gateway Identify failed: $e', tag: 'Discord');
     }
+  }
+
+  String? _lookupCachedAsset(String? url) {
+    if (url == null || url.isEmpty) return null;
+    if (url.startsWith('mp:')) return url;
+    return _externalAssetCache[url];
+  }
+
+  /// Resolves an external HTTPS image URL into Discord's `mp:external/...` format
+  /// via `/applications/<id>/external-assets`. Never returns a raw HTTP/HTTPS URL,
+  /// because Discord drops Gateway activities with unresolved external URLs.
+  Future<String?> _resolveExternalAsset(String? url) async {
+    if (url == null || url.isEmpty) return null;
+    if (url.startsWith('mp:')) return url;
+
+    final parsed = Uri.tryParse(url);
+    if (parsed == null || (parsed.scheme != 'http' && parsed.scheme != 'https')) {
+      return null;
+    }
+
+    final cached = _externalAssetCache[url];
+    if (cached != null) return cached;
+    if (_failedAssetUrls.contains(url)) return null;
+
+    if (externalAssetResolverOverride != null) {
+      final resolved = await externalAssetResolverOverride!(url);
+      if (resolved != null && resolved.startsWith('mp:')) {
+        if (_externalAssetCache.length >= 120) {
+          _externalAssetCache.remove(_externalAssetCache.keys.first);
+        }
+        _externalAssetCache[url] = resolved;
+        return resolved;
+      }
+      _rememberFailedAsset(url);
+      return null;
+    }
+
+    final currentToken = token;
+    if (currentToken.isEmpty) return null;
+
+    try {
+      final response = await _apiDio.post(
+        'https://discord.com/api/v9/applications/$_applicationId/external-assets',
+        options: Options(headers: {
+          'Authorization': currentToken,
+          'Content-Type': 'application/json',
+        }),
+        data: {
+          'urls': [url],
+        },
+      );
+
+      if (response.statusCode == 200 && response.data is List) {
+        final list = response.data as List;
+        if (list.isNotEmpty && list.first is Map) {
+          final extPath = (list.first as Map)['external_asset_path']?.toString();
+          if (extPath != null && extPath.isNotEmpty) {
+            final mpAsset = extPath.startsWith('mp:') ? extPath : 'mp:$extPath';
+            if (_externalAssetCache.length >= 120) {
+              _externalAssetCache.remove(_externalAssetCache.keys.first);
+            }
+            _externalAssetCache[url] = mpAsset;
+            return mpAsset;
+          }
+        }
+      } else {
+        _rememberFailedAsset(url);
+      }
+    } catch (_) {
+      _rememberFailedAsset(url);
+    }
+    return null;
+  }
+
+  void _rememberFailedAsset(String url) {
+    if (_failedAssetUrls.length >= 120) {
+      _failedAssetUrls.remove(_failedAssetUrls.first);
+    }
+    _failedAssetUrls.add(url);
+  }
+
+  static String _clampText(String text, {int maxLen = 128}) {
+    var trimmed = text.trim();
+    if (trimmed.isEmpty) return 'SPY MUSIC';
+    if (trimmed.length == 1) trimmed = '$trimmed ';
+    if (trimmed.length <= maxLen) return trimmed;
+    return '${trimmed.substring(0, maxLen - 1)}…';
   }
 
   Map<String, dynamic> _buildPresencePayload({
     String? title,
     String? artist,
     String? album,
-    String? artUri,
     Duration? duration,
     Duration? position,
     bool isPlaying = true,
+    String? largeAsset,
+    String? smallAsset,
   }) {
     if (!isPlaying || title == null || title.isEmpty) {
       return {
-        "since": null,
+        "since": 0,
         "activities": [],
         "status": "online",
         "afk": false,
@@ -389,50 +653,49 @@ class DiscordService {
       timestamps["end"] = startMs + duration.inMilliseconds;
     }
 
-    // Determine large image (album/song artwork or fallback SPY MUSIC logo)
-    String largeImage =
-        "https://raw.githubusercontent.com/spicy-os123-python-main/SPY-MUSIC/main/assets/logo/spy_music_logo.png";
-    if (artUri != null && artUri.isNotEmpty) {
-      final parsed = Uri.tryParse(artUri);
-      if (parsed != null && (parsed.scheme == 'http' || parsed.scheme == 'https')) {
-        largeImage = artUri;
-      }
+    final safeTitle = _clampText(title);
+    final safeArtist =
+        _clampText(artist != null && artist.isNotEmpty ? artist : 'SPY MUSIC');
+    final safeLargeText = _clampText(
+      (album != null && album.isNotEmpty)
+          ? '$safeTitle • $album'
+          : '$safeTitle - SPY MUSIC',
+    );
+
+    final effectiveLarge = largeAsset ?? smallAsset;
+    final Map<String, dynamic> assets = {};
+    if (effectiveLarge != null) {
+      assets['large_image'] = effectiveLarge;
+      assets['large_text'] = safeLargeText;
+    }
+    if (smallAsset != null) {
+      assets['small_image'] = smallAsset;
+      assets['small_text'] = 'SPY MUSIC';
     }
 
-    const String smallImage =
-        "https://raw.githubusercontent.com/spicy-os123-python-main/SPY-MUSIC/main/assets/logo/spy_music_logo.png";
-
-    final String largeText = (album != null && album.isNotEmpty)
-        ? "$title • $album"
-        : "$title - SPY MUSIC";
+    final Map<String, dynamic> activity = {
+      "application_id": _applicationId,
+      "name": "SPY MUSIC",
+      "type": 2, // 2 = Listening to
+      "details": safeTitle,
+      "state": safeArtist,
+      "timestamps": timestamps,
+      if (assets.isNotEmpty) "assets": assets,
+      "buttons": [
+        "Listen on SPY Music",
+        "Get SPY Music",
+      ],
+      "metadata": {
+        "button_urls": [
+          "https://github.com/spicy-os123-python-main/SPY-MUSIC",
+          "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest",
+        ]
+      }
+    };
 
     return {
-      "since": null,
-      "activities": [
-        {
-          "name": "SPY MUSIC",
-          "type": 2, // 2 = Listening to
-          "details": title,
-          "state": artist != null && artist.isNotEmpty ? artist : "SPY MUSIC",
-          "timestamps": timestamps,
-          "assets": {
-            "large_image": largeImage,
-            "large_text": largeText,
-            "small_image": smallImage,
-            "small_text": "SPY MUSIC",
-          },
-          "buttons": [
-            "Listen on SPY Music",
-            "Get SPY Music",
-          ],
-          "metadata": {
-            "button_urls": [
-              "https://github.com/spicy-os123-python-main/SPY-MUSIC",
-              "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/tag/v1.0.0",
-            ]
-          }
-        }
-      ],
+      "since": startMs,
+      "activities": [activity],
       "status": "online",
       "afk": false,
     };
@@ -473,7 +736,8 @@ class DiscordService {
     }
 
     if (songChanged || songStartTime == null || posDiff > 5) {
-      final offsetMs = position?.inMilliseconds ?? currentPosition?.inMilliseconds ?? 0;
+      final offsetMs =
+          position?.inMilliseconds ?? currentPosition?.inMilliseconds ?? 0;
       songStartTime = DateTime.now().subtract(Duration(milliseconds: offsetMs));
     }
 
@@ -482,14 +746,16 @@ class DiscordService {
       _pauseGraceTimer = null;
       _currentIsPlaying = true;
 
-      // Skip redundant sends if same song is already playing and no major seek occurred
-      // (Routine progress is smoothly synced by the 15-second health check timer)
-      if (!songChanged && _lastSentIsPlaying == true && _lastSentTitle == currentTitle && posDiff <= 5) {
+      // Skip redundant sends only if this exact track was ALREADY sent as playing
+      if (!songChanged &&
+          _lastSentIsPlaying == true &&
+          _lastSentTitle == currentTitle &&
+          posDiff <= 5) {
         return;
       }
 
       _debounceTimer?.cancel();
-      _debounceTimer = Timer(const Duration(milliseconds: 600), () {
+      _debounceTimer = Timer(const Duration(milliseconds: 500), () {
         _sendPresencePayload(isPlaying: true);
       });
     } else {
@@ -507,49 +773,82 @@ class DiscordService {
     }
   }
 
-  void _sendPresencePayload({required bool isPlaying, bool force = false}) {
-    if (!isEnabled || token.isEmpty) return;
+  Future<void> _sendPresencePayload({
+    required bool isPlaying,
+    bool force = false,
+  }) async {
+    if (!isEnabled || token.isEmpty || _authFailed) return;
 
-    if (isGatewayConnected) {
-      // Check if duplicate of last sent presence
-      if (!force &&
-          _lastSentIsPlaying == isPlaying &&
-          _lastSentTitle == currentTitle &&
-          _lastSentArtist == currentArtist &&
-          _lastSentArtUri == currentArtUri) {
-        return;
+    if (!isGatewayConnected) {
+      if (!_isSocketOpen && !_isConnecting) {
+        connectGateway();
       }
+      // Once READY / RESUMED arrives, it will automatically push current presence
+      return;
+    }
 
-      final payload = {
-        "op": 3,
-        "d": _buildPresencePayload(
-          title: currentTitle,
-          artist: currentArtist,
-          album: currentAlbum,
-          artUri: currentArtUri,
-          duration: currentDuration,
-          position: currentPosition,
-          isPlaying: isPlaying,
-        )
-      };
+    final snapshotTitle = currentTitle;
+    final snapshotArtist = currentArtist;
+    final snapshotAlbum = currentAlbum;
+    final snapshotArtUri = currentArtUri;
+    final snapshotDuration = currentDuration;
+    final snapshotPosition = currentPosition;
 
-      try {
-        _socket!.add(jsonEncode(payload));
-        _lastSentTitle = isPlaying ? currentTitle : null;
-        _lastSentArtist = isPlaying ? currentArtist : null;
-        _lastSentArtUri = isPlaying ? currentArtUri : null;
-        _lastSentIsPlaying = isPlaying;
-        debugPrint('[SPY MUSIC Discord] Status updated: $currentTitle (playing: $isPlaying)');
-      } catch (e) {
-        debugPrint('[SPY MUSIC Discord] Send presence error: $e');
-        _scheduleReconnect();
-      }
-    } else if (!_isConnecting) {
-      connectGateway();
+    if (!force &&
+        _lastSentIsPlaying == isPlaying &&
+        _lastSentTitle == snapshotTitle &&
+        _lastSentArtist == snapshotArtist &&
+        _lastSentArtUri == snapshotArtUri) {
+      return;
+    }
+
+    final seq = ++_presenceDispatchSeq;
+    String? largeAsset;
+    String? smallAsset;
+
+    if (isPlaying && snapshotTitle != null && snapshotTitle.isNotEmpty) {
+      final resolved = await Future.wait([
+        _resolveExternalAsset(snapshotArtUri),
+        _resolveExternalAsset(_logoUrl),
+      ]);
+      if (seq != _presenceDispatchSeq) return; // Superseded by newer song/state
+      largeAsset = resolved[0];
+      smallAsset = resolved[1];
+    }
+
+    if (!isGatewayConnected) return;
+
+    final payload = {
+      "op": 3,
+      "d": _buildPresencePayload(
+        title: snapshotTitle,
+        artist: snapshotArtist,
+        album: snapshotAlbum,
+        duration: snapshotDuration,
+        position: snapshotPosition,
+        isPlaying: isPlaying,
+        largeAsset: largeAsset,
+        smallAsset: smallAsset,
+      )
+    };
+
+    try {
+      _socket!.add(jsonEncode(payload));
+      _lastSentTitle = isPlaying ? snapshotTitle : null;
+      _lastSentArtist = isPlaying ? snapshotArtist : null;
+      _lastSentArtUri = isPlaying ? snapshotArtUri : null;
+      _lastSentIsPlaying = isPlaying;
+      printINFO(
+          'Presence updated: ${isPlaying ? (snapshotTitle ?? 'Cleared') : 'Paused/Cleared'} (artwork: ${largeAsset != null ? 'mp:external' : 'none'})',
+          tag: 'Discord');
+    } catch (e) {
+      printWarning('Send presence error: $e', tag: 'Discord');
+      _scheduleReconnect();
     }
   }
 
   void clearPresence() {
+    _presenceDispatchSeq++;
     _debounceTimer?.cancel();
     _pauseGraceTimer?.cancel();
     _debounceTimer = null;
@@ -562,16 +861,12 @@ class DiscordService {
     currentPosition = null;
     songStartTime = null;
     _currentIsPlaying = false;
-    _lastSentTitle = null;
-    _lastSentArtist = null;
-    _lastSentArtUri = null;
-    _lastSentIsPlaying = false;
-    debugPrint('[SPY MUSIC Discord] Presence cleared');
+    _resetSentCache();
 
     if (isGatewayConnected) {
       final payload = {
         "op": 3,
-        "d": _buildPresencePayload(isPlaying: false)
+        "d": _buildPresencePayload(isPlaying: false),
       };
       try {
         _socket!.add(jsonEncode(payload));

@@ -1548,61 +1548,91 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final isConnected = DiscordService().isGatewayConnected;
-    final hasToken = DiscordService().token.isNotEmpty;
+    return ValueListenableBuilder<String>(
+      valueListenable: DiscordService().connectionStatusNotifier,
+      builder: (context, connState, _) {
+        final isConnected = connState == 'connected';
+        final isConnecting = connState == 'connecting';
+        final isAuthFailed = connState == 'auth_failed';
+        final hasToken = DiscordService().token.isNotEmpty;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A0D18),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isConnected
-              ? const Color(0xFF5865F2)
-              : Colors.white.withOpacity(0.08),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        Color badgeColor = const Color(0xFF5865F2);
+        String badgeLabel = "connected".tr;
+        if (isAuthFailed) {
+          badgeColor = Colors.redAccent;
+          badgeLabel = "Token ungültig";
+        } else if (isConnecting) {
+          badgeColor = Colors.amber;
+          badgeLabel = "Verbinde...";
+        } else if (!hasToken) {
+          badgeColor = Colors.white38;
+          badgeLabel = "Kein Token";
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A0D18),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isAuthFailed
+                  ? Colors.redAccent.withOpacity(0.8)
+                  : (isConnected
+                      ? const Color(0xFF5865F2)
+                      : Colors.white.withOpacity(0.08)),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.smartphone_rounded,
-                size: 16,
-                color: isConnected ? const Color(0xFF5865F2) : Colors.white70,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                "discordMobileStatus".tr,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const Spacer(),
-              if (isConnected)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF5865F2).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                        color: const Color(0xFF5865F2), width: 0.8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.smartphone_rounded,
+                    size: 16,
+                    color: isAuthFailed
+                        ? Colors.redAccent
+                        : (isConnected
+                            ? const Color(0xFF5865F2)
+                            : Colors.white70),
                   ),
-                  child: Text(
-                    "connected".tr,
+                  const SizedBox(width: 8),
+                  Text(
+                    "discordMobileStatus".tr,
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF5865F2),
+                      color: Colors.white,
                     ),
                   ),
+                  const Spacer(),
+                  if (isConnected || isConnecting || isAuthFailed || !hasToken)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: badgeColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: badgeColor, width: 0.8),
+                      ),
+                      child: Text(
+                        badgeLabel,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: badgeColor,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (isAuthFailed) ...[
+                const SizedBox(height: 6),
+                const Text(
+                  "Discord Token abgelaufen oder ungültig (4004). Bitte unten per 1-Klick-Login neu anmelden.",
+                  style: TextStyle(fontSize: 11, color: Colors.redAccent),
                 ),
-            ],
-          ),
+              ],
           const SizedBox(height: 6),
           Text(
             "discordTokenDes".tr,
@@ -1769,6 +1799,8 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
           ),
         ],
       ),
+    );
+      },
     );
   }
 }

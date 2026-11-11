@@ -139,9 +139,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     });
     _player.playerStateStream.listen((playerState) {
       if (mediaItem.value != null) {
-        // Only update Discord on state changes when ready or completed, avoiding spam during loading/buffering
+        // Update Discord on play/ready/completed without firing stale loading states
         if (!isSongLoading &&
-            (playerState.processingState == ProcessingState.ready ||
+            (playerState.playing ||
+                playerState.processingState == ProcessingState.ready ||
                 playerState.processingState == ProcessingState.completed)) {
           DiscordService().updatePresence(
             mediaItem.value,
@@ -867,6 +868,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     mediaItem.add(currentSong);
   }
 
+  void _syncDiscordPlaying() {
+    final item = mediaItem.value;
+    if (item != null) {
+      DiscordService().updatePresence(
+        item,
+        isPlaying: true,
+        position: _player.position,
+      );
+    }
+  }
+
   @override
   Future<void> play() async {
     _pausedByDeviceDisconnect = false;
@@ -886,6 +898,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       return;
     }
     await _player.play();
+    _syncDiscordPlaying();
   }
 
   @override
@@ -1299,6 +1312,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               await session.setActive(true);
             } catch (_) {}
             await _player.play();
+            _syncDiscordPlaying();
           }
         } catch (e, st) {
           final errStr = e.toString().toLowerCase();
@@ -1353,6 +1367,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   await session.setActive(true);
                 } catch (_) {}
                 await _player.play();
+                _syncDiscordPlaying();
                 return;
               }
             } catch (_) {}
@@ -1658,6 +1673,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             await session.setActive(true);
           } catch (_) {}
           await _player.play();
+          _syncDiscordPlaying();
         } catch (e, st) {
           final errStr = e.toString().toLowerCase();
           if (reqId != _activePlayRequestId) {
@@ -1709,6 +1725,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   await session.setActive(true);
                 } catch (_) {}
                 await _player.play();
+                _syncDiscordPlaying();
                 return;
               }
             } catch (_) {}
