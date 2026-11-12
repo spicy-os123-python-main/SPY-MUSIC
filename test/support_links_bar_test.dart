@@ -34,6 +34,14 @@ void main() {
       expect(find.text('Support me'), findsOneWidget);
       expect(find.text('PayPal'), findsOneWidget);
       expect(find.text('Discord'), findsOneWidget);
+      expect(find.text('About'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('support_about_link')),
+        findsOneWidget,
+      );
+      final aboutText = tester.widget<Text>(find.text('About'));
+      expect(aboutText.style?.decoration, TextDecoration.underline);
+      expect(aboutText.style?.color, const Color(0xFF58A6FF));
       expect(find.byIcon(Ionicons.logo_paypal), findsOneWidget);
       expect(find.byIcon(Ionicons.logo_discord), findsOneWidget);
       expect(
@@ -176,6 +184,45 @@ void main() {
       );
 
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('tapping blue underlined About opens centered explanation modal',
+        (tester) async {
+      final launched = <Uri>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppThemes.warp.createThemeData(),
+          home: Scaffold(
+            body: Center(
+              child: SupportLinksBar(
+                overrideConfig: AppThemes.warp,
+                onLaunchUri: (uri) async => launched.add(uri),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey<String>('support_about_link')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('support_about_dialog')),
+        findsOneWidget,
+      );
+      expect(find.text('Why Support SPY MUSIC?'), findsOneWidget);
+      expect(find.textContaining('PayPal'), findsWidgets);
+      expect(find.textContaining('Discord'), findsWidgets);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('support_about_dialog')),
+        findsNothing,
+      );
     });
   });
 }

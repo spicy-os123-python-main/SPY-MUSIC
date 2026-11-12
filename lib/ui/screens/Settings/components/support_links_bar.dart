@@ -161,10 +161,186 @@ class SupportLinksBar extends StatelessWidget {
                   ],
                 ],
               ),
+              const SizedBox(height: 4),
+              _buildAboutLink(
+                context: context,
+                config: config,
+                accentColor: accentColor,
+                isLight: isLight,
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAboutLink({
+    required BuildContext context,
+    required SpyThemeConfig? config,
+    required Color accentColor,
+    required bool isLight,
+  }) {
+    final linkBlue =
+        isLight ? const Color(0xFF0A66C2) : const Color(0xFF58A6FF);
+
+    return Semantics(
+      link: true,
+      label: 'About',
+      child: GestureDetector(
+        key: const ValueKey<String>('support_about_link'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => showSupportAboutDialog(
+          context,
+          config: config,
+          accentColor: accentColor,
+          isLight: isLight,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          child: Text(
+            'About',
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: linkBlue,
+              decoration: TextDecoration.underline,
+              decorationColor: linkBlue,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> showSupportAboutDialog(
+    BuildContext context, {
+    required SpyThemeConfig? config,
+    required Color accentColor,
+    required bool isLight,
+  }) {
+    final theme = Theme.of(context);
+    final baseSurface = isLight ? Colors.white : const Color(0xFF141826);
+    final rawCard = config?.cardColor ?? theme.dialogBackgroundColor;
+    final dialogBg = Color.alphaBlend(rawCard, config?.bg ?? baseSurface);
+    final titleColor = config?.fg ??
+        theme.textTheme.titleMedium?.color ??
+        (isLight ? Colors.black87 : Colors.white);
+    final bodyColor = config?.muted ??
+        theme.textTheme.bodyMedium?.color ??
+        (isLight ? Colors.black54 : Colors.white70);
+    final borderColor = accentColor.withOpacity(0.35);
+
+    Future<void> openTarget(String rawUrl) async {
+      final uri = Uri.parse(rawUrl);
+      if (onLaunchUri != null) {
+        await onLaunchUri!(uri);
+        return;
+      }
+      await _launchExternalUri(context, uri);
+    }
+
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          key: const ValueKey<String>('support_about_dialog'),
+          backgroundColor: dialogBg,
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: borderColor, width: 1.1),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 340),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: accentColor.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.favorite_rounded,
+                          color: accentColor,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'supportAboutTitle'.tr,
+                          style: TextStyle(
+                            color: titleColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        splashRadius: 18,
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: Icon(
+                          Icons.close_rounded,
+                          size: 19,
+                          color: bodyColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _SupportInfoCard(
+                    icon: Ionicons.logo_paypal,
+                    title: 'PayPal',
+                    description: 'supportAboutPaypalDesc'.tr,
+                    accentColor: accentColor,
+                    titleColor: titleColor,
+                    bodyColor: bodyColor,
+                    isLight: isLight,
+                    onTap: () => openTarget(paypalUrl),
+                  ),
+                  const SizedBox(height: 10),
+                  _SupportInfoCard(
+                    icon: Ionicons.logo_discord,
+                    title: 'Discord',
+                    description: 'supportAboutDiscordDesc'.tr,
+                    accentColor: accentColor,
+                    titleColor: titleColor,
+                    bodyColor: bodyColor,
+                    isLight: isLight,
+                    onTap: () => openTarget(discordUrl),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: Text(
+                        'close'.tr,
+                        style: TextStyle(
+                          color: accentColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -297,5 +473,93 @@ class SupportLinksBar extends StatelessWidget {
         );
       }
     }
+  }
+}
+
+class _SupportInfoCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  final Color accentColor;
+  final Color titleColor;
+  final Color bodyColor;
+  final bool isLight;
+  final VoidCallback onTap;
+
+  const _SupportInfoCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.accentColor,
+    required this.titleColor,
+    required this.bodyColor,
+    required this.isLight,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cardFill = accentColor.withOpacity(isLight ? 0.08 : 0.12);
+    final cardBorder = accentColor.withOpacity(0.28);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: cardFill,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: cardBorder, width: 0.9),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(icon, size: 20, color: accentColor),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: titleColor,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Icon(
+                          Icons.open_in_new_rounded,
+                          size: 13,
+                          color: accentColor.withOpacity(0.8),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        color: bodyColor,
+                        fontSize: 12.5,
+                        height: 1.38,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

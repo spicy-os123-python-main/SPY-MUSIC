@@ -17,6 +17,7 @@ import 'utils/app_link_controller.dart';
 import '/services/audio_handler.dart';
 import '/services/music_service.dart';
 import '/ui/home.dart';
+import '/ui/widgets/spy_launch_screen.dart';
 import '/ui/player/player_controller.dart';
 import 'ui/screens/Settings/settings_screen_controller.dart';
 import 'package:media_kit/media_kit.dart';
@@ -112,7 +113,7 @@ class MyApp extends StatelessWidget {
     return GetMaterialApp(
         title: 'SPY MUSIC',
         scrollBehavior: const SpyScrollBehavior(),
-        home: const Home(),
+        home: const SpyLaunchGate(child: Home()),
         debugShowCheckedModeBanner: false,
         defaultTransition: Transition.fadeIn,
         transitionDuration: const Duration(milliseconds: 420),
