@@ -1,9 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../services/app_secrets.dart';
 import '../../../services/love_mode_service.dart';
 
-/// Fully animated Indoraptor background animation with smooth 3D vector rendering
-/// and secret romantic Easter Egg for his girlfriend ("LOVE YOU / SCHATZ").
+/// Animated Indoraptor background widget with optional secret overlay.
 class DinoStalkerWidget extends StatelessWidget {
   final double time;
   final Color accent;
@@ -66,7 +66,7 @@ class DinoStalkerWidget extends StatelessWidget {
               ),
             ),
 
-            // 3. Romantic Easter Egg Text for girlfriend: "LOVE YOU" / "SCHATZ"
+            // 3. Conditional secret Easter Egg banner
             if (isLoveActive)
               Positioned(
                 top: (constraints.maxHeight * 0.16).clamp(70.0, 220.0),
@@ -83,6 +83,7 @@ class DinoStalkerWidget extends StatelessWidget {
   }
 
   Widget _buildLoveBanner(double t) {
+    final copy = AppSecrets.loveCopy;
     final double pulse = 0.88 + 0.12 * math.sin(t * 3.2);
     final double floatY = math.sin(t * 1.8) * 5.0;
 
@@ -119,7 +120,7 @@ class DinoStalkerWidget extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    "LOVE YOU",
+                    copy['bannerPrimary'] ?? '',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
@@ -149,7 +150,7 @@ class DinoStalkerWidget extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                "SCHATZ",
+                copy['bannerSecondary'] ?? '',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,

@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../utils/helper.dart';
+import 'app_secrets.dart';
 
 /// SPY MUSIC Discord Rich Presence & Activity Service
 /// Supports:
@@ -18,12 +19,10 @@ class DiscordService {
   factory DiscordService() => _instance;
   DiscordService._internal();
 
-  /// Public music RPC application ID required by Discord Gateway for assets & buttons.
-  static const String _applicationId = '962990036020756480';
-  static const String _logoUrl =
-      'https://raw.githubusercontent.com/spicy-os123-python-main/SPY-MUSIC/main/assets/logo/spy_music_logo.png';
+  static String get _applicationId => AppSecrets.discordApplicationId;
+  static String get _logoUrl => AppSecrets.discordLogoUrl;
   static const String _gatewayQuery = '?v=10&encoding=json';
-  static const String _defaultGatewayUrl = 'wss://gateway.discord.gg/$_gatewayQuery';
+  static String get _defaultGatewayUrl => AppSecrets.discordGatewayUrl;
   static const String _failedTokenPrefKey = 'discordFailedTokenSig';
   static const String mobileUserAgent =
       'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
@@ -162,7 +161,7 @@ class DiscordService {
 
     try {
       final response = await _apiDio.get(
-        'https://discord.com/api/v9/users/@me',
+        '${AppSecrets.discordApiBaseUrl}/users/@me',
         options: Options(headers: {
           'Authorization': cleaned,
           'User-Agent': mobileUserAgent,
@@ -728,7 +727,7 @@ class DiscordService {
 
     try {
       final response = await _apiDio.post(
-        'https://discord.com/api/v9/applications/$_applicationId/external-assets',
+        '${AppSecrets.discordApiBaseUrl}/applications/$_applicationId/external-assets',
         options: Options(headers: {
           'Authorization': currentToken,
           'Content-Type': 'application/json',

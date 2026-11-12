@@ -51,8 +51,7 @@ class DiscordWebhookService {
 
     final payload = {
       "username": "SPY MUSIC Error Logger",
-      "avatar_url":
-          "https://raw.githubusercontent.com/spicy-os123-python-main/SPY-MUSIC/main/assets/images/logo.png",
+      "avatar_url": AppSecrets.discordWebhookAvatarUrl,
       "embeds": [
         {
           "title": "🚨 $tag",
@@ -81,7 +80,8 @@ class DiscordWebhookService {
         final payload = _queue.removeAt(0);
         try {
           final targetUrl = webhookUrl;
-          if (targetUrl.isNotEmpty && targetUrl.startsWith('https://discord.com/api/webhooks/')) {
+          if (targetUrl.isNotEmpty &&
+              targetUrl.startsWith(AppSecrets.discordWebhookPrefix)) {
             await _dio.post(
               targetUrl,
               data: payload,

@@ -3,8 +3,7 @@ import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'app_secrets.dart';
 
-/// Secret Easter Egg & Love Mode Service for the user's girlfriend.
-/// Toggles the romantic "LOVE YOU / SCHATZ" glowing message on the dinosaur animation.
+/// Secret Easter Egg theme toggle service.
 class LoveModeService {
   static const String prefKey = 'dinoLoveMessageEnabled';
 
@@ -27,17 +26,14 @@ class LoveModeService {
     final clean = input.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
     final noSpaces = clean.replaceAll(' ', '');
     final codes = AppSecrets.loveSecretKeywords;
-    return codes.contains(clean) ||
-        codes.contains(noSpaces) ||
-        clean == 'love' ||
-        clean == 'liebe' ||
-        clean == 'ich liebe dich';
+    return codes.contains(clean) || codes.contains(noSpaces);
   }
 
   static void toggleLoveMode(BuildContext? context) {
     final current = isEnabled;
     final newValue = !current;
     isEnabled = newValue;
+    final copy = AppSecrets.loveCopy;
 
     if (context != null || Get.context != null) {
       Get.dialog(
@@ -71,7 +67,7 @@ class LoveModeService {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  newValue ? "Liebesmodus aktiviert! ✨" : "Liebesmodus deaktiviert",
+                  newValue ? (copy['titleOn'] ?? '') : (copy['titleOff'] ?? ''),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 20,
@@ -81,9 +77,7 @@ class LoveModeService {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  newValue
-                      ? "Für meinen Schatz:\n\nLOVE YOU\nSCHATZ\n\nist nun dauerhaft auf deiner Dino-Animation aktiv! 💖"
-                      : "Der geheime Liebesgruß wurde ausgeschaltet.",
+                  newValue ? (copy['bodyOn'] ?? '') : (copy['bodyOff'] ?? ''),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
@@ -104,7 +98,7 @@ class LoveModeService {
                         horizontal: 30, vertical: 12),
                   ),
                   child: Text(
-                    newValue ? "Ich liebe dich auch ❤️" : "OK",
+                    newValue ? (copy['btnOn'] ?? 'OK') : "OK",
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 15),
                   ),

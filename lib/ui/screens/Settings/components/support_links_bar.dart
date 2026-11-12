@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../services/app_secrets.dart';
 import '../../../themes/app_themes.dart';
 import '../../../themes/components/spy_button_animation.dart';
 import '../../../utils/theme_controller.dart';
@@ -28,25 +29,25 @@ class _SupportAction {
 /// Compact top-right "Support me" pill housing separate PayPal and Discord
 /// buttons styled dynamically after the active app theme.
 class SupportLinksBar extends StatelessWidget {
-  static const String paypalUrl = 'https://www.paypal.me/NuayaYauan';
-  static const String discordUrl = 'https://discord.gg/3XczVdSHdG';
+  static String get paypalUrl => AppSecrets.supportPaypalUrl;
+  static String get discordUrl => AppSecrets.supportDiscordUrl;
 
-  static final List<_SupportAction> _actions = <_SupportAction>[
-    const _SupportAction(
-      buttonKey: ValueKey<String>('support_paypal_button'),
-      label: 'PayPal',
-      tooltip: 'supportViaPaypal',
-      icon: Ionicons.logo_paypal,
-      url: paypalUrl,
-    ),
-    const _SupportAction(
-      buttonKey: ValueKey<String>('support_discord_button'),
-      label: 'Discord',
-      tooltip: 'joinDiscord',
-      icon: Ionicons.logo_discord,
-      url: discordUrl,
-    ),
-  ];
+  static List<_SupportAction> get _actions => <_SupportAction>[
+        _SupportAction(
+          buttonKey: const ValueKey<String>('support_paypal_button'),
+          label: 'PayPal',
+          tooltip: 'supportViaPaypal',
+          icon: Ionicons.logo_paypal,
+          url: paypalUrl,
+        ),
+        _SupportAction(
+          buttonKey: const ValueKey<String>('support_discord_button'),
+          label: 'Discord',
+          tooltip: 'joinDiscord',
+          icon: Ionicons.logo_discord,
+          url: discordUrl,
+        ),
+      ];
 
   final Future<void> Function(Uri uri)? onLaunchUri;
   final SpyThemeConfig? overrideConfig;

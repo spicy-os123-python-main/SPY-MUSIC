@@ -5,6 +5,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 
+import 'app_secrets.dart';
+
 /// Remote-controllable seasonal and startup UI configuration.
 ///
 /// Allows toggling seasonal visuals (such as the winter Santa hat and
@@ -75,11 +77,9 @@ class LiveConfig {
 /// updates (e.g. Winter Update overlays) roll out automatically on launch.
 class LiveConfigService {
   static const String hiveCacheKey = 'liveConfigCache';
-  static const String defaultConfigUrl = String.fromEnvironment(
-    'LIVE_CONFIG_URL',
-    defaultValue:
-        'https://raw.githubusercontent.com/spicy-os123-python-main/SPY-MUSIC/main/live_config.json',
-  );
+  static const String _envConfigUrl = String.fromEnvironment('LIVE_CONFIG_URL');
+  static String get defaultConfigUrl =>
+      _envConfigUrl.isNotEmpty ? _envConfigUrl : AppSecrets.liveConfigUrl;
 
   static final LiveConfigService _instance = LiveConfigService._internal();
 
@@ -95,8 +95,9 @@ class LiveConfigService {
 
   LiveConfigService._internal({
     Dio? dio,
-    this.configUrl = defaultConfigUrl,
+    String? configUrl,
   })  : _dio = dio,
+        configUrl = configUrl ?? defaultConfigUrl,
         currentConfig = ValueNotifier<LiveConfig>(_readCachedConfig());
 
   final Dio? _dio;

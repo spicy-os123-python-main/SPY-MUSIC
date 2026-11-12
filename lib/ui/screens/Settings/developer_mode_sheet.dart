@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../../services/app_log_service.dart';
+import '../../../services/app_secrets.dart';
 import '../../../services/data_usage_tracker.dart';
 import '../../../services/love_mode_service.dart';
 import '../../../services/music_service.dart';
@@ -306,7 +307,7 @@ class DeveloperModeSheet extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      "Liebesmodus (LOVE YOU SCHATZ)",
+                                      AppSecrets.loveCopy['sheetTitle'] ?? '',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
@@ -318,8 +319,8 @@ class DeveloperModeSheet extends StatelessWidget {
                                     const SizedBox(height: 2),
                                     Text(
                                       isLove
-                                          ? "Aktiv: Text wird auf der Dino-Animation angezeigt"
-                                          : "Geheimcode 'schatz' in der Suche oder 5x Version tippen",
+                                          ? (AppSecrets.loveCopy['sheetHintOn'] ?? '')
+                                          : (AppSecrets.loveCopy['sheetHintOff'] ?? ''),
                                       style: TextStyle(
                                         fontSize: 11,
                                         color: theme.textTheme.bodyMedium?.color

@@ -52,8 +52,8 @@ jobs:
 
       - name: Build Android APKs (Release & Split)
         run: |
-          flutter build apk --release
-          flutter build apk --split-per-abi --release
+          flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
+          flutter build apk --split-per-abi --release --obfuscate --split-debug-info=build/app/outputs/symbols
 
       - name: Prepare APK Output
         run: |
