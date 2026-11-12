@@ -17,11 +17,12 @@ class AddToPlaylist extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final addToPlaylistController = Get.put(AddToPlaylistController());
+    final maxHeight = MediaQuery.of(context).size.height * 0.72;
     return CommonDialog(
       child: Container(
-        height: 350,
+        height: maxHeight < 350.0 ? maxHeight : 350.0,
         padding:
-            const EdgeInsets.only(top: 20, bottom: 30, left: 20, right: 20),
+            const EdgeInsets.only(top: 20, bottom: 24, left: 20, right: 20),
         child: Stack(
           children: [
             Column(children: [
@@ -58,13 +59,13 @@ class AddToPlaylist extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColorLight,
-                    borderRadius: BorderRadius.circular(10)),
-                height: 250,
-                //color: Colors.green,
-                child: Obx(
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                      color: Theme.of(context).primaryColorLight,
+                      borderRadius: BorderRadius.circular(10)),
+                  //color: Colors.green,
+                  child: Obx(
                   () => addToPlaylistController.playlists.isNotEmpty
                       ? ListView.builder(
                           itemCount: addToPlaylistController.playlists.length,
@@ -101,8 +102,9 @@ class AddToPlaylist extends StatelessWidget {
                       : Center(
                           child: Text("noLibPlaylist".tr),
                         ),
+                  ),
                 ),
-              )
+              ),
             ]),
             Obx(() => (addToPlaylistController.additionInProgress.isTrue)
                 ? const Positioned(

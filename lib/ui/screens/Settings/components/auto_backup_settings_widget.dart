@@ -10,7 +10,6 @@ import '/services/backup_service.dart';
 import '/services/playlist_repair_service.dart';
 import '/ui/widgets/cust_switch.dart';
 import '/ui/widgets/snackbar.dart';
-import '../settings_screen_controller.dart';
 
 class AutoBackupSettingsWidget extends StatefulWidget {
   const AutoBackupSettingsWidget({super.key});
@@ -45,14 +44,6 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
     }
   }
 
-  bool get _isGerman {
-    try {
-      final settingsController = Get.find<SettingsScreenController>();
-      if (settingsController.currentAppLanguageCode.value == 'de') return true;
-    } catch (_) {}
-    return (Get.locale?.languageCode ?? 'en') == 'de';
-  }
-
   Future<void> _toggleAutoBackup(bool value) async {
     setState(() {
       _isAutoBackupEnabled = value;
@@ -76,9 +67,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           snackbar(
             context,
-            _isGerman
-                ? "✅ Backup erfolgreich erstellt & altes gelöscht!"
-                : "✅ Backup successfully created & old deleted!",
+            "autoBackupCreatedMsg".tr,
             size: SanckBarSize.MEDIUM,
           ),
         );
@@ -86,9 +75,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           snackbar(
             context,
-            _isGerman
-                ? "❌ Fehler beim Erstellen des Backups"
-                : "❌ Error creating backup",
+            "autoBackupErrorMsg".tr,
             size: SanckBarSize.MEDIUM,
           ),
         );
@@ -101,9 +88,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
     ScaffoldMessenger.of(context).showSnackBar(
       snackbar(
         context,
-        _isGerman
-            ? "Lade Backup für Google Drive vor..."
-            : "Preparing backup for Google Drive...",
+        "preparingDriveBackup".tr,
         size: SanckBarSize.SMALL,
       ),
     );
@@ -116,9 +101,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         snackbar(
           context,
-          _isGerman
-              ? "ℹ️ Teilen / Google Drive Vorgang beendet"
-              : "ℹ️ Share / Google Drive process finished",
+          "driveShareFinished".tr,
           size: SanckBarSize.SMALL,
         ),
       );
@@ -130,9 +113,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         snackbar(
           context,
-          _isGerman
-              ? "Kein automatisches Backup vorhanden"
-              : "No automatic backup found",
+          "noAutoBackupFound".tr,
           size: SanckBarSize.SMALL,
         ),
       );
@@ -146,22 +127,18 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
         backgroundColor: Theme.of(ctx).cardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          _isGerman
-              ? "Aus Auto-Backup wiederherstellen?"
-              : "Restore from Auto-Backup?",
+          "restoreAutoBackupTitle".tr,
           style: Theme.of(ctx).textTheme.titleMedium,
         ),
         content: Text(
-          _isGerman
-              ? "Deine Playlists und Einstellungen werden auf den Stand vom $backupDate zurückgesetzt.\n\nDie App wird danach automatisch neu gestartet."
-              : "Your playlists and settings will be restored from $backupDate.\n\nThe app will restart automatically.",
+          "restoreAutoBackupMsg".tr.replaceAll("{date}", "$backupDate"),
           style: Theme.of(ctx).textTheme.bodyMedium,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
-              _isGerman ? "Abbrechen" : "Cancel",
+              "cancel".tr,
               style: TextStyle(color: Theme.of(ctx).hintColor),
             ),
           ),
@@ -171,7 +148,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
               foregroundColor: Colors.black,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(_isGerman ? "Wiederherstellen" : "Restore"),
+            child: Text("restore".tr),
           ),
         ],
       ),
@@ -196,9 +173,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           snackbar(
             context,
-            _isGerman
-                ? "❌ Wiederherstellung fehlgeschlagen"
-                : "❌ Restore failed",
+            "restoreFailed".tr,
             size: SanckBarSize.MEDIUM,
           ),
         );
@@ -208,7 +183,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
 
   Future<void> _restoreFromCustomFile() async {
     final result = await FilePicker.platform.pickFiles(
-      dialogTitle: _isGerman ? "Backup-Datei auswählen" : "Select backup file",
+      dialogTitle: "selectBackupFile".tr,
       type: FileType.any,
       allowMultiple: false,
     );
@@ -222,19 +197,17 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
         backgroundColor: Theme.of(ctx).cardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          _isGerman ? "Backup einspielen?" : "Import Backup?",
+          "importBackupTitle".tr,
           style: Theme.of(ctx).textTheme.titleMedium,
         ),
         content: Text(
-          _isGerman
-              ? "Möchtest du das Backup aus der ausgewählten Datei einspielen? Die App wird danach neu gestartet."
-              : "Do you want to import the backup from the selected file? The app will restart afterwards.",
+          "importBackupMsg".tr,
           style: Theme.of(ctx).textTheme.bodyMedium,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(_isGerman ? "Abbrechen" : "Cancel"),
+            child: Text("cancel".tr),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -242,7 +215,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
               foregroundColor: Colors.black,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(_isGerman ? "Einspielen" : "Import"),
+            child: Text("importBackupAction".tr),
           ),
         ],
       ),
@@ -267,9 +240,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           snackbar(
             context,
-            _isGerman
-                ? "❌ Fehler beim Einspielen der Datei"
-                : "❌ Error importing backup file",
+            "errorImportingFile".tr,
             size: SanckBarSize.MEDIUM,
           ),
         );
@@ -280,7 +251,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
   @override
   Widget build(BuildContext context) {
     final hasBackup = _backupInfo != null;
-    final backupDate = _backupInfo?["date"] ?? (_isGerman ? "Noch kein Backup vorhanden" : "No backup yet");
+    final backupDate = _backupInfo?["date"] ?? "noBackupYet".tr;
     final backupSize = _backupInfo?["size"] ?? "";
 
     return Column(
@@ -290,15 +261,11 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
         ListTile(
           contentPadding: const EdgeInsets.only(left: 5, right: 10),
           title: Text(
-            _isGerman
-                ? "Automatisches Backup (1x täglich)"
-                : "Daily Auto-Backup (1x per day)",
+            "autoBackupTitle".tr,
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           subtitle: Text(
-            _isGerman
-                ? "Sichert 1x am Tag automatisch alle Playlists & Einstellungen. Das alte Backup wird gelöscht, sobald das neue fertig ist."
-                : "Automatically backs up playlists & settings once daily. The old backup is deleted once the new one is complete.",
+            "autoBackupDesc".tr,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           isThreeLine: true,
@@ -320,7 +287,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
               border: Border.all(
                 color: hasBackup
                     ? const Color(0xFF00D2FF).withAlpha(100)
-                    : Colors.white12,
+                    : Theme.of(context).dividerColor,
               ),
             ),
             child: Row(
@@ -341,9 +308,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _isGerman
-                            ? "Rolling-Backup Status"
-                            : "Rolling Backup Status",
+                        "rollingBackupStatus".tr,
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -361,9 +326,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _isGerman
-                            ? "Alte Backups werden automatisch ersetzt (kein Datenmüll)"
-                            : "Old backups are auto-replaced (no clutter)",
+                        "autoReplaceBackupsHint".tr,
                         style: TextStyle(
                           fontSize: 11,
                           color: hasBackup
@@ -394,13 +357,11 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
             size: 26,
           ),
           title: Text(
-            _isGerman ? "In Google Drive sichern" : "Save to Google Drive",
+            "saveToGoogleDrive".tr,
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           subtitle: Text(
-            _isGerman
-                ? "Aktuelles Backup direkt in deinem Google Drive ablegen oder teilen."
-                : "Directly save or share the current backup in your Google Drive.",
+            "saveToGoogleDriveDesc".tr,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           isThreeLine: true,
@@ -417,13 +378,11 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
             size: 26,
           ),
           title: Text(
-            _isGerman ? "Jetzt manuell sichern" : "Back up now manually",
+            "manualBackupNow".tr,
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           subtitle: Text(
-            _isGerman
-                ? "Erstellt sofort ein neues Backup und überschreibt das vorherige."
-                : "Creates a new backup now and overwrites the previous one.",
+            "manualBackupNowDesc".tr,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           isThreeLine: true,
@@ -439,19 +398,13 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
             size: 26,
           ),
           title: Text(
-            _isGerman
-                ? "Aus letztem Auto-Backup wiederherstellen"
-                : "Restore from latest Auto-Backup",
+            "restoreLatestAutoBackup".tr,
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           subtitle: Text(
-            _isGerman
-                ? (hasBackup
-                    ? "Stellt alle Daten vom Stand $backupDate wieder her."
-                    : "Kein gespeichertes Auto-Backup vorhanden.")
-                : (hasBackup
-                    ? "Restores all data from $backupDate."
-                    : "No saved auto-backup available."),
+            hasBackup
+                ? "restoreLatestAutoBackupDesc".tr.replaceAll("{date}", "$backupDate")
+                : "noSavedAutoBackup".tr,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           isThreeLine: true,
@@ -467,15 +420,11 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
             size: 26,
           ),
           title: Text(
-            _isGerman
-                ? "Aus Datei wiederherstellen..."
-                : "Restore from file...",
+            "restoreFromFile".tr,
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           subtitle: Text(
-            _isGerman
-                ? "Wähle eine .spymusic oder .hmb Backup-Datei von deinem Gerät aus."
-                : "Pick a .spymusic or .hmb backup file from your device.",
+            "restoreFromFileDesc".tr,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           isThreeLine: true,
@@ -491,15 +440,11 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
             size: 26,
           ),
           title: Text(
-            _isGerman
-                ? "Playlists reparieren & bereinigen"
-                : "Repair & clean playlists",
+            "repairCleanPlaylists".tr,
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           subtitle: Text(
-            _isGerman
-                ? "Korrigiert 0:00-Laufzeiten, repariert Streams und bereinigt fehlerhafte Downloads."
-                : "Fixes 0:00 durations, repairs streams and cleans up faulty downloads.",
+            "repairCleanPlaylistsDesc".tr,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           isThreeLine: true,
@@ -507,9 +452,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
             ScaffoldMessenger.of(context).showSnackBar(
               snackbar(
                 context,
-                _isGerman
-                    ? "Repariere Playlists..."
-                    : "Repairing playlists...",
+                "repairingPlaylistsMsg".tr,
                 size: SanckBarSize.MEDIUM,
               ),
             );
@@ -518,9 +461,7 @@ class _AutoBackupSettingsWidgetState extends State<AutoBackupSettingsWidget> {
               ScaffoldMessenger.of(context).showSnackBar(
                 snackbar(
                   context,
-                  _isGerman
-                      ? "✅ $repaired Songs in Playlists erfolgreich repariert!"
-                      : "✅ $repaired songs in playlists successfully repaired!",
+                  "playlistsRepairedCount".tr.replaceAll("{count}", "$repaired"),
                   size: SanckBarSize.BIG,
                 ),
               );

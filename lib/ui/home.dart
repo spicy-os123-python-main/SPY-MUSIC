@@ -133,15 +133,42 @@ class Home extends StatelessWidget {
                                                   color: playerController
                                                           .isQueueLoopModeEnabled
                                                           .isFalse
-                                                      ? Colors.white24
-                                                      : Colors.white
-                                                          .withOpacity(0.8),
+                                                      ? Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurface
+                                                          .withOpacity(0.12)
+                                                      : Theme.of(context)
+                                                          .colorScheme
+                                                          .secondary,
                                                   borderRadius:
                                                       BorderRadius.circular(20),
                                                 ),
                                                 child: Center(
-                                                    child:
-                                                        Text("queueLoop".tr)),
+                                                  child: Text(
+                                                    "queueLoop".tr,
+                                                    style: TextStyle(
+                                                      color: playerController
+                                                              .isQueueLoopModeEnabled
+                                                              .isFalse
+                                                          ? Theme.of(context)
+                                                              .textTheme
+                                                              .bodyMedium
+                                                              ?.color
+                                                          : (Theme.of(context)
+                                                                      .colorScheme
+                                                                      .secondary
+                                                                      .computeLuminance() >
+                                                                  0.45
+                                                              ? Colors.black87
+                                                              : Colors.white),
+                                                      fontWeight: playerController
+                                                              .isQueueLoopModeEnabled
+                                                              .isTrue
+                                                          ? FontWeight.w600
+                                                          : FontWeight.normal,
+                                                    ),
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -189,7 +216,12 @@ class Home extends StatelessWidget {
               body: ThemeBackground(
                 child: Obx(() {
                   final customTheme = Get.find<ThemeController>().activeCustomTheme.value;
-                  final panelColor = customTheme != null ? customTheme.bg : const Color(0xFF070913);
+                  final isLight = Theme.of(context).brightness == Brightness.light;
+                  final panelColor = customTheme != null
+                      ? customTheme.bg
+                      : (isLight
+                          ? Theme.of(context).canvasColor
+                          : const Color(0xFF070913));
                   return SlidingUpPanel(
                     color: panelColor,
                     onPanelSlide: playerController.panellistener,

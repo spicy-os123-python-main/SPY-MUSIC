@@ -62,7 +62,7 @@ class SpyVideoPlayer extends StatelessWidget {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        'Video wird geladen...',
+                        'loadingVideo'.tr,
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.85),
                           fontSize: 13,

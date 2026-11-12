@@ -96,27 +96,59 @@ class SearchResultScreenBN extends StatelessWidget {
                               controller: searchResScrController.tabController,
                               contentPadding:
                                   const EdgeInsets.only(left: 15, right: 15),
-                              backgroundColor: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.color ??
-                                  Colors.white,
-                              unselectedBackgroundColor:
-                                  Theme.of(context).colorScheme.secondary,
+                              backgroundColor: Theme.of(context).brightness ==
+                                      Brightness.light
+                                  ? Theme.of(context).colorScheme.secondary
+                                  : (Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.color ??
+                                      Colors.white),
+                              unselectedBackgroundColor: Theme.of(context)
+                                          .brightness ==
+                                      Brightness.light
+                                  ? Colors.black.withOpacity(0.08)
+                                  : Theme.of(context).colorScheme.secondary,
                               borderWidth: 0,
                               buttonMargin: const EdgeInsets.only(
                                   right: 10, left: 4, top: 4, bottom: 4),
                               borderColor: Colors.black,
                               labelStyle: TextStyle(
-                                color: Theme.of(context).primaryColor,
+                                color: (Theme.of(context).brightness ==
+                                                Brightness.light
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .secondary
+                                            : (Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.color ??
+                                                Colors.white))
+                                        .computeLuminance() >
+                                    0.45
+                                    ? Colors.black87
+                                    : Colors.white,
                                 fontWeight: FontWeight.bold,
                               ),
                               unselectedLabelStyle: TextStyle(
-                                color: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.color ??
-                                    Colors.white70,
+                                color: Theme.of(context).brightness ==
+                                        Brightness.light
+                                    ? (Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.color ??
+                                        Colors.black87)
+                                    : (Theme.of(context)
+                                                .colorScheme
+                                                .secondary
+                                                .computeLuminance() >
+                                            0.45
+                                        ? Colors.black87
+                                        : (Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.color ??
+                                            Colors.white70)),
                                 fontWeight: FontWeight.bold,
                               ),
                               // Add your tabs here

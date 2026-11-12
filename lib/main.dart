@@ -9,6 +9,7 @@ import 'package:terminate_restart/terminate_restart.dart';
 
 import '/ui/screens/Search/search_screen_controller.dart';
 import '/utils/get_localization.dart';
+import '/utils/lang_mapping.dart';
 import '/services/downloader.dart';
 import '/services/piped_service.dart';
 import '/services/discord_service.dart';
@@ -118,7 +119,9 @@ class MyApp extends StatelessWidget {
         translations: Languages(),
         locale: Locale(
           Hive.isBoxOpen("AppPrefs")
-              ? (Hive.box("AppPrefs").get('currentAppLanguageCode') ?? "en")
+              ? normalizeSupportedLanguageCode(
+                  Hive.box("AppPrefs").get('currentAppLanguageCode')?.toString(),
+                )
               : "en",
         ),
         fallbackLocale: const Locale("en"),

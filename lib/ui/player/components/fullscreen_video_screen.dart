@@ -48,7 +48,9 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
             AnimatedOpacity(
               opacity: _showOverlay ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 200),
-              child: SafeArea(
+              child: IgnorePointer(
+                ignoring: !_showOverlay,
+                child: SafeArea(
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: Padding(
@@ -132,6 +134,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
                       ],
                     ),
                   ),
+                ),
                 ),
               ),
             ),

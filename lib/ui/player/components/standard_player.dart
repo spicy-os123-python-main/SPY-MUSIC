@@ -43,7 +43,9 @@ class StandardPlayer extends StatelessWidget {
               }
             },
             child: Container(
-              color: const Color(0xFF070913),
+              color: Theme.of(context).brightness == Brightness.light
+                  ? Theme.of(context).canvasColor
+                  : const Color(0xFF070913),
             ),
           ),
         ),
@@ -53,17 +55,24 @@ class StandardPlayer extends StatelessWidget {
           alignment: Alignment.bottomCenter,
           child: Container(
             height: 65 + Get.mediaQuery.padding.bottom + 120,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  Color(0xFF070913),
-                  Color(0xFF070913),
-                  Color(0x66070913),
-                  Color(0x00070913),
-                ],
+                colors: Theme.of(context).brightness == Brightness.light
+                    ? [
+                        Theme.of(context).canvasColor,
+                        Theme.of(context).canvasColor,
+                        Theme.of(context).canvasColor.withOpacity(0.4),
+                        Theme.of(context).canvasColor.withOpacity(0.0),
+                      ]
+                    : const [
+                        Color(0xFF070913),
+                        Color(0xFF070913),
+                        Color(0x66070913),
+                        Color(0x00070913),
+                      ],
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
-                stops: [0, 0.5, 0.8, 1],
+                stops: const [0, 0.5, 0.8, 1],
               ),
             ),
           ),

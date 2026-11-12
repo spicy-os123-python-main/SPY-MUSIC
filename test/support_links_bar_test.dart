@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:spymusic/ui/screens/Settings/components/support_links_bar.dart';
 import 'package:spymusic/ui/themes/app_themes.dart';
+import 'package:spymusic/utils/get_localization.dart';
 
 void main() {
+  setUp(() {
+    Get.addTranslations(Languages().keys);
+    Get.locale = const Locale('en');
+  });
+
+  tearDown(Get.reset);
+
   group('SupportLinksBar', () {
     testWidgets('renders Support me label and separate PayPal & Discord buttons',
         (tester) async {

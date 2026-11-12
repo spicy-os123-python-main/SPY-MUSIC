@@ -59,33 +59,36 @@ class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF00D2FF), Color(0xFFFF0055)],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00D2FF), Color(0xFFFF0055)],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    borderRadius: BorderRadius.circular(10),
+                    child: const Icon(Icons.cloud_download_rounded, color: Colors.white, size: 22),
                   ),
-                  child: const Icon(Icons.cloud_download_rounded, color: Colors.white, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'importPlaylistTitle'.tr,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'importPlaylistTitle'.tr,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
             const SizedBox(height: 12),
             Text(
               'importPlaylistHint'.tr,
@@ -125,61 +128,82 @@ class _ImportPlaylistDialogState extends State<ImportPlaylistDialog> {
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                  visualDensity: VisualDensity.compact,
-                ),
-                icon: const Icon(Icons.folder_open_rounded, size: 16, color: Color(0xFF00D2FF)),
-                label: Text(
-                  'importPlaylistDesc'.tr,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-                onPressed: () {
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
                   Navigator.of(context).pop();
                   Get.find<LibraryPlaylistsController>()
                       .importPlaylistFromJson(context);
                 },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.folder_open_rounded,
+                        size: 16,
+                        color: Color(0xFF00D2FF),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'importPlaylistDesc'.tr,
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text('cancel'.tr, style: const TextStyle(color: Colors.white54)),
-                ),
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: _handleImport,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF00D2FF), Color(0xFFFF0055)],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFFF0055).withOpacity(0.4),
-                          blurRadius: 10,
+            SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text('cancel'.tr,
+                        style: const TextStyle(color: Colors.white54)),
+                  ),
+                  GestureDetector(
+                    onTap: _handleImport,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF00D2FF), Color(0xFFFF0055)],
                         ),
-                      ],
-                    ),
-                    child: Text(
-                      'import'.tr,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF0055).withOpacity(0.4),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        'import'.tr,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );

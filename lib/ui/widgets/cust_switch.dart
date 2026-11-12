@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:spymusic/ui/utils/theme_controller.dart';
 
 class CustSwitch extends StatelessWidget {
   const CustSwitch({super.key, this.onChanged, required this.value});
@@ -9,15 +7,24 @@ class CustSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLightMode =
-        Get.find<ThemeController>().themedata.value!.primaryColor ==
-            Colors.white;
+    final theme = Theme.of(context);
+    final isLightMode = theme.brightness == Brightness.light;
+    final Color? preferredAccent =
+        theme.colorScheme.primary.computeLuminance() < 0.7
+            ? theme.colorScheme.primary
+            : (theme.primaryColor.computeLuminance() < 0.7
+                ? theme.primaryColor
+                : (theme.colorScheme.secondary.computeLuminance() < 0.7
+                    ? theme.colorScheme.secondary
+                    : null));
+    final lightActiveThumb = preferredAccent ?? Colors.black87;
     return Switch(
-        activeColor: Colors.white,
-        activeTrackColor: isLightMode ? Colors.grey : null,
-        inactiveTrackColor: isLightMode ? Colors.grey : null,
+        activeColor: isLightMode ? lightActiveThumb : Colors.white,
+        activeTrackColor:
+            isLightMode ? lightActiveThumb.withOpacity(0.4) : null,
+        inactiveTrackColor: isLightMode ? Colors.grey[350] : null,
         inactiveThumbColor:
-            isLightMode ? Colors.grey[300] : Colors.white.withOpacity(0.5),
+            isLightMode ? Colors.grey[600] : Colors.white.withOpacity(0.5),
         value: value,
         onChanged: onChanged);
   }

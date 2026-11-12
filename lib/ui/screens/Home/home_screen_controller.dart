@@ -202,7 +202,7 @@ class HomeScreenController extends GetxController {
         if (index != -1 && index != 0) {
           quickPicks.value = QuickPicks(
               List<MediaItem>.from(homeContentListMap[index]["contents"]),
-              title: "Trending");
+              title: "trending".tr);
         } else if (index == -1) {
           List charts = await _musicServices.getCharts(contentType);
           final index = charts.indexWhere((element) =>
@@ -256,7 +256,7 @@ class HomeScreenController extends GetxController {
             .indexWhere((element) => element['title'] == "Quick picks");
         final con = homeContentListMap.removeAt(index);
         quickPicks.value = QuickPicks(List<MediaItem>.from(con["contents"]),
-            title: "Quick picks");
+            title: "quickpicks".tr);
       }
 
       middleContent.value = _setContentList(middleContentTemp);

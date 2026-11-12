@@ -250,8 +250,11 @@ class SongInfoBottomSheet extends StatelessWidget {
                       songInfoController
                           .removeSongFromPlaylist(song, playlist!)
                           .whenComplete(() => ScaffoldMessenger.of(Get.context!)
-                              .showSnackBar(snackbar(Get.context!,
-                                  "Removed from ${playlist!.title}",
+                              .showSnackBar(snackbar(
+                                  Get.context!,
+                                  "removedFromPlaylistMsg"
+                                      .tr
+                                      .replaceAll("{title}", playlist!.title),
                                   size: SanckBarSize.MEDIUM)));
                     },
                   )

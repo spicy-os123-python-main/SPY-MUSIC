@@ -1240,7 +1240,6 @@ class PlayerController extends GetxController
     printERROR("Song playback failed: $message", tag: "PlayerController");
     final ctx = Get.context;
     if (ctx != null) {
-      final isGerman = (Get.locale?.languageCode ?? 'de') == 'de';
       ScaffoldMessenger.of(ctx).hideCurrentSnackBar();
       ScaffoldMessenger.of(ctx).showSnackBar(
         SnackBar(
@@ -1269,15 +1268,13 @@ class PlayerController extends GetxController
                   ScaffoldMessenger.of(ctx).hideCurrentSnackBar();
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(
-                      content: Text(isGerman
-                          ? "Logs in Zwischenablage kopiert!"
-                          : "Logs copied to clipboard!"),
+                      content: Text("logsCopiedToClipboard".tr),
                       duration: const Duration(seconds: 2),
                     ),
                   );
                 },
                 child: Text(
-                  isGerman ? "LOGS KOPIEREN" : "COPY LOGS",
+                  "copyLogs".tr,
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ),

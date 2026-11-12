@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 enum InteractionAnimationType {
   standard,
@@ -16,50 +17,50 @@ enum InteractionAnimationType {
 String getInteractionAnimationName(InteractionAnimationType type) {
   switch (type) {
     case InteractionAnimationType.standard:
-      return 'Standard / Sanft';
+      return 'interAnimStandard'.tr;
     case InteractionAnimationType.bookFlip:
-      return 'Buchseiten 3D (Book Flip)';
+      return 'interAnimBookFlip'.tr;
     case InteractionAnimationType.cube3d:
-      return '3D Würfel (Cube Rotation)';
+      return 'interAnimCube3d'.tr;
     case InteractionAnimationType.cardStack:
-      return 'Karten-Stapel & Tiefe (Card Depth)';
+      return 'interAnimCardStack'.tr;
     case InteractionAnimationType.elasticBounce:
-      return 'Elastischer Bounce (Spring Pop)';
+      return 'interAnimElastic'.tr;
     case InteractionAnimationType.jellySquish:
-      return 'Gelee / Jelly Squish';
+      return 'interAnimJelly'.tr;
     case InteractionAnimationType.neonGlow:
-      return 'Neon Glow & Cyber Pulse';
+      return 'interAnimNeonGlow'.tr;
     case InteractionAnimationType.tilt3d:
-      return '3D Neigung & Druck (Haptic Tilt)';
+      return 'interAnimTilt3d'.tr;
     case InteractionAnimationType.zoomPop:
-      return 'Zoom & Dynamik (Scale Flow)';
+      return 'interAnimZoomPop'.tr;
     case InteractionAnimationType.smoothSlide:
-      return 'Horizontales Gleiten (Smooth Slide)';
+      return 'interAnimSmoothSlide'.tr;
   }
 }
 
 String getInteractionAnimationDescription(InteractionAnimationType type) {
   switch (type) {
     case InteractionAnimationType.standard:
-      return 'Klassische, minimalistische Übergänge und dezente Klick-Skalierung.';
+      return 'interAnimStandardDesc'.tr;
     case InteractionAnimationType.bookFlip:
-      return 'Seiten blättern sich mit 3D-Biegung und Schatten wie echte Buchseiten um; Buttons neigen sich am Buchrücken.';
+      return 'interAnimBookFlipDesc'.tr;
     case InteractionAnimationType.cube3d:
-      return 'Seiten rotieren wie ein echter 3D-Würfel im Raum; Buttons sinken mit räumlicher Tiefe ein.';
+      return 'interAnimCube3dDesc'.tr;
     case InteractionAnimationType.cardStack:
-      return 'Seiten zoomen heraus und schieben sich wie ein Kartenstapel übereinander; Buttons drücken sich plastisch ein.';
+      return 'interAnimCardStackDesc'.tr;
     case InteractionAnimationType.elasticBounce:
-      return 'Seiten und Buttons federn mit lebendigem, elastischem Schwung nach (Spring-Effekt).';
+      return 'interAnimElasticDesc'.tr;
     case InteractionAnimationType.jellySquish:
-      return 'Buttons und Seiten verformen sich saftig wie Gelee (horizontales und vertikales Stauchen).';
+      return 'interAnimJellyDesc'.tr;
     case InteractionAnimationType.neonGlow:
-      return 'Buttons pulsieren beim Berühren mit einer intensiven Neon-Lichtwelle und energiegeladenem Glühen.';
+      return 'interAnimNeonGlowDesc'.tr;
     case InteractionAnimationType.tilt3d:
-      return 'Buttons neigen sich dynamisch in 3D zur Berührungsposition; Seiten kippen sanft in den Raum.';
+      return 'interAnimTilt3dDesc'.tr;
     case InteractionAnimationType.zoomPop:
-      return 'Dynamischer Zoom-Pop beim Öffnen von Seiten; blitzschnelles Einschnappen bei Buttons.';
+      return 'interAnimZoomPopDesc'.tr;
     case InteractionAnimationType.smoothSlide:
-      return 'Butterweiches, horizontales Gleiten mit eleganter kubischer Beschleunigungskurve.';
+      return 'interAnimSmoothSlideDesc'.tr;
   }
 }
 

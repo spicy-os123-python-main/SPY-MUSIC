@@ -319,15 +319,23 @@ class _SongListTileState extends State<SongListTile>
               } else {
                 rowRadius = BorderRadius.circular(12);
                 coverRadius = BorderRadius.circular(8);
+                final isLight =
+                    Theme.of(context).brightness == Brightness.light;
                 decoration = BoxDecoration(
                   color: isCurrent
-                      ? const Color(0xFF00D2FF).withOpacity(0.12)
-                      : const Color(0xFF101322).withOpacity(0.55),
+                      ? (isLight
+                          ? const Color(0xFF2F7BFF).withOpacity(0.12)
+                          : const Color(0xFF00D2FF).withOpacity(0.12))
+                      : (isLight
+                          ? Colors.black.withOpacity(0.04)
+                          : const Color(0xFF101322).withOpacity(0.55)),
                   borderRadius: rowRadius,
                   border: Border.all(
                     color: isCurrent
                         ? const Color(0xFF00D2FF).withOpacity(0.65)
-                        : Colors.white.withOpacity(0.06),
+                        : (Theme.of(context).brightness == Brightness.light
+                            ? Colors.black.withOpacity(0.08)
+                            : Colors.white.withOpacity(0.06)),
                     width: isCurrent ? 1.2 : 0.8,
                   ),
                   boxShadow: isCurrent

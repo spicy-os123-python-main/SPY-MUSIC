@@ -13,9 +13,10 @@ class SleepTimerBottomSheet extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(bottom: Get.mediaQuery.padding.bottom),
       child: Obx(
-        () => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        () => SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             ListTile(
               leading: const Icon(Icons.timer),
               title: Text("sleepTimer".tr),
@@ -49,7 +50,16 @@ class SleepTimerBottomSheet extends StatelessWidget {
                         style: Theme.of(context)
                             .textTheme
                             .titleLarge!
-                            .copyWith(fontSize: 35),
+                            .copyWith(
+                              fontSize: 35,
+                              color: Theme.of(context)
+                                          .colorScheme
+                                          .secondary
+                                          .computeLuminance() >
+                                      0.45
+                                  ? Colors.black87
+                                  : Colors.white,
+                            ),
                       );
                     }),
                   ),
@@ -62,8 +72,10 @@ class SleepTimerBottomSheet extends StatelessWidget {
             if (playerController.isSleepTimerActive.isTrue)
               Padding(
                 padding: const EdgeInsets.only(bottom: 20.0, top: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 12,
+                  runSpacing: 8,
                   children: [
                     if (playerController.isSleepEndOfSongActive.isFalse)
                       OutlinedButton(
@@ -111,6 +123,7 @@ class SleepTimerBottomSheet extends StatelessWidget {
                 ),
               ),
           ],
+          ),
         ),
       ),
     );

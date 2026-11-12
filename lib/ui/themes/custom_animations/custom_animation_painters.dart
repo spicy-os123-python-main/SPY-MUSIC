@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 enum CustomAnimationType {
   none,
@@ -24,78 +25,78 @@ enum CustomAnimationType {
 String getCustomAnimationName(CustomAnimationType type) {
   switch (type) {
     case CustomAnimationType.none:
-      return "Aus / Theme-Standard";
+      return "customAnimNone".tr;
     case CustomAnimationType.fireAndEmbers:
-      return "1. Feuer & Funken";
+      return "customAnimFire".tr;
     case CustomAnimationType.neonMatrix:
-      return "2. Cyber Matrix (Code Rain)";
+      return "customAnimMatrix".tr;
     case CustomAnimationType.starfieldWarp:
-      return "3. Starfield Hyperdrive";
+      return "customAnimStarfield".tr;
     case CustomAnimationType.auroraBorealis:
-      return "4. Nordlichter (Aurora)";
+      return "customAnimAurora".tr;
     case CustomAnimationType.cosmicNebula:
-      return "5. Sternennebel (Nebula)";
+      return "customAnimNebula".tr;
     case CustomAnimationType.audioWaves:
-      return "6. Wellen & Frequenzen";
+      return "customAnimAudioWaves".tr;
     case CustomAnimationType.electricStorm:
-      return "7. Gewitter & Blitze";
+      return "customAnimElectricStorm".tr;
     case CustomAnimationType.cyberEqualizer:
-      return "8. Cyber Equalizer";
+      return "customAnimCyberEq".tr;
     case CustomAnimationType.hexPlasmaGrid:
-      return "9. Wabengitter Plasma";
+      return "customAnimHexPlasma".tr;
     case CustomAnimationType.meteorShower:
-      return "10. Sternschnuppen";
+      return "customAnimMeteor".tr;
     case CustomAnimationType.liquidCaustics:
-      return "11. Wasserwellen & Reflektionen";
+      return "customAnimCaustics".tr;
     case CustomAnimationType.sakuraBlossom:
-      return "12. Kirschblütenzauber";
+      return "customAnimSakura".tr;
     case CustomAnimationType.synthwaveSunset:
-      return "13. 80s Retro Synthwave";
+      return "customAnimSynthwave".tr;
     case CustomAnimationType.cyberGlitchPulse:
-      return "14. Hacker Glitch & Scanlines";
+      return "customAnimGlitch".tr;
     case CustomAnimationType.goldenStardust:
-      return "15. Goldstaub & Bokeh";
+      return "customAnimStardust".tr;
     case CustomAnimationType.indoraptorHunt:
-      return "16. Indoraptor Jagd (Dino)";
+      return "customAnimIndoraptor".tr;
   }
 }
 
 String getCustomAnimationDescription(CustomAnimationType type) {
   switch (type) {
     case CustomAnimationType.none:
-      return "Nutzt die standardmäßige Hintergrund-Optik des aktiven Themes";
+      return "customAnimNoneDesc".tr;
     case CustomAnimationType.fireAndEmbers:
-      return "Aufsteigende Feuerzungen, Hitzewellen und schwebende Funken";
+      return "customAnimFireDesc".tr;
     case CustomAnimationType.neonMatrix:
-      return "Herabfallender digitaler Cyber-Code-Regen im Matrix-Stil";
+      return "customAnimMatrixDesc".tr;
     case CustomAnimationType.starfieldWarp:
-      return "Hyperspace-Sternenfeld mit 3D-Lichtgeschwindigkeit";
+      return "customAnimStarfieldDesc".tr;
     case CustomAnimationType.auroraBorealis:
-      return "Majestätisch schimmernde Polarlichter-Wellen";
+      return "customAnimAuroraDesc".tr;
     case CustomAnimationType.cosmicNebula:
-      return "Rotierende Weltraum-Gaswolken mit pulsierenden Sternen";
+      return "customAnimNebulaDesc".tr;
     case CustomAnimationType.audioWaves:
-      return "Flüssig pulsierende organische Audio-Sinuswellen";
+      return "customAnimAudioWavesDesc".tr;
     case CustomAnimationType.electricStorm:
-      return "Verzweigte Plasma-Blitze und energetische Entladungen";
+      return "customAnimElectricStormDesc".tr;
     case CustomAnimationType.cyberEqualizer:
-      return "Futuristische Frequenz-Lichttürme mit Schwebespitzen";
+      return "customAnimCyberEqDesc".tr;
     case CustomAnimationType.hexPlasmaGrid:
-      return "Pulsierendes futuristisches Nanotech-Wabenmuster";
+      return "customAnimHexPlasmaDesc".tr;
     case CustomAnimationType.meteorShower:
-      return "Leuchtende Sternschnuppen mit glitzernden Schweifen";
+      return "customAnimMeteorDesc".tr;
     case CustomAnimationType.liquidCaustics:
-      return "Sonnenlicht-Wasserreflektionen und sich ausbreitende Tropfen";
+      return "customAnimCausticsDesc".tr;
     case CustomAnimationType.sakuraBlossom:
-      return "Sanft im Wind tanzende Kirschblütenblätter";
+      return "customAnimSakuraDesc".tr;
     case CustomAnimationType.synthwaveSunset:
-      return "80er-Jahre Perspektivgitter mit leuchtender Retro-Sonne";
+      return "customAnimSynthwaveDesc".tr;
     case CustomAnimationType.cyberGlitchPulse:
-      return "High-Tech Scanlines mit Farbverzerrungen und Signalimpulsen";
+      return "customAnimGlitchDesc".tr;
     case CustomAnimationType.goldenStardust:
-      return "Schwebender Luxus-Goldstaub mit funkelnden Sternen";
+      return "customAnimStardustDesc".tr;
     case CustomAnimationType.indoraptorHunt:
-      return "Der Indoraptor schleicht durch den Hintergrund, verharrt 2 Sekunden in der Mitte, fixiert den User und pirscht weiter";
+      return "customAnimIndoraptorDesc".tr;
   }
 }
 

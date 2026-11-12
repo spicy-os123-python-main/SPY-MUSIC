@@ -63,8 +63,11 @@ class _ThemeBackgroundState extends State<ThemeBackground>
       final config = themeController.activeCustomTheme.value;
       final reduceEffects = settingsController.reduceEffects.value;
       final customAnim = settingsController.customAnimationType.value;
-      final accentColor = config?.accent ?? const Color(0xFF00D2FF);
-      final bgColor = config?.bg ?? const Color(0xFF07080D);
+      final isLight = Theme.of(context).brightness == Brightness.light;
+      final accentColor = config?.accent ??
+          (isLight ? const Color(0xFF2F7BFF) : const Color(0xFF00D2FF));
+      final bgColor = config?.bg ??
+          (isLight ? Theme.of(context).canvasColor : const Color(0xFF07080D));
 
       if (reduceEffects) {
         return Container(
@@ -101,6 +104,8 @@ class _ThemeBackgroundState extends State<ThemeBackground>
             ),
           ],
         );
+      } else if (config == null && isLight) {
+        bgVisual = Container(color: bgColor);
       } else if (config == null) {
         bgVisual = _buildDefaultBackground();
       } else if (config.isFlame) {

@@ -312,13 +312,16 @@ class WatchtimeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           // Legend
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            alignment: WrapAlignment.center,
             children: platforms.entries.map((entry) {
               final color = colors[entry.key] ?? Colors.grey;
               final sec = entry.value;
               final pct = totalSec > 0 ? ((sec / totalSec) * 100).toInt() : 0;
               return Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     width: 8,
@@ -328,7 +331,10 @@ class WatchtimeScreen extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(
                     "${entry.key}: $pct%",
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               );

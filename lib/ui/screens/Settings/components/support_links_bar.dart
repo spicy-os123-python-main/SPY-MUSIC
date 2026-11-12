@@ -35,14 +35,14 @@ class SupportLinksBar extends StatelessWidget {
     const _SupportAction(
       buttonKey: ValueKey<String>('support_paypal_button'),
       label: 'PayPal',
-      tooltip: 'Support via PayPal',
+      tooltip: 'supportViaPaypal',
       icon: Ionicons.logo_paypal,
       url: paypalUrl,
     ),
     const _SupportAction(
       buttonKey: ValueKey<String>('support_discord_button'),
       label: 'Discord',
-      tooltip: 'Join Discord',
+      tooltip: 'joinDiscord',
       icon: Ionicons.logo_discord,
       url: discordUrl,
     ),
@@ -120,7 +120,7 @@ class SupportLinksBar extends StatelessWidget {
       maxScaleFactor: 1.15,
       child: Semantics(
         container: true,
-        label: 'Support me',
+        label: 'supportMe'.tr,
         child: Container(
           padding: const EdgeInsets.fromLTRB(7, 4, 7, 6),
           decoration: BoxDecoration(
@@ -133,7 +133,7 @@ class SupportLinksBar extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Support me',
+                'supportMe'.tr,
                 maxLines: 1,
                 softWrap: false,
                 style: TextStyle(
@@ -187,7 +187,7 @@ class SupportLinksBar extends StatelessWidget {
     }
 
     return Tooltip(
-      message: action.tooltip,
+      message: action.tooltip.tr,
       child: Semantics(
         button: true,
         label: action.label,
@@ -279,13 +279,21 @@ class SupportLinksBar extends StatelessWidget {
       }
       if (!launched && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          snackbar(context, 'Could not open link', size: SanckBarSize.MEDIUM),
+          snackbar(
+            context,
+            'couldNotOpenLink'.tr.replaceAll('{url}', uri.toString()),
+            size: SanckBarSize.MEDIUM,
+          ),
         );
       }
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          snackbar(context, 'Could not open link', size: SanckBarSize.MEDIUM),
+          snackbar(
+            context,
+            'couldNotOpenLink'.tr.replaceAll('{url}', uri.toString()),
+            size: SanckBarSize.MEDIUM,
+          ),
         );
       }
     }

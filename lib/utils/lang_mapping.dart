@@ -1,52 +1,19 @@
-const langMap = {
-  "ar": "Arabic",
-  "az": "Azerbaijani",
-  "bg": "Bulgarian",
-  "bn": "Bengali",
-  "ca": "Catalan",
-  "cs": "Czech",
-  "de": "German",
+const Map<String, String> langMap = {
   "en": "English",
-  "eo": "Esperanto",
-  "es": "Spanish",
-  "et": "Estonian",
-  "eu": "Basque",
-  'fa': "Persian",
-  "fi": "Finnish",
-  "fil": "Filipino",
-  "fj": "Fijian",
-  "fr": "French",
-  "ga": "Irish",
-  "gl": "Galician",
-  "hi": "Hindi",
-  "hr": "Croatian",
-  "hu": "Hungarian",
-  "ia": "Interlingua",
-  "id": "Indonesian",
-  "it": "Italian",
-  "ja": "Japanese",
-  "km": "Khmer(Central)",
-  "kn": "Kannada",
-  "ko": "Korean",
-  "ml": "Malayalam",
-  "my": "Burmese",
-  "nb_NO": "Norwegian",
-  "nl": "Dutch",
-  "or": "Odia",
-  "pa": "Punjabi",
-  "pl": "Polish",
-  "pt": "Portuguese",
-  "ro": "Romanian",
-  "ru": "Russian",
-  "sk": "Slovak",
-  "sr": "Serbian",
-  "sv": "Swedish",
-  "ta": "Tamil",
-  "te": "Telugu",
-  "tr": "Turkish",
-  "uk": "Ukrainian",
-  "ur": "Urdu",
-  "vi": "Vietnamese",
-  "zh-CN": "Chinese",
-  "zh-TW": "Chinese(Trad.)"
+  "de": "Deutsch",
+  "it": "Italiano",
+  "es": "Español",
+  "fr": "Français",
+  "nl": "Nederlands",
 };
+
+/// Normalizes persisted or locale-derived language codes to one of the 6
+/// supported languages (`en`, `de`, `it`, `es`, `fr`, `nl`), defaulting to `en`.
+String normalizeSupportedLanguageCode(String? code) {
+  if (code == null || code.trim().isEmpty) return "en";
+  final normalized = code.trim().replaceAll('-', '_').toLowerCase();
+  final base = normalized.split('_').first;
+  if (langMap.containsKey(normalized)) return normalized;
+  if (langMap.containsKey(base)) return base;
+  return "en";
+}

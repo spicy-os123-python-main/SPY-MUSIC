@@ -211,15 +211,22 @@ class _QuickPickItemState extends State<_QuickPickItem> {
             } else {
               rowRadius = BorderRadius.circular(12);
               coverRadius = BorderRadius.circular(8);
+              final isLight = Theme.of(context).brightness == Brightness.light;
               decoration = BoxDecoration(
                 color: isCurrent
-                    ? const Color(0xFF00D2FF).withOpacity(0.12)
-                    : const Color(0xFF121526).withOpacity(0.65),
+                    ? (isLight
+                        ? const Color(0xFF2F7BFF).withOpacity(0.12)
+                        : const Color(0xFF00D2FF).withOpacity(0.12))
+                    : (isLight
+                        ? Colors.black.withOpacity(0.04)
+                        : const Color(0xFF121526).withOpacity(0.65)),
                 borderRadius: rowRadius,
                 border: Border.all(
                   color: isCurrent
                       ? const Color(0xFF00D2FF).withOpacity(0.6)
-                      : Colors.white.withOpacity(0.08),
+                      : (Theme.of(context).brightness == Brightness.light
+                          ? Colors.black.withOpacity(0.08)
+                          : Colors.white.withOpacity(0.08)),
                   width: isCurrent ? 1.2 : 0.8,
                 ),
                 boxShadow: isCurrent

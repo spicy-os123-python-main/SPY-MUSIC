@@ -88,7 +88,7 @@ class AdditionalOperationDialog extends StatelessWidget {
                     },
                   ),
                   ProceedButton(
-                      buttonText: "Proceed",
+                      buttonText: "proceed".tr,
                       onPressed: () {
                         Navigator.of(context).pop();
                         screenController.performAdditionalOperation!();

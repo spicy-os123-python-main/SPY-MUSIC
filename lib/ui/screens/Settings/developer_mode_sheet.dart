@@ -195,7 +195,7 @@ class DeveloperModeSheet extends StatelessWidget {
                                   Row(
                                     children: [
                                       Text(
-                                        "85% Datensparmodus",
+                                        "devDataSaverTitle".tr,
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 14,
@@ -879,8 +879,8 @@ class DeveloperModeSheet extends StatelessWidget {
                           _buildActionButton(
                             context,
                             icon: Icons.bug_report_rounded,
-                            label: "Error-Logs in Zwischenablage kopieren",
-                            subtitle: "Kopiert die letzten App-Fehler zum schnellen Teilen",
+                            label: "devCopyErrorLogsTitle".tr,
+                            subtitle: "devCopyErrorLogsSub".tr,
                             color: Colors.redAccent,
                             onTap: () async {
                               final count = AppLogService.errorLogs.length;
@@ -889,7 +889,9 @@ class DeveloperModeSheet extends StatelessWidget {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   snackbar(
                                     context,
-                                    "$count Fehler-Logs in Zwischenablage kopiert!",
+                                    "devErrorLogsCopiedCount"
+                                        .tr
+                                        .replaceAll("{count}", "$count"),
                                     size: SanckBarSize.BIG,
                                   ),
                                 );
@@ -902,8 +904,8 @@ class DeveloperModeSheet extends StatelessWidget {
                           _buildActionButton(
                             context,
                             icon: Icons.share_rounded,
-                            label: "Diagnose- & Error-Logs teilen",
-                            subtitle: "Öffnet das Teilen-Menü für alle Diagnose-Logs",
+                            label: "devShareLogsTitle".tr,
+                            subtitle: "devShareLogsSub".tr,
                             color: Colors.orangeAccent,
                             onTap: () async {
                               await AppLogService.shareLogs();

@@ -11,16 +11,22 @@ class NewVersionDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CommonDialog(
-      child: Container(
-        height: 320,
-        padding: const EdgeInsets.only(top: 40, bottom: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              "newVersionAvailable".tr,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.78,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(
+              top: 32, bottom: 20, left: 16, right: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                "newVersionAvailable".tr,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 child: SizedBox.square(
@@ -61,7 +67,9 @@ class NewVersionDialog extends StatelessWidget {
                         },
                         shape: const CircleBorder());
                   }),
-                  Text("dontShowInfoAgain".tr)
+                  Flexible(
+                    child: Text("dontShowInfoAgain".tr),
+                  )
                 ],
               ),
             ),
@@ -78,7 +86,8 @@ class NewVersionDialog extends StatelessWidget {
                   ),
                   onTap: () => Navigator.of(context).pop(),
                 ))
-          ],
+            ],
+          ),
         ),
       ),
     );

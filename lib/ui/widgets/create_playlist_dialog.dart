@@ -27,13 +27,16 @@ class CreateNRenamePlaylistPopup extends StatelessWidget {
     librPlstCntrller.changeCreationMode("local");
     librPlstCntrller.textInputController.text = "";
     return CommonDialog(
-      child: Container(
-        height: 200,
-        padding:
-            const EdgeInsets.only(top: 30, left: 30, right: 30, bottom: 10),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
         child: Stack(
           children: [
-            Column(children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.only(
+                  top: 28, left: 28, right: 28, bottom: 16),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
               Padding(
                 padding: const EdgeInsets.only(bottom: 5),
                 child: Align(
@@ -134,6 +137,7 @@ class CreateNRenamePlaylistPopup extends StatelessWidget {
                 ),
               )
             ]),
+            ),
             Obx(() =>
                 (librPlstCntrller.creationInProgress.isTrue)
                     ? const Positioned(

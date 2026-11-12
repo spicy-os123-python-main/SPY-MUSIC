@@ -21,7 +21,7 @@ class AppUpdateDialog extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Link konnte nicht geöffnet werden: $url"),
+            content: Text("couldNotOpenLink".tr.replaceAll("{url}", url)),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -146,17 +146,17 @@ class AppUpdateDialog extends StatelessWidget {
                   color: Colors.orange.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  "GitHub Verbindung konnte nicht hergestellt werden. Du kannst die APKs oder Releases direkt auf GitHub herunterladen.",
-                  style: TextStyle(color: Colors.white70, fontSize: 11),
+                child: Text(
+                  "githubConnectionError".tr,
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
                 ),
               ),
             ],
             if (releaseBody.isNotEmpty) ...[
               const SizedBox(height: 14),
-              const Text(
-                "Changelog / Details:",
-                style: TextStyle(
+              Text(
+                "changelogDetails".tr,
+                style: const TextStyle(
                   color: Colors.white70,
                   fontWeight: FontWeight.w600,
                   fontSize: 12,

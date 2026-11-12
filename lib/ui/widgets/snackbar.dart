@@ -9,20 +9,20 @@ SnackBar snackbar(BuildContext context, String text,
     Duration duration = const Duration(seconds: 1),
     bool top = false}) {
   final scrWidth = MediaQuery.of(context).size.width;
-  final hrMargin = size == SanckBarSize.BIG
+  final rawMargin = size == SanckBarSize.BIG
       ? (scrWidth - 300) / 2
       : size == SanckBarSize.MEDIUM
           ? (scrWidth - 200) / 2
           : (scrWidth - 100) / 2;
+  final hrMargin = rawMargin < 16.0 ? 16.0 : rawMargin;
+  final bg = Theme.of(context).colorScheme.secondary;
+  final fg = bg.computeLuminance() > 0.45 ? Colors.black87 : Colors.white;
   return SnackBar(
-    backgroundColor: Theme.of(context).colorScheme.secondary,
+    backgroundColor: bg,
     content: Center(
       child: Text(
         text,
-        style: TextStyle(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Colors.white
-                : Colors.black),
+        style: TextStyle(color: fg),
       ),
     ),
     //width: width,

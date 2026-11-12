@@ -89,7 +89,10 @@ class _AnimatedPlayButtonState extends State<AnimatedPlayButton>
                 : AnimatedIcon(
                     icon: AnimatedIcons.play_pause,
                     progress: _controller,
-                    color: Colors.white,
+                    color: Theme.of(context).brightness == Brightness.light
+                        ? (Theme.of(context).textTheme.titleMedium?.color ??
+                            Colors.black87)
+                        : Colors.white,
                     size: widget.iconSize,
                   ),
           ),

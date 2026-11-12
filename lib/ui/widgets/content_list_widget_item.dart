@@ -243,7 +243,10 @@ class _ContentListItemState extends State<ContentListItem> {
                                       : widget.content.playlistId == 'SongsCache'
                                           ? Icons.flight
                                           : Icons.download,
-                              color: Colors.white,
+                              color: Theme.of(context).brightness ==
+                                      Brightness.light
+                                  ? Colors.black87
+                                  : Colors.white,
                               size: 40,
                             ))),
                   ),
@@ -253,29 +256,33 @@ class _ContentListItemState extends State<ContentListItem> {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       widget.content.title,
                       maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontSize: 14.5,
+                            height: 1.15,
                             fontWeight: FontWeight.w600,
                             color: Theme.of(context).textTheme.titleLarge?.color,
                           ),
                     ),
-                    Text(
-                      isAlbum
-                          ? widget.isLibraryItem
-                              ? ""
-                              : "${widget.content.artists[0]['name'] ?? ""} | ${widget.content.year ?? ""}"
-                          : widget.isLibraryItem
-                              ? ""
-                              : widget.content.description ?? "",
-                      maxLines: 1,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: Theme.of(context).textTheme.bodyMedium?.color ??
-                                Colors.white60,
-                          ),
-                    ),
+                    if (!widget.isLibraryItem)
+                      Text(
+                        isAlbum
+                            ? "${widget.content.artists[0]['name'] ?? ""} | ${widget.content.year ?? ""}"
+                            : widget.content.description ?? "",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontSize: 12.5,
+                              color:
+                                  Theme.of(context).textTheme.bodyMedium?.color ??
+                                      Colors.white60,
+                            ),
+                      ),
                   ],
                 ),
               )

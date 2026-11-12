@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../utils/update_check_flag_file.dart';
+import '/utils/lang_mapping.dart';
 import '/services/piped_service.dart';
 import '/services/discord_service.dart';
 import '../Library/library_controller.dart';
@@ -85,15 +86,9 @@ class SettingsScreenController extends GetxController {
 
     if (_devTapCount >= 2 && _devTapCount < 5) {
       final remaining = 5 - _devTapCount;
-      final isGerman = currentAppLanguageCode.value == 'de' ||
-          (Get.locale?.languageCode ?? 'en') == 'de';
-      final msg = isGerman
-          ? (remaining == 1
-              ? "Noch 1 Klick bis zum Developer-Menü"
-              : "Noch $remaining Klicks bis zum Developer-Menü")
-          : (remaining == 1
-              ? "1 more tap to open Developer Menu"
-              : "$remaining more taps to open Developer Menu");
+      final msg = remaining == 1
+          ? "devModeOneTapLeft".tr
+          : "devModeTapsLeft".tr.replaceAll("{count}", "$remaining");
 
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -224,12 +219,12 @@ class SettingsScreenController extends GetxController {
 
   Future<void> _setInitValue() async {
     final isDesktop = GetPlatform.isDesktop;
-    final appLang = setBox.get('currentAppLanguageCode') ?? "en";
-    currentAppLanguageCode.value = appLang == "zh_Hant"
-        ? "zh-TW"
-        : appLang == "zh_Hans"
-            ? "zh-CN"
-            : appLang;
+    final rawAppLang = setBox.get('currentAppLanguageCode')?.toString();
+    final normalizedLang = normalizeSupportedLanguageCode(rawAppLang);
+    currentAppLanguageCode.value = normalizedLang;
+    if (rawAppLang != null && rawAppLang != normalizedLang) {
+      await setBox.put('currentAppLanguageCode', normalizedLang);
+    }
     isBottomNavBarEnabled.value = setBox.get("isBottomNavBarEnabled") ?? true;
     noOfHomeScreenContent.value = setBox.get("noOfHomeScreenContent") ?? 3;
     isTransitionAnimationDisabled.value =
@@ -308,11 +303,12 @@ class SettingsScreenController extends GetxController {
   }
 
   void setAppLanguage(String? val) {
-    Get.updateLocale(Locale(val!));
-    Get.find<MusicServices>().hlCode = val;
+    final normalized = normalizeSupportedLanguageCode(val);
+    Get.updateLocale(Locale(normalized));
+    Get.find<MusicServices>().hlCode = normalized;
     Get.find<HomeScreenController>().loadContentFromNetwork(silent: true);
-    currentAppLanguageCode.value = val;
-    setBox.put('currentAppLanguageCode', val);
+    currentAppLanguageCode.value = normalized;
+    setBox.put('currentAppLanguageCode', normalized);
   }
 
   void setContentNumber(int? no) {

@@ -303,7 +303,9 @@ class PlaylistScreenController extends PlaylistAlbumScreenControllerBase
     if (Get.context != null) {
       ScaffoldMessenger.of(Get.context!).showSnackBar(snackbar(
         Get.context!,
-        count > 0 ? "$count neue Gerätesongs gefunden!" : "Gerätesongs sind auf aktuellem Stand",
+        count > 0
+            ? "newDeviceSongsFound".tr.replaceAll("{count}", "$count")
+            : "deviceSongsUpToDate".tr,
         size: SanckBarSize.BIG,
         duration: const Duration(seconds: 2),
       ));

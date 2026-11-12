@@ -22,13 +22,18 @@ class BackupDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final backupDialogController = Get.put(BackupDialogController());
     return CommonDialog(
-      child: Container(
-        height: GetPlatform.isAndroid ? 350 : 300,
-        padding:
-            const EdgeInsets.only(top: 20, bottom: 30, left: 20, right: 20),
-        child: Stack(
-          children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: 240,
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
+        child: Padding(
+          padding:
+              const EdgeInsets.only(top: 20, bottom: 24, left: 20, right: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
               Container(
                 padding: const EdgeInsets.only(bottom: 10.0, top: 10),
                 child: Text(
@@ -36,13 +41,13 @@ class BackupDialog extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              Expanded(
-                child: SizedBox(
-                  height: 100,
-                  child: Center(
-                      child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
                       Obx(() => (backupDialogController.scanning.isTrue ||
                               backupDialogController.backupRunning.isTrue)
                           ? const LoadingIndicator()
@@ -83,8 +88,9 @@ class BackupDialog extends StatelessWidget {
                         ],
                       )
                     ],
-                  )),
+                  ),
                 ),
+              ),
               ),
               if (!GetPlatform.isDesktop)
                 Obx(() => Padding(
@@ -110,7 +116,9 @@ class BackupDialog extends StatelessWidget {
                                               .value = value!;
                                         },
                             ),
-                            Text("includeDownloadedFiles".tr),
+                            Flexible(
+                              child: Text("includeDownloadedFiles".tr),
+                            ),
                           ]),
                     )),
               SizedBox(
@@ -155,8 +163,8 @@ class BackupDialog extends StatelessWidget {
                   ),
                 ),
               ),
-            ]),
-          ],
+            ],
+          ),
         ),
       ),
     );

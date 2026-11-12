@@ -20,50 +20,57 @@ class RestoreDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final restoreDialogController = Get.put(RestoreDialogController());
     return CommonDialog(
-      child: Container(
-        height: 300,
-        padding:
-            const EdgeInsets.only(top: 20, bottom: 30, left: 20, right: 20),
-        child: Stack(
-          children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-              Container(
-                padding: const EdgeInsets.only(bottom: 10.0, top: 10),
-                child: Text(
-                  "restoreAppData".tr,
-                  style: Theme.of(context).textTheme.titleMedium,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: 240,
+          maxHeight: MediaQuery.of(context).size.height * 0.78,
+        ),
+        child: SingleChildScrollView(
+          padding:
+              const EdgeInsets.only(top: 20, bottom: 24, left: 20, right: 20),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.only(bottom: 10.0, top: 10),
+                  child: Text(
+                    "restoreAppData".tr,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
-              ),
-              SizedBox(
-                height: 150,
-                child: Center(
-                  child: Obx(() => restoreDialogController.restoreProgress
-                              .toInt() ==
-                          restoreDialogController.filesToRestore.toInt()
-                      ? Text(
-                          "restoreMsg".tr,
-                          textAlign: TextAlign.center,
-                        )
-                      : restoreDialogController.processingFiles.isTrue
-                          ? Text("processFiles".tr)
-                          : restoreDialogController.restoreRunning.isTrue
-                              ? Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                        "${restoreDialogController.restoreProgress.toInt()}/${restoreDialogController.filesToRestore.toInt()}",
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleLarge),
-                                    const SizedBox(
-                                      height: 10,
-                                    ),
-                                    Text("restoring".tr)
-                                  ],
-                                )
-                              : Text("letsStrart".tr)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 28),
+                  child: Center(
+                    child: Obx(() => restoreDialogController.restoreProgress
+                                .toInt() ==
+                            restoreDialogController.filesToRestore.toInt()
+                        ? Text(
+                            "restoreMsg".tr,
+                            textAlign: TextAlign.center,
+                          )
+                        : restoreDialogController.processingFiles.isTrue
+                            ? Text("processFiles".tr,
+                                textAlign: TextAlign.center)
+                            : restoreDialogController.restoreRunning.isTrue
+                                ? Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                          "${restoreDialogController.restoreProgress.toInt()}/${restoreDialogController.filesToRestore.toInt()}",
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge),
+                                      const SizedBox(
+                                        height: 10,
+                                      ),
+                                      Text("restoring".tr)
+                                    ],
+                                  )
+                                : Text("letsStrart".tr,
+                                    textAlign: TextAlign.center)),
+                  ),
                 ),
-              ),
               SizedBox(
                 width: double.maxFinite,
                 child: Align(
@@ -117,7 +124,6 @@ class RestoreDialog extends StatelessWidget {
                 ),
               ),
             ]),
-          ],
         ),
       ),
     );

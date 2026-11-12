@@ -119,8 +119,12 @@ class MiniPlayer extends StatelessWidget {
                   );
                 }
               } else {
+                final isLightTheme =
+                    Theme.of(context).brightness == Brightness.light;
                 decoration = BoxDecoration(
-                  color: const Color(0xF2080A14),
+                  color: isLightTheme
+                      ? Theme.of(context).cardColor.withOpacity(0.95)
+                      : const Color(0xF2080A14),
                   border: Border(
                     top: BorderSide(
                       color: const Color(0xFF00D2FF).withOpacity(0.40),
@@ -252,7 +256,14 @@ class MiniPlayer extends StatelessWidget {
                                             .titleMedium
                                             ?.copyWith(
                                               fontWeight: FontWeight.w700,
-                                              color: Colors.white,
+                                              color: Theme.of(context).brightness ==
+                                                      Brightness.light
+                                                  ? (Theme.of(context)
+                                                          .textTheme
+                                                          .titleMedium
+                                                          ?.color ??
+                                                      Colors.black87)
+                                                  : Colors.white,
                                             ),
                                       ),
                                     ),
@@ -303,7 +314,15 @@ class MiniPlayer extends StatelessWidget {
                                                 .textTheme
                                                 .titleSmall
                                                 ?.copyWith(
-                                                  color: Colors.white60,
+                                                  color: Theme.of(context)
+                                                              .brightness ==
+                                                          Brightness.light
+                                                      ? (Theme.of(context)
+                                                              .textTheme
+                                                              .bodySmall
+                                                              ?.color ??
+                                                          Colors.black54)
+                                                      : Colors.white60,
                                                 ),
                                           ),
                                         ),

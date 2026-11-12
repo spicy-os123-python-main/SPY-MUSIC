@@ -135,11 +135,40 @@ class Player extends StatelessWidget {
                                     decoration: BoxDecoration(
                                       color: playerController
                                               .isQueueLoopModeEnabled.isFalse
-                                          ? Colors.white24
-                                          : Colors.white.withOpacity(0.8),
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withOpacity(0.12)
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .secondary,
                                       borderRadius: BorderRadius.circular(20),
                                     ),
-                                    child: Center(child: Text("queueLoop".tr)),
+                                    child: Center(
+                                      child: Text(
+                                        "queueLoop".tr,
+                                        style: TextStyle(
+                                          color: playerController
+                                                  .isQueueLoopModeEnabled
+                                                  .isFalse
+                                              ? Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.color
+                                              : (Theme.of(context)
+                                                          .colorScheme
+                                                          .secondary
+                                                          .computeLuminance() >
+                                                      0.45
+                                                  ? Colors.black87
+                                                  : Colors.white),
+                                          fontWeight: playerController
+                                                  .isQueueLoopModeEnabled.isTrue
+                                              ? FontWeight.w600
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),

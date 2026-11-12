@@ -16,14 +16,16 @@ class LinkPiped extends StatelessWidget {
   Widget build(BuildContext context) {
     final pipedLinkedController = Get.put(PipedLinkedController());
     return CommonDialog(
-        child: Obx(() => Container(
-              height: pipedLinkedController.selectedInst.value == "custom"
-                  ? 450
-                  : 415,
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
+        child: Obx(() => ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.82,
+              ),
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                   Text(
                     "Piped (Optional)",
                     style: Theme.of(context).textTheme.titleLarge,
@@ -40,13 +42,17 @@ class LinkPiped extends StatelessWidget {
                     ),
                     child: Text(
                       "pipedAccountOptional".tr,
-                      style: const TextStyle(fontSize: 11, color: Colors.white70),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 15.0, bottom: 10),
                     child: Obx(() => DropdownButton(
+                        isExpanded: true,
                         underline: const SizedBox.shrink(),
                         value: pipedLinkedController.selectedInst.value,
                         items: pipedLinkedController.pipedInstList
@@ -100,7 +106,8 @@ class LinkPiped extends StatelessWidget {
                         obscureText:
                             !pipedLinkedController.passwordVisible.value,
                       )),
-                  Expanded(
+                  Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Obx(() => Center(
                               child: Text(
                             pipedLinkedController.errorText.value,
@@ -123,6 +130,7 @@ class LinkPiped extends StatelessWidget {
                         ),
                       )),
                 ],
+              ),
               ),
             )));
   }

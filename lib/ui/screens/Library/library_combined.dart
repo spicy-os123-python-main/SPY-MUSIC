@@ -17,7 +17,7 @@ class CombinedLibrary extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        toolbarHeight: 85,
+        toolbarHeight: 96,
         backgroundColor: Theme.of(context).canvasColor,
         elevation: 0,
         actions: [
@@ -31,7 +31,7 @@ class CombinedLibrary extends StatelessWidget {
             final progressText = tot > 0 ? '$curr/$tot' : '...';
 
             return Padding(
-              padding: const EdgeInsets.only(top: 50.0, right: 8),
+              padding: const EdgeInsets.only(top: 40.0, right: 8),
               child: Tooltip(
                 message: importService.importStatus.value.isNotEmpty
                     ? importService.importStatus.value
@@ -82,7 +82,7 @@ class CombinedLibrary extends StatelessWidget {
             );
           }),
           Padding(
-            padding: const EdgeInsets.only(top: 50.0, right: 10),
+            padding: const EdgeInsets.only(top: 40.0, right: 10),
             child: SizedBox(
               height: 40,
               width: 50,
@@ -103,7 +103,7 @@ class CombinedLibrary extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(top: 50.0, right: 25),
+            padding: const EdgeInsets.only(top: 40.0, right: 25),
             child: SizedBox(
               height: 40,
               width: 50,
@@ -151,7 +151,7 @@ class CombinedLibrary extends StatelessWidget {
           ],
         ),
         title: Padding(
-          padding: const EdgeInsets.only(top: 60.0, left: 5),
+          padding: const EdgeInsets.only(top: 46.0, left: 5),
           child:
               Text('library'.tr, style: Theme.of(context).textTheme.titleLarge),
         ),

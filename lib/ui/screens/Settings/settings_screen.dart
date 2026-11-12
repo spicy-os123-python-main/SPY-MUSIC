@@ -122,7 +122,7 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   ListTile(
                     contentPadding: const EdgeInsets.only(left: 5, right: 10),
-                    title: const Text("Custom Animationen"),
+                    title: Text("customAnimations".tr),
                     subtitle: Obx(
                       () => Text(
                         getCustomAnimationName(
@@ -130,8 +130,9 @@ class SettingsScreen extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                        size: 16, color: Colors.white54),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded,
+                        size: 16,
+                        color: Theme.of(context).textTheme.bodyMedium?.color),
                     onTap: () => showDialog(
                       context: context,
                       builder: (context) =>
@@ -140,7 +141,7 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   ListTile(
                     contentPadding: const EdgeInsets.only(left: 5, right: 10),
-                    title: const Text("Button- & Seiten-Animationen"),
+                    title: Text("interactionAnimations".tr),
                     subtitle: Obx(
                       () => Text(
                         getInteractionAnimationName(
@@ -148,8 +149,9 @@ class SettingsScreen extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                        size: 16, color: Colors.white54),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded,
+                        size: 16,
+                        color: Theme.of(context).textTheme.bodyMedium?.color),
                     onTap: () => showDialog(
                       context: context,
                       builder: (context) =>
@@ -158,9 +160,9 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   ListTile(
                     contentPadding: const EdgeInsets.only(left: 5, right: 10),
-                    title: const Text("Reduce effects"),
+                    title: Text("reduceEffects".tr),
                     subtitle: Text(
-                      "Reduce animations and blur for better performance",
+                      "reduceEffectsDes".tr,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     trailing: Obx(() => CustSwitch(
@@ -179,7 +181,8 @@ class SettingsScreen extends StatelessWidget {
                         dropdownColor: Theme.of(context).cardColor,
                         underline: const SizedBox.shrink(),
                         style: Theme.of(context).textTheme.titleSmall,
-                        value: settingsController.currentAppLanguageCode.value,
+                        value: normalizeSupportedLanguageCode(
+                            settingsController.currentAppLanguageCode.value),
                         items: langMap.entries
                             .map((lang) => DropdownMenuItem(
                                   value: lang.key,
@@ -264,7 +267,7 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
               CustomExpansionTile(
-                title: "Discord Status (Rich Presence)",
+                title: "discordStatusTitle".tr,
                 icon: Icons.discord_rounded,
                 children: [
                   Container(
@@ -290,27 +293,33 @@ class SettingsScreen extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF5865F2),
-                                    borderRadius: BorderRadius.circular(8),
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF5865F2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.music_note_rounded,
+                                        color: Colors.white, size: 18),
                                   ),
-                                  child: const Icon(Icons.music_note_rounded,
-                                      color: Colors.white, size: 18),
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  "discordActivity".tr,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                  const SizedBox(width: 10),
+                                  Flexible(
+                                    child: Text(
+                                      "discordActivity".tr,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                             Obx(
                               () => CustSwitch(
@@ -703,7 +712,7 @@ class SettingsScreen extends StatelessWidget {
                     title: Text("downloadLocation".tr),
                     subtitle: Obx(() => Text(
                         settingsController.isCurrentPathsupportDownDir
-                            ? "In App storage directory"
+                            ? "inAppStorageDir".tr
                             : settingsController.downloadLocationPath.value,
                         style: Theme.of(context).textTheme.bodyMedium)),
                     onTap: () async {
@@ -777,15 +786,16 @@ class SettingsScreen extends StatelessWidget {
                         color: Color(0xFF00D2FF)),
                     title: Text("checkForUpdates".tr),
                     subtitle: Text("checkForUpdatesDes".tr),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                        size: 16, color: Colors.white54),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded,
+                        size: 16,
+                        color: Theme.of(context).textTheme.bodyMedium?.color),
                     onTap: () =>
                         settingsController.checkForUpdatesManually(context),
                   ),
                   const Divider(),
                   ListTile(
-                    leading:
-                        const Icon(Icons.code_rounded, color: Colors.white70),
+                    leading: Icon(Icons.code_rounded,
+                        color: Theme.of(context).textTheme.bodyMedium?.color),
                     contentPadding: const EdgeInsets.only(left: 15, right: 10),
                     title: const Text("GitHub Repository"),
                     subtitle: Text(
@@ -826,35 +836,37 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ),
                 ],
-              )
+              ),
+              Center(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    final now = DateTime.now();
+                    if (_lastVersionTapTime != null &&
+                        now.difference(_lastVersionTapTime!) >
+                            const Duration(seconds: 2)) {
+                      _versionTapCount = 1;
+                    } else {
+                      _versionTapCount++;
+                    }
+                    _lastVersionTapTime = now;
+                    if (_versionTapCount >= 5) {
+                      _versionTapCount = 0;
+                      LoveModeService.toggleLoveMode(context);
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                        bottom: 20.0, top: 10.0, left: 24.0, right: 24.0),
+                    child: Text(
+                      "${settingsController.currentVersion} by SPY",
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ),
+              ),
             ],
           )),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              final now = DateTime.now();
-              if (_lastVersionTapTime != null &&
-                  now.difference(_lastVersionTapTime!) >
-                      const Duration(seconds: 2)) {
-                _versionTapCount = 1;
-              } else {
-                _versionTapCount++;
-              }
-              _lastVersionTapTime = now;
-              if (_versionTapCount >= 5) {
-                _versionTapCount = 0;
-                LoveModeService.toggleLoveMode(context);
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.only(
-                  bottom: 20.0, top: 10.0, left: 24.0, right: 24.0),
-              child: Text(
-                "${settingsController.currentVersion} by SPY",
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -1018,12 +1030,12 @@ class CustomAnimationSelectorDialog extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Custom Animationen",
+                      "customAnimations".tr,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      "Visuelle Live-Effekte (funktionieren mit jedem Theme)",
+                      "customAnimationsSub".tr,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -1128,40 +1140,51 @@ class _InteractionAnimationSelectorDialogState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Button- & Seiten-Animationen",
+                      "interactionAnimations".tr,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      "Wähle wie sich Seiten wechseln und Buttons beim Klick verhalten",
+                      "interactionAnimationsSub".tr,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    const SizedBox(height: 10),
-                    // Interactive Test & Preview Box
-                    Obx(() {
-                      final currentType =
-                          settingsController.interactionAnimationType.value;
-                      return Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF141928),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: const Color(0xFF00D2FF).withOpacity(0.35),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Flexible(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                      child: Obx(() {
+                        final currentType =
+                            settingsController.interactionAnimationType.value;
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF141928),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(0xFF00D2FF).withOpacity(0.35),
+                            ),
                           ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.auto_awesome,
-                                    size: 16, color: Color(0xFF00D2FF)),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    "Aktiv: ${getInteractionAnimationName(currentType)}",
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.auto_awesome,
+                                      size: 16, color: Color(0xFF00D2FF)),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      "${"activeLabel".tr}: ${getInteractionAnimationName(currentType)}",
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
@@ -1246,8 +1269,8 @@ class _InteractionAnimationSelectorDialogState
                                               children: [
                                                 Text(
                                                   _previewPage == 0
-                                                      ? "📖 Seite 1: Bibliothek"
-                                                      : "🎵 Seite 2: Song-Wiedergabe",
+                                                      ? "previewPage1".tr
+                                                      : "previewPage2".tr,
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontWeight: FontWeight.bold,
@@ -1256,7 +1279,7 @@ class _InteractionAnimationSelectorDialogState
                                                 ),
                                                 const SizedBox(height: 2),
                                                 Text(
-                                                  "Tippe hier für Seiten-Wechsel (Book Flip)",
+                                                  "tapToFlipPage".tr,
                                                   style: TextStyle(
                                                     color: Colors.white
                                                         .withOpacity(0.65),
@@ -1293,9 +1316,11 @@ class _InteractionAnimationSelectorDialogState
                                         border: Border.all(
                                             color: Colors.white24),
                                       ),
-                                      child: const Text(
-                                        "🔘 Button-Klick",
-                                        style: TextStyle(
+                                      child: Text(
+                                        "previewButtonClick".tr,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
                                           color: Colors.white,
                                           fontWeight: FontWeight.w600,
                                           fontSize: 11,
@@ -1327,9 +1352,11 @@ class _InteractionAnimationSelectorDialogState
                                         ),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: const Text(
-                                        "📖 Seite umblättern",
-                                        style: TextStyle(
+                                      child: Text(
+                                        "previewTurnPage".tr,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
                                           color: Colors.white,
                                           fontWeight: FontWeight.bold,
                                           fontSize: 11,
@@ -1342,20 +1369,12 @@ class _InteractionAnimationSelectorDialogState
                             ),
                           ],
                         ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Flexible(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: InteractionAnimationType.values.map((type) {
-                    return Obx(() {
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 10),
+                    ...InteractionAnimationType.values.map((type) {
+                      return Obx(() {
                       final isSelected =
                           settingsController.interactionAnimationType.value ==
                               type;
@@ -1384,7 +1403,10 @@ class _InteractionAnimationSelectorDialogState
                               size: 18,
                               color: isSelected
                                   ? (Theme.of(context).colorScheme.primary)
-                                  : Colors.white70,
+                                  : Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.color,
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -1411,7 +1433,8 @@ class _InteractionAnimationSelectorDialogState
                         ),
                       );
                     });
-                  }).toList(),
+                  }),
+                  ],
                 ),
               ),
             ),
@@ -1422,7 +1445,7 @@ class _InteractionAnimationSelectorDialogState
                 child: TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: Text(
-                    "Fertig",
+                    "done".tr,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.bold,
@@ -1446,56 +1469,59 @@ class DiscoverContentSelectorDialog extends StatelessWidget {
     final settingsController = Get.find<SettingsScreenController>();
     return CommonDialog(
       child: Container(
-        height: 300,
-        //color: Theme.of(context).cardColor,
-        padding: const EdgeInsets.only(top: 30, left: 5, right: 30, bottom: 10),
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 20.0, bottom: 5),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "setDiscoverContent".tr,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-          ),
-          SizedBox(
-            height: 180,
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  radioWidget(
-                      label: "quickpicks".tr,
-                      controller: settingsController,
-                      value: "QP"),
-                  radioWidget(
-                      label: "topmusicvideos".tr,
-                      controller: settingsController,
-                      value: "TMV"),
-                  radioWidget(
-                      label: "trending".tr,
-                      controller: settingsController,
-                      value: "TR"),
-                  radioWidget(
-                      label: "basedOnLast".tr,
-                      controller: settingsController,
-                      value: "BOLI"),
-                ],
-              ),
-            ),
-          ),
-          const Expanded(child: SizedBox()),
-          Align(
-              alignment: Alignment.centerRight,
-              child: InkWell(
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text("cancel".tr),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.72,
+        ),
+        padding: const EdgeInsets.only(top: 24, left: 5, right: 20, bottom: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 20.0, bottom: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "setDiscoverContent".tr,
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-                onTap: () => Navigator.of(context).pop(),
-              ))
-        ]),
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    radioWidget(
+                        label: "quickpicks".tr,
+                        controller: settingsController,
+                        value: "QP"),
+                    radioWidget(
+                        label: "topmusicvideos".tr,
+                        controller: settingsController,
+                        value: "TMV"),
+                    radioWidget(
+                        label: "trending".tr,
+                        controller: settingsController,
+                        value: "TR"),
+                    radioWidget(
+                        label: "basedOnLast".tr,
+                        controller: settingsController,
+                        value: "BOLI"),
+                  ],
+                ),
+              ),
+            ),
+            Align(
+                alignment: Alignment.centerRight,
+                child: InkWell(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text("cancel".tr),
+                  ),
+                  onTap: () => Navigator.of(context).pop(),
+                ))
+          ],
+        ),
       ),
     );
   }
@@ -1579,13 +1605,13 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
         String badgeLabel = "connected".tr;
         if (isAuthFailed) {
           badgeColor = Colors.redAccent;
-          badgeLabel = "Token ungültig";
+          badgeLabel = "discordTokenInvalid".tr;
         } else if (isConnecting) {
           badgeColor = Colors.amber;
-          badgeLabel = "Verbinde...";
+          badgeLabel = "discordConnecting".tr;
         } else if (!hasToken) {
           badgeColor = Colors.white38;
-          badgeLabel = "Kein Token";
+          badgeLabel = "discordNoToken".tr;
         }
 
         return Container(
@@ -1616,15 +1642,19 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
                             : Colors.white70),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    "discordMobileStatus".tr,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                  Expanded(
+                    child: Text(
+                      "discordMobileStatus".tr,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   if (isConnected || isConnecting || isAuthFailed || !hasToken)
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -1647,9 +1677,9 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
               ),
               if (isAuthFailed) ...[
                 const SizedBox(height: 6),
-                const Text(
-                  "Discord Token abgelaufen oder ungültig (4004). Bitte unten per 1-Klick-Login neu anmelden.",
-                  style: TextStyle(fontSize: 11, color: Colors.redAccent),
+                Text(
+                  "discordTokenExpiredMsg".tr,
+                  style: const TextStyle(fontSize: 11, color: Colors.redAccent),
                 ),
               ],
           const SizedBox(height: 6),
@@ -1690,18 +1720,23 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
                   ),
                 ],
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.discord_rounded, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    "🎮 1-Klick Discord Login",
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 0.3,
+                  const Icon(Icons.discord_rounded,
+                      color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      "discordOneClickLogin".tr,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.3,
+                      ),
                     ),
                   ),
                 ],

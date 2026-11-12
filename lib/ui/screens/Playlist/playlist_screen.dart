@@ -137,10 +137,10 @@ class PlaylistScreen extends StatelessWidget {
               children: [
                 Container(
                   padding: EdgeInsets.only(
-                      top: MediaQuery.of(context).padding.top + 10,
+                      top: MediaQuery.of(context).padding.top + 8,
                       left: 10,
                       right: 10),
-                  height: 80,
+                  height: MediaQuery.of(context).padding.top + 68,
                   child: Center(
                     child: Row(
                       children: [
@@ -373,7 +373,7 @@ class PlaylistScreen extends StatelessWidget {
                                                 final isScanning = DeviceMusicService
                                                     .instance.isScanning.value;
                                                 return IconButton(
-                                                  tooltip: "Gerätemusik scannen (z.B. Samsung Music)",
+                                                  tooltip: "scanDeviceMusicTooltip".tr,
                                                   onPressed: isScanning
                                                       ? null
                                                       : () => playlistController
