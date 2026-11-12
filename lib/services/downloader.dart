@@ -21,6 +21,7 @@ import '/models/media_Item_builder.dart';
 import '../ui/screens/Library/library_controller.dart';
 import 'music_service.dart';
 import 'audio_handler.dart';
+import 'platform_search_service.dart';
 //import '../models/thumbnail.dart' as th;
 
 class Downloader extends GetxService {
@@ -160,10 +161,11 @@ class Downloader extends GetxService {
     Audio? requiredAudioStream;
     String streamUrl = "";
 
-    // 1. If song already has a valid remote URL in extras:
-    if (song.extras?['url'] != null &&
-        song.extras!['url'].toString().startsWith('http')) {
-      streamUrl = song.extras!['url'].toString();
+    // 1. If song already has a valid full-length remote URL in extras:
+    final existingUrl = song.extras?['url']?.toString() ?? '';
+    if (existingUrl.startsWith('http') &&
+        !PlatformSearchService.isPreviewAudioUrl(existingUrl)) {
+      streamUrl = existingUrl;
     }
 
     // 2. Multi-platform stream resolution via AudioHandler (Spotify, SoundCloud, Amazon, YouTube)
@@ -178,6 +180,8 @@ class Downloader extends GetxService {
         if (streamInfo.playable && streamInfo.audio != null) {
           requiredAudioStream = streamInfo.audio;
           streamUrl = streamInfo.audio!.url;
+        } else {
+          streamUrl = "";
         }
       } catch (e) {
         printERROR("Downloader: AudioHandler stream resolution failed for ${song.id}: $e");

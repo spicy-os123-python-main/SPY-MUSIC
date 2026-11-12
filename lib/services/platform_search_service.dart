@@ -96,10 +96,14 @@ class PlatformSearchService {
         ],
         'originalId': id,
         'deezerId': id,
-        'url': preview.isNotEmpty ? preview : null,
+        'url': null,
         'previewUrl': preview.isNotEmpty ? preview : null,
         'streamSource': 'deezer',
         'duration': durationSec,
+        if (rawDuration == null ||
+            rawDuration == 0 ||
+            (rawDuration is String && (int.tryParse(rawDuration) ?? 0) <= 0))
+          'durationEstimated': true,
         'length':
             "${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}",
       },
@@ -133,10 +137,11 @@ class PlatformSearchService {
           {'name': artist, 'id': ''}
         ],
         'originalId': id,
-        'url': preview.isNotEmpty ? preview : null,
+        'url': null,
         'previewUrl': preview.isNotEmpty ? preview : null,
         'streamSource': 'itunes',
         'duration': durationSec,
+        if (item['trackTimeMillis'] == null) 'durationEstimated': true,
         'length':
             "${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}",
       },
@@ -283,10 +288,11 @@ class PlatformSearchService {
           {'name': artist, 'id': ''}
         ],
         'originalId': id,
-        'url': preview.isNotEmpty ? preview : null,
+        'url': null,
         'previewUrl': preview.isNotEmpty ? preview : null,
         'streamSource': 'itunes',
         'duration': durationSec,
+        'durationEstimated': true,
         'length': '3:00',
       },
     );
@@ -663,6 +669,16 @@ class PlatformSearchService {
     'review',
   ];
 
+  /// Returns true if [url] points to a 30-second catalog preview clip rather than a full track.
+  static bool isPreviewAudioUrl(String? url) {
+    if (url == null || url.isEmpty) return false;
+    final lower = url.toLowerCase();
+    return lower.contains('cdnt-preview.dzcdn.net') ||
+        lower.contains('audio-ssl.itunes.apple.com') ||
+        lower.contains('p.scdn.co/mp3-preview') ||
+        lower.contains('/preview');
+  }
+
   /// Picks the candidate that fits the original studio track best.
   /// Strictly rejects sped-up, slowed, nightcore, remix, or wrong-length tracks.
   static MediaItem? findBestMatch(List<MediaItem> candidates, MediaItem? original,
@@ -677,8 +693,12 @@ class PlatformSearchService {
     final primaryArtist = extractPrimaryArtist(rawArtist);
     final expectedArtist = _normalizeString(rawArtist);
 
-    int expectedDurationSec = original.duration?.inSeconds ?? 0;
-    if (expectedDurationSec == 0 && original.extras != null) {
+    final bool durationEstimated = original.extras?['durationEstimated'] == true;
+    int expectedDurationSec =
+        durationEstimated ? 0 : (original.duration?.inSeconds ?? 0);
+    if (!durationEstimated &&
+        expectedDurationSec == 0 &&
+        original.extras != null) {
       if (original.extras!['duration'] is int) {
         expectedDurationSec = original.extras!['duration'] as int;
       } else if (original.extras!['length'] != null) {
@@ -705,6 +725,13 @@ class PlatformSearchService {
           final parsed = _parseDurationString(candidate.extras!['length']?.toString());
           if (parsed != null) cDurationSec = parsed;
         }
+      }
+
+      // Reject ~30s preview clips / snippets when matching a full track
+      if (cDurationSec > 0 &&
+          cDurationSec <= 35 &&
+          (expectedDurationSec == 0 || expectedDurationSec > 45)) {
+        continue;
       }
 
       // 1. Strict rejection of unwanted modifications using word-boundary regex

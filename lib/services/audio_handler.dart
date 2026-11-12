@@ -506,6 +506,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     if (!isCacheEnabled) return;
 
     final songId = currentSong.id;
+    if (url.contains('.m3u8') ||
+        url.contains('/stream/hls') ||
+        url.contains('/hls') ||
+        url.contains('soundcloud') ||
+        url.contains('sndcdn')) {
+      return;
+    }
     final cacheFile = File("$_cacheDir/cachedSongs/$songId.mp3");
     if (cacheFile.existsSync() && cacheFile.lengthSync() >= 250 * 1024) return;
 
@@ -524,13 +531,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 15);
       final req = await client.getUrl(Uri.parse(url));
-      if (url.contains('c=ANDROID')) {
-        req.headers.set('User-Agent',
-            'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip');
-      } else if (url.contains('c=IOS')) {
-        req.headers.set('User-Agent',
-            'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)');
-      }
+      final headers = buildStreamHeaders(url);
+      headers?.forEach((key, value) {
+        req.headers.set(key, value);
+      });
       final resp = await req.close();
       if (resp.statusCode == 200 || resp.statusCode == 206) {
         final sink = tempFile.openWrite();
@@ -743,6 +747,36 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     queue.add(newQueue);
   }
 
+  /// Returns true when [url]/[mediaItem] represents a direct SoundCloud or HLS stream
+  /// rather than a cacheable single-file MP4/WebM/MP3 or YouTube googlevideo stream.
+  static bool isDirectHlsOrSoundCloudStream(String url, MediaItem mediaItem) {
+    if (url.contains('googlevideo.com')) return false;
+    return url.contains('.m3u8') ||
+        url.contains('/stream/hls') ||
+        url.contains('/hls') ||
+        url.contains('soundcloud') ||
+        url.contains('sndcdn') ||
+        mediaItem.id.startsWith("sc_") ||
+        (mediaItem.extras?['isSoundCloud'] == true);
+  }
+
+  /// Builds required mobile client User-Agent headers for googlevideo.com streams.
+  static Map<String, String>? buildStreamHeaders(String url) {
+    if (url.contains('c=IOS')) {
+      return const {
+        'User-Agent':
+            'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
+      };
+    }
+    if (url.contains('googlevideo.com') || url.contains('c=ANDROID')) {
+      return const {
+        'User-Agent':
+            'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+      };
+    }
+    return null;
+  }
+
   AudioSource _createAudioSource(MediaItem mediaItem) {
     // 0. ABSOLUTE PRIORITY: Check SongDownloads FIRST!
     // If this song is downloaded, ALWAYS play the local file (0 KB mobile data!),
@@ -782,23 +816,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
     }
 
-    // Direct stream for SoundCloud (HLS/m3u8 or progressive) or Deezer/Spotify (MP3) or Amazon
-    if (url.contains('.m3u8') ||
-        url.contains('/stream/hls') ||
-        url.contains('/hls') ||
-        url.contains('soundcloud') ||
-        url.contains('sndcdn') ||
-        url.contains('dzcdn.net') ||
-        url.contains('deezer') ||
-        mediaItem.id.startsWith("sc_") ||
-        mediaItem.id.startsWith("sp_") ||
-        mediaItem.id.startsWith("az_") ||
-        (mediaItem.extras?['isSoundCloud'] == true) ||
-        (mediaItem.extras?['isSpotify'] == true) ||
-        (mediaItem.extras?['streamSource'] == 'deezer') ||
-        (mediaItem.extras?['streamSource'] == 'itunes')) {
+    // Direct stream for SoundCloud (HLS/m3u8 or progressive)
+    if (isDirectHlsOrSoundCloudStream(url, mediaItem)) {
       printINFO(
-          "Playing direct platform stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
+          "Playing direct SoundCloud/HLS stream via AudioSource.uri: ${url.substring(0, min(80, url.length))}...");
       isPlayingUsingLockCachingSource = false;
       return AudioSource.uri(
         Uri.parse(url),
@@ -807,9 +828,21 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     }
 
     final cacheFile = File("$_cacheDir/cachedSongs/${mediaItem.id}.mp3");
+    final bool isPlatformAlias =
+        mediaItem.id.startsWith("sp_") || mediaItem.id.startsWith("az_");
+    final int minCacheBytes = isPlatformAlias ? 800 * 1024 : 250 * 1024;
+
+    // Purge legacy 30s preview cache files (<800 KB) for Spotify/Amazon tracks
+    if (isPlatformAlias &&
+        cacheFile.existsSync() &&
+        cacheFile.lengthSync() < minCacheBytes) {
+      try {
+        cacheFile.deleteSync();
+      } catch (_) {}
+    }
 
     // 1. Check if the song is already cached on disk (0 KB network usage!)
-    if (cacheFile.existsSync() && cacheFile.lengthSync() >= 250 * 1024) {
+    if (cacheFile.existsSync() && cacheFile.lengthSync() >= minCacheBytes) {
       printINFO(
           "Playing offline cached song from disk (0 network data!): ${cacheFile.path}");
       isPlayingUsingLockCachingSource = false;
@@ -825,18 +858,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     final uri =
         isLocalFile ? Uri.file(url) : (Uri.tryParse(url) ?? Uri.parse(url));
 
-    Map<String, String>? headers;
-    // Always configure genuine YouTube mobile client User-Agent on ExoPlayer for googlevideo streams.
-    // NEVER pass Origin or Referer to googlevideo.com on mobile clients, as this triggers CDN throttling/CORS stalls.
-    if (url.contains('googlevideo.com')) {
-      String ua = 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
-      if (url.contains('c=IOS')) {
-        ua = 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)';
-      }
-      headers = {
-        'User-Agent': ua,
-      };
-    }
+    final headers = buildStreamHeaders(url);
 
     return AudioSource.uri(
       uri,
@@ -1117,14 +1139,29 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           if (matchingQueueIdx != -1) {
             currentIndex = matchingQueueIdx;
           }
+          final queueCurrentSong = (matchingQueueIdx != -1)
+              ? queue.value[matchingQueueIdx]
+              : currentSong;
+          final Duration? resolvedDuration =
+              (queueCurrentSong.duration != null &&
+                      queueCurrentSong.duration!.inSeconds > 0 &&
+                      queueCurrentSong.extras?['durationEstimated'] != true)
+                  ? queueCurrentSong.duration
+                  : ((streamInfo.audio?.duration ?? 0) > 0
+                      ? Duration(milliseconds: streamInfo.audio!.duration)
+                      : queueCurrentSong.duration);
           final streamAudioUrl = streamInfo.audio?.url ?? '';
           currentSongUrl = streamAudioUrl;
           final updatedExtras =
-              Map<String, dynamic>.from(currentSong.extras ?? {});
+              Map<String, dynamic>.from(queueCurrentSong.extras ?? {});
           updatedExtras['url'] = streamAudioUrl;
           updatedExtras['size'] = streamInfo.audio?.size ?? 0;
           updatedExtras['codec'] = streamInfo.audio?.audioCodec.name ?? 'mp4a';
-          final playableSong = currentSong.copyWith(extras: updatedExtras);
+          updatedExtras.remove('durationEstimated');
+          final playableSong = queueCurrentSong.copyWith(
+            duration: resolvedDuration,
+            extras: updatedExtras,
+          );
           if (songIndex < queue.value.length) {
             queue.value[songIndex] = playableSong;
           }
@@ -1213,6 +1250,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             try {
               Hive.box("SongsUrlCache").delete(currentSong.id);
             } catch (_) {}
+            if (currentSong.id.startsWith("sc_")) {
+              SoundCloudService.invalidateStreamCache(currentSong.id);
+            }
             if (currentSong.id.startsWith("sp_") || currentSong.id.startsWith("az_")) {
               PlatformSearchService.invalidateMatch(currentSong.id);
             }
@@ -1479,11 +1519,27 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             return;
           }
           currentSongUrl = streamInfo.audio!.url;
-          final updatedExtras = Map<String, dynamic>.from(currMed.extras ?? {});
+          final effectiveSong =
+              (mediaItem.value?.id == currMed.id ? mediaItem.value : null) ??
+                  currMed;
+          final Duration? resolvedDuration =
+              (effectiveSong.duration != null &&
+                      effectiveSong.duration!.inSeconds > 0 &&
+                      effectiveSong.extras?['durationEstimated'] != true)
+                  ? effectiveSong.duration
+                  : ((streamInfo.audio?.duration ?? 0) > 0
+                      ? Duration(milliseconds: streamInfo.audio!.duration)
+                      : effectiveSong.duration);
+          final updatedExtras =
+              Map<String, dynamic>.from(effectiveSong.extras ?? {});
           updatedExtras['url'] = currentSongUrl;
           updatedExtras['size'] = streamInfo.audio!.size;
           updatedExtras['codec'] = streamInfo.audio!.audioCodec.name;
-          final playableSong = currMed.copyWith(extras: updatedExtras);
+          updatedExtras.remove('durationEstimated');
+          final playableSong = effectiveSong.copyWith(
+            duration: resolvedDuration,
+            extras: updatedExtras,
+          );
           if (queue.value.length > 1) {
             final existingQueue = List<MediaItem>.from(queue.value);
             final targetIdx =
@@ -1579,6 +1635,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             try {
               Hive.box("SongsUrlCache").delete(currMed.id);
             } catch (_) {}
+            if (currMed.id.startsWith("sc_")) {
+              SoundCloudService.invalidateStreamCache(currMed.id);
+            }
             if (currMed.id.startsWith("sp_") || currMed.id.startsWith("az_")) {
               PlatformSearchService.invalidateMatch(currMed.id);
             }
@@ -2231,6 +2290,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     // SoundCloud Native Song Handling (Strictly SoundCloud - NEVER falls back to other platforms!)
     if (songId.startsWith("sc_")) {
       printINFO("Resolving SoundCloud track: $songId");
+      if (generateNewUrl) {
+        SoundCloudService.invalidateStreamCache(songId);
+      }
       final transcodingUrl = targetSong?.extras?['transcodingUrl'] as String?;
       final trackAuth = targetSong?.extras?['track_authorization'] as String?;
       final scStreamUrl = await SoundCloudService.resolveStreamUrl(songId,
@@ -2282,56 +2344,128 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       );
     }
 
-    // Spotify (Deezer Engine) or Amazon Native Track Stream Resolution
-    // Strictly uses Deezer (or iTunes fallback for Amazon) - ZERO YouTube fallback!
+    // Spotify / Amazon Native Track Full-Length Stream Resolution
+    // Never plays 30s catalog preview clips (cdnt-preview / itunes previewUrl / scdn preview).
+    // Resolves the verified studio track via PlatformSearchService -> full audio stream.
     if (songId.startsWith("sp_") || songId.startsWith("az_")) {
-      printINFO("Resolving Spotify/Deezer track stream for: $songId");
+      printINFO("Resolving full-length stream for platform track: $songId");
       final artistName = getSafeSongArtist(targetSong, fallback: '');
       final query = (targetSong?.extras?['searchQuery'] as String?) ??
           ('${targetSong?.title ?? ''} $artistName').trim();
 
-      String? streamUrl;
-      final existingUrl = targetSong?.extras?['previewUrl']?.toString() ??
-          targetSong?.extras?['url']?.toString();
-      if (!generateNewUrl && existingUrl != null && existingUrl.startsWith('http')) {
-        streamUrl = existingUrl;
+      if (generateNewUrl) {
+        PlatformSearchService.invalidateMatch(songId);
       }
 
-      if (streamUrl == null || streamUrl.isEmpty) {
-        streamUrl = await PlatformSearchService.getDeezerStreamUrl(songId, query: query);
+      // Check cached full song on disk (>=800 KB to reject any legacy 30s MP3 preview)
+      final platformCachePath = "$_cacheDir/cachedSongs/$songId.mp3";
+      final platformCacheFile = File(platformCachePath);
+      if (platformCacheFile.existsSync() &&
+          platformCacheFile.lengthSync() < 800 * 1024) {
+        try {
+          platformCacheFile.deleteSync();
+        } catch (_) {}
       }
-
-      if (streamUrl != null && streamUrl.isNotEmpty) {
-        int durationMs = targetSong?.duration?.inMilliseconds ?? 0;
-        if (durationMs == 0 && targetSong?.extras?['duration'] != null) {
-          final dur = targetSong!.extras!['duration'];
-          if (dur is num) durationMs = (dur * 1000).toInt();
-        }
-
-        final audio = Audio(
+      if (!offlineReplacementUrl &&
+          !generateNewUrl &&
+          platformCacheFile.existsSync() &&
+          platformCacheFile.lengthSync() >= 800 * 1024) {
+        final durationMs = targetSong?.duration?.inMilliseconds ?? 0;
+        final cachedAudio = Audio(
           audioCodec: Codec.mp4a,
           bitrate: 128000,
           loudnessDb: 0,
           duration: durationMs,
-          size: 0,
-          url: streamUrl,
+          size: platformCacheFile.lengthSync(),
+          url: "file://$platformCachePath",
           itag: 140,
         );
-
         return HMStreamingData(
           playable: true,
           statusMSG: "OK",
-          lowQualityAudio: audio,
-          highQualityAudio: audio,
+          lowQualityAudio: cachedAudio,
+          midQualityAudio: cachedAudio,
+          highQualityAudio: cachedAudio,
         );
       }
 
-      // DO NOT fall through to YouTube code!
+      if (query.isNotEmpty) {
+        MediaItem? matchedItem = await PlatformSearchService.resolveMatchedTrack(
+          songId,
+          query,
+          originalTrack: targetSong,
+        );
+
+        if (matchedItem != null &&
+            !matchedItem.id.startsWith("sp_") &&
+            !matchedItem.id.startsWith("az_")) {
+          var resolved = await checkNGetUrl(
+            matchedItem.id,
+            generateNewUrl: generateNewUrl,
+            targetMediaItem: matchedItem,
+            allowFallback: allowFallback,
+          );
+
+          if (!resolved.playable || resolved.audio == null) {
+            PlatformSearchService.invalidateMatch(songId);
+            try {
+              Hive.box("SongsUrlCache").delete(matchedItem.id);
+            } catch (_) {}
+            final retryMatch = await PlatformSearchService.resolveMatchedTrack(
+              songId,
+              query,
+              originalTrack: targetSong,
+            );
+            if (retryMatch != null &&
+                !retryMatch.id.startsWith("sp_") &&
+                !retryMatch.id.startsWith("az_") &&
+                retryMatch.id != matchedItem.id) {
+              matchedItem = retryMatch;
+              resolved = await checkNGetUrl(
+                retryMatch.id,
+                generateNewUrl: true,
+                targetMediaItem: retryMatch,
+                allowFallback: allowFallback,
+              );
+            }
+          }
+
+          if (resolved.playable && resolved.audio != null) {
+            final bool targetHasReliableDuration =
+                targetSong?.duration != null &&
+                    targetSong!.duration!.inSeconds > 0 &&
+                    targetSong.extras?['durationEstimated'] != true;
+            final int fullDurationMs = targetHasReliableDuration
+                ? targetSong.duration!.inMilliseconds
+                : (matchedItem.duration?.inMilliseconds ??
+                    resolved.audio!.duration);
+            if (!targetHasReliableDuration &&
+                fullDurationMs > 0 &&
+                targetSong != null) {
+              final updatedExtras =
+                  Map<String, dynamic>.from(targetSong.extras ?? {});
+              updatedExtras.remove('durationEstimated');
+              final updatedSong = targetSong.copyWith(
+                duration: Duration(milliseconds: fullDurationMs),
+                extras: updatedExtras,
+              );
+              if (currentIndex != null &&
+                  currentIndex! < queue.value.length &&
+                  queue.value[currentIndex!].id == targetSong.id) {
+                queue.value[currentIndex!] = updatedSong;
+              }
+              mediaItem.add(updatedSong);
+            }
+            return resolved;
+          }
+        }
+      }
+
       return HMStreamingData(
         playable: false,
         statusMSG: _isGerman
-            ? "Audio-Stream für '${targetSong?.title ?? songId}' ist auf Deezer/Spotify derzeit nicht verfügbar."
-            : "Audio stream for '${targetSong?.title ?? songId}' is currently unavailable on Deezer/Spotify.",
+            ? "Vollständiger Audio-Stream für '${targetSong?.title ?? songId}' konnte nicht geladen werden."
+            : "Full audio stream for '${targetSong?.title ?? songId}' could not be loaded.",
       );
     }
 

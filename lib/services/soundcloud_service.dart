@@ -159,8 +159,19 @@ class SoundCloudService {
         } else if (durationRaw is String) {
           durationMs = int.tryParse(durationRaw) ?? 0;
         }
+        final fullDurationRaw = track['full_duration'];
+        final int fullDurationMs = fullDurationRaw is num ? fullDurationRaw.toInt() : 0;
 
-        // Find best full unencrypted transcoding URL (strictly exclude previews and DRM)
+        // Skip Go+ / 30s snipped tracks
+        if (track['policy']?.toString().toUpperCase() == 'SNIP' ||
+            (fullDurationMs > 0 &&
+                durationMs > 0 &&
+                fullDurationMs > durationMs + 5000 &&
+                durationMs <= 35000)) {
+          continue;
+        }
+
+        // Find best full unencrypted transcoding URL (strictly exclude previews, snipped, and DRM)
         final media = track['media'] as Map?;
         final transcodings = (media != null && media['transcodings'] is List)
             ? media['transcodings'] as List
@@ -175,8 +186,9 @@ class SoundCloudService {
           final format = t['format'] as Map?;
           final protocol = format?['protocol']?.toString() ?? '';
 
-          // Strictly skip preview and encrypted streams
-          if (tUrl.contains('/preview') ||
+          // Strictly skip preview, snipped, and encrypted streams
+          if (t['snipped'] == true ||
+              tUrl.contains('/preview') ||
               protocol.contains('preview') ||
               protocol.contains('encrypted')) {
             continue;
@@ -285,18 +297,26 @@ class SoundCloudService {
           targetAuth ??= trackRes.data['track_authorization']?.toString();
           if (trackRes.data['media'] != null) {
             final transcodings = trackRes.data['media']['transcodings'] as List? ?? [];
+            String? progUrl;
+            String? hlsUrl;
             for (var t in transcodings) {
+              if (t is! Map) continue;
               final u = t['url']?.toString() ?? '';
               final format = t['format'] as Map?;
               final protocol = format?['protocol']?.toString() ?? '';
-              if (!protocol.contains('encrypted') &&
-                  !protocol.contains('preview') &&
-                  !u.contains('/preview') &&
-                  (u.contains('/stream/progressive') || u.contains('/stream/hls'))) {
-                targetTranscoding = u;
-                break;
+              if (t['snipped'] == true ||
+                  protocol.contains('encrypted') ||
+                  protocol.contains('preview') ||
+                  u.contains('/preview')) {
+                continue;
+              }
+              if (u.contains('/stream/progressive')) {
+                progUrl ??= u;
+              } else if (u.contains('/stream/hls')) {
+                hlsUrl ??= u;
               }
             }
+            targetTranscoding = progUrl ?? hlsUrl;
           }
         }
       }
