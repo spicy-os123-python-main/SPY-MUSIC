@@ -238,8 +238,8 @@ class _SpyLaunchScreenState extends State<SpyLaunchScreen>
                           if (showHat)
                             Positioned(
                               key: const ValueKey<String>('spy_santa_hat'),
-                              top: -40,
-                              right: -20,
+                              top: -42,
+                              left: 8,
                               child: AnimatedBuilder(
                                 animation: _controller,
                                 builder: (context, child) {
@@ -247,13 +247,13 @@ class _SpyLaunchScreenState extends State<SpyLaunchScreen>
                                           _controller.value * math.pi * 2) *
                                       0.035;
                                   return Transform.rotate(
-                                    angle: 0.24 + sway,
-                                    alignment: Alignment.bottomLeft,
+                                    angle: -0.05 + sway,
+                                    alignment: const Alignment(-0.2, 0.7),
                                     child: child,
                                   );
                                 },
                                 child: const CustomPaint(
-                                  size: Size(84, 72),
+                                  size: Size(96, 76),
                                   painter: SantaHatPainter(),
                                 ),
                               ),
@@ -419,7 +419,7 @@ class SnowfallPainter extends CustomPainter {
       oldDelegate.progress != progress;
 }
 
-/// Draws a festive Santa hat tilted over the corner of the app icon.
+/// Draws a festive Santa hat sitting snugly atop the app icon.
 class SantaHatPainter extends CustomPainter {
   const SantaHatPainter();
 
@@ -428,12 +428,13 @@ class SantaHatPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    // Red velvet hat body curving toward right tip
+    // Red velvet hat body curving smoothly toward right tip
     final hatPath = Path()
-      ..moveTo(w * 0.14, h * 0.72)
-      ..quadraticBezierTo(w * 0.30, h * 0.10, w * 0.74, h * 0.18)
-      ..quadraticBezierTo(w * 0.90, h * 0.24, w * 0.90, h * 0.46)
-      ..quadraticBezierTo(w * 0.72, h * 0.36, w * 0.64, h * 0.70)
+      ..moveTo(w * 0.10, h * 0.72)
+      ..quadraticBezierTo(w * 0.18, h * 0.28, w * 0.38, h * 0.08)
+      ..quadraticBezierTo(w * 0.58, h * 0.07, w * 0.76, h * 0.20)
+      ..quadraticBezierTo(w * 0.94, h * 0.30, w * 0.93, h * 0.48)
+      ..quadraticBezierTo(w * 0.80, h * 0.40, w * 0.72, h * 0.72)
       ..close();
 
     final hatPaint = Paint()
@@ -447,46 +448,46 @@ class SantaHatPainter extends CustomPainter {
         ],
       ).createShader(Rect.fromLTWH(0, 0, w, h));
 
-    canvas.drawShadow(hatPath, Colors.black.withOpacity(0.45), 4.0, true);
+    canvas.drawShadow(hatPath, Colors.black.withOpacity(0.42), 4.0, true);
     canvas.drawPath(hatPath, hatPaint);
 
     // Subtle fabric highlight curve along the crown
     final highlightPaint = Paint()
-      ..color = Colors.white.withOpacity(0.22)
+      ..color = Colors.white.withOpacity(0.25)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.2
       ..strokeCap = StrokeCap.round;
     final highlightPath = Path()
-      ..moveTo(w * 0.28, h * 0.56)
-      ..quadraticBezierTo(w * 0.40, h * 0.22, w * 0.68, h * 0.24);
+      ..moveTo(w * 0.22, h * 0.48)
+      ..quadraticBezierTo(w * 0.34, h * 0.18, w * 0.60, h * 0.16);
     canvas.drawPath(highlightPath, highlightPaint);
 
-    // Fluffy white fur trim along brim
+    // Fluffy white fur trim along brim resting on the icon's top edge
     final brimPaint = Paint()..color = const Color(0xFFF8FAFC);
     final brimShadowPaint = Paint()..color = const Color(0xFFCBD5E1);
     final brimRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.08, h * 0.64, w * 0.64, h * 0.22),
-      const Radius.circular(11),
+      Rect.fromLTWH(w * 0.06, h * 0.66, w * 0.70, h * 0.24),
+      const Radius.circular(12),
     );
     canvas.drawRRect(brimRect.shift(const Offset(0, 2)), brimShadowPaint);
     canvas.drawRRect(brimRect, brimPaint);
 
     // Fluffy puffs along the fur brim for soft silhouette
-    const int puffCount = 5;
+    const int puffCount = 6;
     for (int i = 0; i < puffCount; i++) {
-      final px = w * (0.14 + i * 0.13);
-      final py = h * (i.isEven ? 0.74 : 0.77);
-      canvas.drawCircle(Offset(px, py), h * 0.11, brimPaint);
+      final px = w * (0.11 + i * 0.12);
+      final py = h * (i.isEven ? 0.77 : 0.80);
+      canvas.drawCircle(Offset(px, py), h * 0.105, brimPaint);
     }
 
     // Fluffy white pom-pom at hat tip
-    final pomCenter = Offset(w * 0.89, h * 0.50);
+    final pomCenter = Offset(w * 0.92, h * 0.50);
     canvas.drawCircle(
       pomCenter.translate(0, 2),
-      w * 0.115,
+      w * 0.11,
       brimShadowPaint,
     );
-    canvas.drawCircle(pomCenter, w * 0.115, brimPaint);
+    canvas.drawCircle(pomCenter, w * 0.11, brimPaint);
   }
 
   @override
