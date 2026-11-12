@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../services/app_secrets.dart';
+import '../../../../services/app_secrets.dart';
 import '../../../themes/app_themes.dart';
 import '../../../themes/components/spy_button_animation.dart';
 import '../../../utils/theme_controller.dart';
