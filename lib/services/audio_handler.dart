@@ -2609,7 +2609,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
     if (songsUrlCacheBox.containsKey(songId) && !generateNewUrl) {
       final streamInfoJson = songsUrlCacheBox.get(songId);
-      if (streamInfoJson.runtimeType.toString().contains("Map")) {
+      if (streamInfoJson is Map) {
         final lowUrl = streamInfoJson['lowQualityAudio']?['url'];
         final highUrl = streamInfoJson['highQualityAudio']?['url'];
         final midUrl = streamInfoJson['midQualityAudio']?['url'];

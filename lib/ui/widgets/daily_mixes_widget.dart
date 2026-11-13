@@ -94,13 +94,15 @@ class _DailyMixesWidgetState extends State<DailyMixesWidget> {
 
     // Fallback: If network search fails, try favorite songs
     try {
-      final favBox = Hive.box("LIBFAV");
+      final favBox = Hive.isBoxOpen("LIBFAV")
+          ? Hive.box("LIBFAV")
+          : await Hive.openBox("LIBFAV");
       if (favBox.isNotEmpty) {
-        final favSongs = favBox.values.map((e) => MediaItem(
-          id: e['id'] ?? '',
-          title: e['title'] ?? 'Song',
-          artist: e['artist'] ?? '',
-          artUri: Uri.tryParse(e['artUri'] ?? ''),
+        final favSongs = favBox.values.whereType<Map>().map((e) => MediaItem(
+          id: e['id']?.toString() ?? '',
+          title: e['title']?.toString() ?? 'Song',
+          artist: e['artist']?.toString() ?? '',
+          artUri: Uri.tryParse(e['artUri']?.toString() ?? ''),
         )).toList();
         if (favSongs.isNotEmpty) {
           playerController.playPlayListSong(favSongs, 0);

@@ -501,8 +501,7 @@ class MusicServices extends getx.GetxService {
     );
     if (results != null) {
       List contents = [];
-      if (results.runtimeType.toString().contains("Iterable") ||
-          results.runtimeType.toString().contains("List")) {
+      if (results is Iterable || results is List) {
         for (dynamic result in results) {
           contents.add(parseAlbum(result['musicTwoRowItemRenderer']));
         }
@@ -785,7 +784,7 @@ class MusicServices extends getx.GetxService {
           } else if (item is Artist) {
             itemType = "Artists";
           } else {
-            itemType = "${item.runtimeType}s";
+            itemType = "Other";
           }
           if (searchResults.containsKey(itemType)) {
             (searchResults[itemType] as List).add(item);

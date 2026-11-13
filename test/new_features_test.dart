@@ -5,6 +5,8 @@ import 'package:hive/hive.dart';
 import 'package:spymusic/services/collab_playlist_service.dart';
 import 'package:spymusic/services/song_recognizer_service.dart';
 import 'package:spymusic/ui/widgets/daily_mixes_widget.dart';
+import 'package:spymusic/models/album.dart';
+import 'package:spymusic/models/playlist.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -101,6 +103,41 @@ void main() {
       expect(clampLevel(-15.0), 0.0);
       expect(clampLevel(120.0), 100.0);
       expect(clampLevel(65.0), 65.0);
+    });
+  });
+
+  group('Obfuscation Safety: AlbumContent and PlaylistContent Type Guards', () {
+    test('AlbumContent and PlaylistContent are identified by is-checks, never runtimeType string', () {
+      final albumContent = AlbumContent(
+        title: "Test Album Shelf",
+        albumList: [
+          Album(
+            title: "Album 1",
+            browseId: "b1",
+            artists: [
+              {'name': 'Artist 1'}
+            ],
+            thumbnailUrl: "https://example.com/art.jpg",
+          ),
+        ],
+      );
+
+      final playlistContent = PlaylistContent(
+        title: "Test Playlist Shelf",
+        playlistList: [
+          Playlist(
+            title: "Playlist 1",
+            playlistId: "p1",
+            thumbnailUrl: "https://example.com/art.jpg",
+            isPipedPlaylist: false,
+          ),
+        ],
+      );
+
+      expect(albumContent is AlbumContent, isTrue);
+      expect(albumContent is PlaylistContent, isFalse);
+      expect(playlistContent is PlaylistContent, isTrue);
+      expect(playlistContent is AlbumContent, isFalse);
     });
   });
 }

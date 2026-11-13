@@ -40,7 +40,7 @@ class PipedServices extends GetxService {
       _isLoggedIn = true;
       _insApiUrl = insApiUrl;
 
-      if (response.data.runtimeType.toString() == "_Map<String, dynamic>" &&
+      if (response.data is Map &&
           response.data.containsKey("error")) {
         return Res(0, errorMessage: response.data['error']);
       }
@@ -97,7 +97,7 @@ class PipedServices extends GetxService {
                     PipedInstance(name: data['name'], apiUrl: data['api_url']))
                 .toList());
       } else {
-        if (response.data.runtimeType.toString() == "_Map<String, dynamic>" &&
+        if (response.data is Map &&
             response.data.containsKey("error")) {
           return Res(0, errorMessage: response.data['error']);
         }

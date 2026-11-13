@@ -70,6 +70,13 @@ jobs:
           path: output/*.apk
           retention-days: 30
 
+      - name: Upload Debug Symbols Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-symbols
+          path: build/app/outputs/symbols
+          retention-days: 90
+
       - name: Extract App Version
         id: app_version
         run: |

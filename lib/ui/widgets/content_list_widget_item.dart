@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../models/album.dart';
 import '../../models/playlist.dart';
 import '../navigator.dart';
 import '../utils/theme_controller.dart';
@@ -25,7 +26,9 @@ class _ContentListItemState extends State<ContentListItem> {
 
   @override
   Widget build(BuildContext context) {
-    final isAlbum = widget.content.runtimeType.toString() == "Album";
+    final isAlbum = widget.content is Album;
+    final Album? album = isAlbum ? (widget.content as Album) : null;
+    final Playlist? playlist = widget.content is Playlist ? (widget.content as Playlist) : null;
     final double itemW = widget.customWidth ?? 130.0;
     final double imgSize = (itemW - 10.0).clamp(65.0, 160.0);
     final double itemH = imgSize + 58.0;
@@ -35,22 +38,22 @@ class _ContentListItemState extends State<ContentListItem> {
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
       onTap: () {
-        if (isAlbum) {
+        if (isAlbum && album != null) {
           Get.toNamed(ScreenNavigationSetup.albumScreen,
               id: ScreenNavigationSetup.id,
-              arguments: (widget.content, widget.content.browseId));
+              arguments: (album, album.browseId));
           return;
         }
-        Get.toNamed(ScreenNavigationSetup.playlistScreen,
-            id: ScreenNavigationSetup.id,
-            arguments: [widget.content, widget.content.playlistId]);
+        if (playlist != null) {
+          Get.toNamed(ScreenNavigationSetup.playlistScreen,
+              id: ScreenNavigationSetup.id,
+              arguments: [playlist, playlist.playlistId]);
+        }
       },
       onLongPress: () {
         if (!isAlbum) {
-          Playlist? p;
-          if (widget.content is Playlist) {
-            p = widget.content as Playlist;
-          } else if (widget.content != null) {
+          Playlist? p = playlist;
+          if (p == null && widget.content != null) {
             try {
               p = Playlist.fromJson(widget.content);
             } catch (_) {}
@@ -160,22 +163,22 @@ class _ContentListItemState extends State<ContentListItem> {
                     child: isAlbum
                         ? ImageWidget(
                             size: imgSize,
-                            album: widget.content,
+                            album: album,
                           )
-                        : widget.content.isCloudPlaylist ||
-                                !(widget.content.playlistId == 'LIBRP' ||
-                                    widget.content.playlistId == 'LIBFAV' ||
-                                    widget.content.playlistId == 'SongsCache' ||
-                                    widget.content.playlistId == 'SongDownloads')
+                        : (playlist?.isCloudPlaylist ?? false) ||
+                                !(playlist?.playlistId == 'LIBRP' ||
+                                    playlist?.playlistId == 'LIBFAV' ||
+                                    playlist?.playlistId == 'SongsCache' ||
+                                    playlist?.playlistId == 'SongDownloads')
                             ? SizedBox.square(
                                 dimension: imgSize,
                                 child: Stack(
                               children: [
                                 ImageWidget(
                                   size: imgSize,
-                                  playlist: widget.content,
+                                  playlist: playlist ?? widget.content,
                                 ),
-                                if (widget.content.isPipedPlaylist)
+                                if (playlist?.isPipedPlaylist ?? false)
                                   Align(
                                     alignment: Alignment.bottomRight,
                                     child: Padding(
@@ -200,7 +203,7 @@ class _ContentListItemState extends State<ContentListItem> {
                                       ),
                                     ),
                                   ),
-                                if (!widget.content.isCloudPlaylist)
+                                if (!(playlist?.isCloudPlaylist ?? true))
                                   Align(
                                     alignment: Alignment.bottomRight,
                                     child: Padding(
@@ -236,11 +239,11 @@ class _ContentListItemState extends State<ContentListItem> {
                                 borderRadius: BorderRadius.circular(10)),
                             child: Center(
                                 child: Icon(
-                              widget.content.playlistId == 'LIBRP'
+                              playlist?.playlistId == 'LIBRP'
                                   ? Icons.history
-                                  : widget.content.playlistId == 'LIBFAV'
+                                  : playlist?.playlistId == 'LIBFAV'
                                       ? Icons.favorite
-                                      : widget.content.playlistId == 'SongsCache'
+                                      : playlist?.playlistId == 'SongsCache'
                                           ? Icons.flight
                                           : Icons.download,
                               color: Theme.of(context).brightness ==
@@ -259,7 +262,9 @@ class _ContentListItemState extends State<ContentListItem> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      widget.content.title,
+                      isAlbum
+                          ? (album?.title ?? "")
+                          : (playlist?.title ?? widget.content?.title?.toString() ?? ""),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -272,8 +277,8 @@ class _ContentListItemState extends State<ContentListItem> {
                     if (!widget.isLibraryItem)
                       Text(
                         isAlbum
-                            ? "${widget.content.artists[0]['name'] ?? ""} | ${widget.content.year ?? ""}"
-                            : widget.content.description ?? "",
+                            ? "${(album?.artists != null && album!.artists!.isNotEmpty) ? (album.artists![0]['name'] ?? "") : ""} | ${album?.year ?? ""}"
+                            : (playlist?.description ?? widget.content?.description?.toString() ?? ""),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(

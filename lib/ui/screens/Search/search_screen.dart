@@ -108,7 +108,7 @@ class SearchScreen extends StatelessWidget {
                           contentPadding: const EdgeInsets.only(left: 5),
                           focusColor: Colors.white,
                           hintText: "searchDes".tr,
-                          suffix: Row(
+                          suffixIcon: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(

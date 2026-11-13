@@ -19,9 +19,11 @@ class Artist {
       radioId: json['radioId'],
       subscribers: (json['subscribers']) == null
           ? ""
-          : (json['subscribers']).runtimeType.toString() == "String"
+          : json['subscribers'] is String
               ? json['subscribers']
-              : json['subscribers']['text'],
+              : (json['subscribers'] is Map
+                  ? (json['subscribers']['text']?.toString() ?? "")
+                  : json['subscribers'].toString()),
       thumbnailUrl: Thumbnail(json["thumbnails"][0]["url"]).high);
 
   Map<String, dynamic> toJson() => {

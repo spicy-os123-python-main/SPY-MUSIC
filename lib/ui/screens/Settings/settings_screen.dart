@@ -1539,7 +1539,7 @@ Widget radioWidget(
   return Obx(() => ListTile(
         visualDensity: const VisualDensity(vertical: -4),
         onTap: () {
-          if (value.runtimeType == ThemeType) {
+          if (value is ThemeType) {
             controller.onThemeChange(value);
           } else {
             controller.onContentChange(value);
@@ -1548,10 +1548,10 @@ Widget radioWidget(
         },
         leading: Radio(
             value: value,
-            groupValue: value.runtimeType == ThemeType
+            groupValue: value is ThemeType
                 ? controller.themeModetype.value
                 : controller.discoverContentType.value,
-            onChanged: value.runtimeType == ThemeType
+            onChanged: value is ThemeType
                 ? controller.onThemeChange
                 : controller.onContentChange),
         title: Text(label),
