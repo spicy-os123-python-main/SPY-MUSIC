@@ -21,7 +21,7 @@ open class MusicWidgetProvider(private val layoutResId: Int) : AppWidgetProvider
     private fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
         val views = RemoteViews(context.packageName, layoutResId)
 
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {
             PendingIntent.FLAG_UPDATE_CURRENT
@@ -29,9 +29,9 @@ open class MusicWidgetProvider(private val layoutResId: Int) : AppWidgetProvider
 
         // Clicking the widget opens MainActivity
         val launchIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
-        val launchPendingIntent = PendingIntent.getActivity(context, 0, launchIntent, flags)
+        val launchPendingIntent = PendingIntent.getActivity(context, 0, launchIntent, pendingFlags)
         try {
             views.setOnClickPendingIntent(R.id.widget_container, launchPendingIntent)
         } catch (_: Exception) {}
@@ -44,7 +44,7 @@ open class MusicWidgetProvider(private val layoutResId: Int) : AppWidgetProvider
             component = mediaReceiver
             putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
         }
-        val playPausePending = PendingIntent.getBroadcast(context, 101, playPauseIntent, flags)
+        val playPausePending = PendingIntent.getBroadcast(context, 101, playPauseIntent, pendingFlags)
         try {
             views.setOnClickPendingIntent(R.id.btn_play_pause, playPausePending)
         } catch (_: Exception) {}
@@ -54,7 +54,7 @@ open class MusicWidgetProvider(private val layoutResId: Int) : AppWidgetProvider
             component = mediaReceiver
             putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT))
         }
-        val nextPending = PendingIntent.getBroadcast(context, 102, nextIntent, flags)
+        val nextPending = PendingIntent.getBroadcast(context, 102, nextIntent, pendingFlags)
         try {
             views.setOnClickPendingIntent(R.id.btn_next, nextPending)
         } catch (_: Exception) {}
@@ -64,7 +64,7 @@ open class MusicWidgetProvider(private val layoutResId: Int) : AppWidgetProvider
             component = mediaReceiver
             putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
         }
-        val prevPending = PendingIntent.getBroadcast(context, 103, prevIntent, flags)
+        val prevPending = PendingIntent.getBroadcast(context, 103, prevIntent, pendingFlags)
         try {
             views.setOnClickPendingIntent(R.id.btn_prev, prevPending)
         } catch (_: Exception) {}
