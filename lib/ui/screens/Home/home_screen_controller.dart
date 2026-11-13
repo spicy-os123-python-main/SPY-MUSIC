@@ -152,7 +152,6 @@ class HomeScreenController extends GetxController {
   }
 
   Future<bool> loadContentFromDb() async {
-    final stopwatch = Stopwatch()..start();
     final homeScreenData = await Hive.openBox("homeScreenData");
     if (homeScreenData.keys.isNotEmpty) {
       final String quickPicksType = homeScreenData.get("quickPicksType");
@@ -173,10 +172,6 @@ class HomeScreenController extends GetxController {
               : PlaylistContent.fromJson(e))
           .toList();
 
-      final elapsed = stopwatch.elapsedMilliseconds;
-      if (elapsed < 2000) {
-        await Future.delayed(Duration(milliseconds: 2000 - elapsed));
-      }
       isContentFetched.value = true;
       printINFO("Loaded from offline db");
       return true;
@@ -190,7 +185,6 @@ class HomeScreenController extends GetxController {
     String contentType = box.get("discoverContentType") ?? "QP";
 
     networkError.value = false;
-    final stopwatch = Stopwatch()..start();
     try {
       List middleContentTemp = [];
       final homeContentListMap = await _musicServices.getHome(
@@ -262,10 +256,6 @@ class HomeScreenController extends GetxController {
       middleContent.value = _setContentList(middleContentTemp);
       fixedContent.value = _setContentList(homeContentListMap);
 
-      final elapsed = stopwatch.elapsedMilliseconds;
-      if (elapsed < 2000) {
-        await Future.delayed(Duration(milliseconds: 2000 - elapsed));
-      }
       isContentFetched.value = true;
 
       // set home content last update time

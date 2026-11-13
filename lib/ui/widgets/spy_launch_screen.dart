@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../services/live_config_service.dart';
+import '../screens/Home/home_screen_controller.dart';
 
 /// Displays [SpyLaunchScreen] for at least 3 seconds (`minSplashMs >= 3000`)
 /// while syncing [LiveConfigService] in the background, then smoothly reveals
@@ -34,6 +35,14 @@ class _SpyLaunchGateState extends State<SpyLaunchGate> {
     super.initState();
     _service = widget.liveConfigService ?? LiveConfigService();
     _config = _service.currentConfig.value;
+
+    // Warm up and start loading home screen in the background while winter splash plays
+    try {
+      if (Get.isRegistered<HomeScreenController>()) {
+        Get.find<HomeScreenController>();
+      }
+    } catch (_) {}
+
     _startLaunchSequence();
   }
 
@@ -67,6 +76,20 @@ class _SpyLaunchGateState extends State<SpyLaunchGate> {
       );
       if (!mounted) return;
     }
+
+    // Ensure home content is ready before dismissing launch screen
+    // so no second loading screen ever shows up.
+    try {
+      if (Get.isRegistered<HomeScreenController>()) {
+        final hsc = Get.find<HomeScreenController>();
+        int checks = 0;
+        while (!hsc.isContentFetched.value && checks < 20) {
+          await Future.delayed(const Duration(milliseconds: 100));
+          checks++;
+          if (!mounted) return;
+        }
+      }
+    } catch (_) {}
 
     setState(() => _ready = true);
   }

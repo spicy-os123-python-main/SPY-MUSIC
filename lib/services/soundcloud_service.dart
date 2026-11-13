@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:hive/hive.dart';
@@ -349,6 +351,21 @@ class SoundCloudService {
       final errBody = dioErr.response?.data?.toString();
       final trunc = errBody != null ? (errBody.length > 200 ? '${errBody.substring(0, 200)}...' : errBody) : 'none';
       printERROR("SoundCloud resolveStreamUrl failed [HTTP $status] for $songId: ${dioErr.message}, body: $trunc");
+
+      if (!isRetry &&
+          (dioErr.type == DioExceptionType.connectionError ||
+           dioErr.type == DioExceptionType.connectionTimeout ||
+           dioErr.type == DioExceptionType.sendTimeout ||
+           dioErr.type == DioExceptionType.receiveTimeout ||
+           dioErr.error is SocketException ||
+           dioErr.message?.contains('Failed host lookup') == true)) {
+        printINFO("SoundCloud resolveStreamUrl connection hiccup for $songId, retrying after 600ms...");
+        await Future.delayed(const Duration(milliseconds: 600));
+        return await resolveStreamUrl(songId,
+            transcodingUrl: transcodingUrl,
+            trackAuthorization: trackAuthorization,
+            isRetry: true);
+      }
 
       if ((status == 401 || status == 403) && !isRetry) {
         printINFO("SoundCloud resolveStreamUrl $status, refreshing client ID...");

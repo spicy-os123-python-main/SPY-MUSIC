@@ -15,7 +15,6 @@ import '../../navigator.dart';
 import '../../widgets/content_list_widget.dart';
 import '../../widgets/quickpickswidget.dart';
 import '../../widgets/daily_mixes_widget.dart';
-import '../../widgets/spy_music_loading_widget.dart';
 import 'home_screen_controller.dart';
 import '../../widgets/platform_selector_widget.dart';
 import '../../widgets/spy_music_header_widget.dart';
@@ -200,8 +199,9 @@ class Body extends StatelessWidget {
                     : Obx(() {
                         // dispose all detachached scroll controllers
                         homeScreenController.disposeDetachedScrollControllers();
-                        if (!homeScreenController.isContentFetched.value) {
-                          return const SpyMusicLoadingWidget();
+                        if (!homeScreenController.isContentFetched.value &&
+                            homeScreenController.quickPicks.value.songList.isEmpty) {
+                          return const SizedBox.shrink();
                         }
                         final items = [
                           const SpyMusicHeaderWidget(),

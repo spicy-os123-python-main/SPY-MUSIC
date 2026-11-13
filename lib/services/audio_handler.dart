@@ -2357,6 +2357,35 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
 
       SoundCloudService.invalidateStreamCache(songId);
+
+      // Attempt seamless studio fallback if SoundCloud stream is unavailable or unreachable
+      try {
+        final artistName = getSafeSongArtist(targetSong, fallback: '');
+        final query = (targetSong?.extras?['searchQuery'] as String?) ??
+            ('${targetSong?.title ?? ''} $artistName').trim();
+        if (query.isNotEmpty) {
+          printINFO("SoundCloud stream unreachable for $songId, attempting seamless fallback for '$query'...");
+          final matchedItem = await PlatformSearchService.resolveMatchedTrack(
+            songId,
+            query,
+            originalTrack: targetSong,
+          );
+          if (matchedItem != null && !matchedItem.id.startsWith("sc_")) {
+            final fallbackResolved = await checkNGetUrl(
+              matchedItem.id,
+              generateNewUrl: generateNewUrl,
+              targetMediaItem: matchedItem,
+              allowFallback: allowFallback,
+            );
+            if (fallbackResolved.playable) {
+              return fallbackResolved;
+            }
+          }
+        }
+      } catch (fallbackErr) {
+        printERROR("SoundCloud fallback error: $fallbackErr");
+      }
+
       return HMStreamingData(
         playable: false,
         statusMSG: _isGerman
