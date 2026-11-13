@@ -75,6 +75,8 @@ class PlayerController extends GetxController
   final eqPreset = "Normal".obs;
   final customBassBoost = 0.0.obs;
   final bummmBoostGain = 0.0.obs;
+  final spatialAudioEnabled = false.obs;
+  final spatialAudioLevel = 60.0.obs;
 
   // Video Mode State
   final isVideoMode = false.obs;
@@ -955,6 +957,8 @@ class PlayerController extends GetxController
         final savedBummm = (appPrefs.get("bummm_boost_gain", defaultValue: 0.0) as num).toDouble();
         customBassBoost.value = savedBass;
         bummmBoostGain.value = savedBummm;
+        spatialAudioEnabled.value = (appPrefs.get("spatial_audio_enabled", defaultValue: false) as bool);
+        spatialAudioLevel.value = (appPrefs.get("spatial_audio_level", defaultValue: 60.0) as num).toDouble();
       } else {
         eqSupported.value = false;
       }
@@ -1007,6 +1011,26 @@ class PlayerController extends GetxController
       "enabled": gain > 0,
       "gain": gain,
     });
+  }
+
+  Future<void> setSpatialAudioEnabled(bool enable) async {
+    spatialAudioEnabled.value = enable;
+    await Hive.box("AppPrefs").put("spatial_audio_enabled", enable);
+    await _audioHandler.customAction("setSpatialAudio", {
+      "enabled": enable,
+      "level": spatialAudioLevel.value,
+    });
+  }
+
+  Future<void> setSpatialAudioLevel(double level) async {
+    spatialAudioLevel.value = level;
+    await Hive.box("AppPrefs").put("spatial_audio_level", level);
+    if (spatialAudioEnabled.value) {
+      await _audioHandler.customAction("setSpatialAudio", {
+        "enabled": true,
+        "level": level,
+      });
+    }
   }
 
   Future<void> resetAudioEngine() async {

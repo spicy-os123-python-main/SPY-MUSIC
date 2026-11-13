@@ -833,8 +833,8 @@ class DiscordService {
       "timestamps": timestamps,
       if (assets.isNotEmpty) "assets": assets,
       "buttons": [
-        "Listen on SPY Music",
-        "Get SPY Music",
+        "Listen on SPY MUSIC",
+        "Download SPY MUSIC (APK)",
       ],
       "metadata": {
         "button_urls": [

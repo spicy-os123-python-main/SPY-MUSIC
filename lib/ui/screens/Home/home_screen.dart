@@ -14,6 +14,7 @@ import '/ui/widgets/create_playlist_dialog.dart';
 import '../../navigator.dart';
 import '../../widgets/content_list_widget.dart';
 import '../../widgets/quickpickswidget.dart';
+import '../../widgets/daily_mixes_widget.dart';
 import '../../widgets/spy_music_loading_widget.dart';
 import 'home_screen_controller.dart';
 import '../../widgets/platform_selector_widget.dart';
@@ -206,6 +207,7 @@ class Body extends StatelessWidget {
                           const SpyMusicHeaderWidget(),
                           const PlatformSelectorWidget(),
                           const WatchtimeHomeWidget(),
+                          const DailyMixesWidget(),
                           Obx(() {
                             final scrollController = ScrollController();
                             homeScreenController.contentScrollControllers

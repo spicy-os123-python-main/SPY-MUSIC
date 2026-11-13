@@ -1986,6 +1986,27 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         }
         break;
 
+      case 'setSpatialAudio':
+        final enable = extras?['enabled'] as bool? ?? false;
+        final level = (extras?['level'] as num?)?.toDouble() ?? 60.0;
+        final appPrefsBox = Hive.box("AppPrefs");
+        await appPrefsBox.put("spatial_audio_enabled", enable);
+        await appPrefsBox.put("spatial_audio_level", level);
+        if (_equalizer != null && enable) {
+          try {
+            final params = await _equalizer!.parameters;
+            final len = params.bands.length;
+            if (len >= 5) {
+              final widenDb = (level / 100.0) * 2.8;
+              final highBand = params.bands[len - 1];
+              await highBand.setGain(
+                (highBand.gain + (widenDb / 10.0)).clamp(params.minDecibels, params.maxDecibels),
+              );
+            }
+          } catch (_) {}
+        }
+        break;
+
       case 'resetAudioEngine':
         try {
           final session = await AudioSession.instance;

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="8dp">
+
+    <ImageView
+        android:id="@+id/widget_art"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:background="@drawable/widget_art_bg"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:src="@drawable/ic_widget_music"
+        android:contentDescription="Cover Art" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="8dp">
+
+        <ImageView
+            android:id="@+id/btn_play_pause"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_widget_play"
+            android:contentDescription="Play/Pause" />
+
+        <ImageView
+            android:id="@+id/btn_next"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="4dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_widget_next"
+            android:contentDescription="Next" />
+    </LinearLayout>
+</LinearLayout>

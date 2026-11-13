@@ -9,7 +9,6 @@ import '../../widgets/common_dialog_widget.dart';
 import '../../widgets/cust_switch.dart';
 import '../../widgets/export_file_dialog.dart';
 import '../../widgets/snackbar.dart';
-import '/ui/player/player_controller.dart';
 import '/services/music_service.dart';
 import '/services/discord_service.dart';
 import '../../widgets/discord_login_dialog.dart';
@@ -22,6 +21,7 @@ import '../../themes/components/spy_button_animation.dart';
 import 'components/custom_expansion_tile.dart';
 import 'components/auto_backup_settings_widget.dart';
 import 'components/support_links_bar.dart';
+import '../../widgets/inapp_equalizer_sheet.dart';
 import 'settings_screen_controller.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -590,10 +590,15 @@ class SettingsScreen extends StatelessWidget {
                       contentPadding:
                           const EdgeInsets.only(left: 5, right: 10, top: 0),
                       title: Text("equalizer".tr),
-                      subtitle: Text("equalizerDes".tr),
+                      subtitle: Text("equalizerSettingsSub".tr),
                       trailing: const Icon(Icons.equalizer_rounded, color: Color(0xFF00D2FF)),
                       onTap: () {
-                        Get.find<PlayerController>().openEqualizer();
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => const InAppEqualizerSheet(),
+                        );
                       },
                     ),
                   if (!isDesktop)
@@ -1849,6 +1854,70 @@ class _DiscordTokenInputWidgetState extends State<_DiscordTokenInputWidget> {
                   ),
                 ),
               ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF5865F2).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF5865F2).withOpacity(0.2)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.phone_android_rounded, size: 16, color: Color(0xFF5865F2)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "discordMobileNotice".tr,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: Colors.white.withOpacity(0.7),
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => launchUrl(
+                    Uri.parse("https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest"),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                  icon: const Icon(Icons.download_rounded, size: 14),
+                  label: Text("downloadAppBtn".tr, style: const TextStyle(fontSize: 11)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => launchUrl(
+                    Uri.parse("https://github.com/spicy-os123-python-main/SPY-MUSIC"),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                  icon: const Icon(Icons.code_rounded, size: 14),
+                  label: Text("githubRepoBtn".tr, style: const TextStyle(fontSize: 11)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
             ],
           ),
         ],

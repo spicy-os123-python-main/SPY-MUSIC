@@ -8,6 +8,7 @@ import '../../widgets/modified_text_field.dart';
 import '/ui/navigator.dart';
 import 'search_screen_controller.dart';
 import '../../widgets/platform_selector_widget.dart';
+import '../../widgets/song_recognizer_dialog.dart';
 
 class SearchScreen extends StatelessWidget {
   const SearchScreen({super.key});
@@ -59,12 +60,19 @@ class SearchScreen extends StatelessWidget {
                 padding: EdgeInsets.only(top: topPadding, left: 5),
                 child: Column(
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        "search".tr,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "search".tr,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.graphic_eq_rounded, color: Color(0xFF00D2FF)),
+                          tooltip: "recognizerTitle".tr,
+                          onPressed: () => SongRecognizerDialog.show(context),
+                        ),
+                      ],
                     ),
                     const SizedBox(
                       height: 10,
@@ -100,11 +108,23 @@ class SearchScreen extends StatelessWidget {
                           contentPadding: const EdgeInsets.only(left: 5),
                           focusColor: Colors.white,
                           hintText: "searchDes".tr,
-                          suffix: IconButton(
-                            onPressed: searchScreenController.reset,
-                            icon: const Icon(Icons.close),
-                            splashRadius: 16,
-                            iconSize: 19,
+                          suffix: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                onPressed: () => SongRecognizerDialog.show(context),
+                                icon: const Icon(Icons.mic_rounded, color: Color(0xFF00D2FF)),
+                                splashRadius: 16,
+                                iconSize: 20,
+                                tooltip: "recognizerTitle".tr,
+                              ),
+                              IconButton(
+                                onPressed: searchScreenController.reset,
+                                icon: const Icon(Icons.close),
+                                splashRadius: 16,
+                                iconSize: 19,
+                              ),
+                            ],
                           )),
                     ),
                     const PlatformSelectorWidget(),

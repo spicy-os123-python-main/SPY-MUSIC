@@ -22,6 +22,8 @@ import '../navigator.dart';
 import 'song_download_btn.dart';
 import 'image_widget.dart';
 import 'song_info_dialog.dart';
+import 'inapp_equalizer_sheet.dart';
+import 'story_share_sheet.dart';
 
 class SongInfoBottomSheet extends StatelessWidget {
   const SongInfoBottomSheet(this.song,
@@ -161,7 +163,12 @@ class SongInfoBottomSheet extends StatelessWidget {
               trailing: const Icon(Icons.chevron_right, color: Colors.white54),
               onTap: () {
                 Navigator.of(context).pop();
-                playerController.openEqualizer();
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const InAppEqualizerSheet(),
+                );
               },
             ),
             ListTile(
@@ -372,6 +379,28 @@ class SongInfoBottomSheet extends StatelessWidget {
               title: Text("shareSong".tr),
               onTap: () =>
                   Share.share("https://youtube.com/watch?v=${song.id}"),
+            ),
+            ListTile(
+              contentPadding: const EdgeInsets.only(left: 15),
+              visualDensity: const VisualDensity(vertical: -1),
+              leading: const Icon(Icons.camera_alt_outlined, color: Color(0xFFE1306C)),
+              title: Text("shareStoryCard".tr),
+              subtitle: Text(
+                "shareStoryCardSub".tr,
+                style: TextStyle(
+                  color: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.color
+                          ?.withOpacity(0.6) ??
+                      Colors.white60,
+                  fontSize: 12,
+                ),
+              ),
+              onTap: () {
+                Navigator.of(context).pop();
+                StoryShareSheet.show(context, song);
+              },
             ),
           ],
         ),

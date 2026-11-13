@@ -997,6 +997,112 @@ class _InAppEqualizerSheetState extends State<InAppEqualizerSheet> {
                 ),
               ),
 
+              // 4. Virtual 3D Spatial Audio (Räumlicher 3D-Klang)
+              Container(
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 18),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFF10B981).withOpacity(0.22),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.surround_sound_rounded,
+                            color: Color(0xFF10B981),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "spatialAudioTitle".tr,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                "spatialAudioSub".tr,
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.6),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Obx(() => Switch(
+                              value: playerController.spatialAudioEnabled.value,
+                              activeColor: const Color(0xFF10B981),
+                              onChanged: playerController.eqEnabled.value
+                                  ? (val) => playerController.setSpatialAudioEnabled(val)
+                                  : null,
+                            )),
+                      ],
+                    ),
+                    Obx(() {
+                      if (!playerController.spatialAudioEnabled.value) {
+                        return const SizedBox.shrink();
+                      }
+                      final level = playerController.spatialAudioLevel.value;
+                      return Column(
+                        children: [
+                          const SizedBox(height: 8),
+                          SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: const Color(0xFF10B981),
+                              inactiveTrackColor: Colors.white12,
+                              thumbColor: const Color(0xFF10B981),
+                              overlayColor: const Color(0xFF10B981).withOpacity(0.2),
+                              trackHeight: 4,
+                            ),
+                            child: Slider(
+                              value: level.clamp(0.0, 100.0),
+                              min: 0.0,
+                              max: 100.0,
+                              divisions: 20,
+                              label: "${level.toInt()}%",
+                              onChanged: playerController.eqEnabled.value
+                                  ? (val) => playerController.setSpatialAudioLevel(val)
+                                  : null,
+                            ),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text("spatialSubtle".tr,
+                                  style: TextStyle(fontSize: 10.5, color: Colors.white.withOpacity(0.4))),
+                              Text("spatialImmersive".tr,
+                                  style: TextStyle(fontSize: 10.5, color: Colors.white.withOpacity(0.4))),
+                              Text("spatialWide3D".tr,
+                                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF10B981))),
+                            ],
+                          ),
+                        ],
+                      );
+                    }),
+                  ],
+                ),
+              ),
+
               // Presets Selection (10 Sound Profiles)
               Text(
                 "soundProfiles".tr,

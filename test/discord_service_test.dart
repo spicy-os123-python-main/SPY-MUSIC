@@ -115,7 +115,7 @@ void main() {
       expect(act['state'], 'Test Artist');
       expect(act['assets']['large_image'], 'mp:external/resolved_cover');
       expect(act['assets']['small_image'], 'mp:external/resolved_logo');
-      expect(act['buttons'], ['Listen on SPY Music', 'Get SPY Music']);
+      expect(act['buttons'], ['Listen on SPY MUSIC', 'Download SPY MUSIC (APK)']);
     } finally {
       await server.close(force: true);
     }

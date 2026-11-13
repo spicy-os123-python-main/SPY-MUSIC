@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import 'additional_operation_dialog.dart';
 import 'import_playlist_dialog.dart';
+import 'collab_playlist_dialog.dart';
 import 'modified_text_field.dart';
 
 enum OperationMode { arrange, delete, addToPlaylist, none }
@@ -163,12 +164,18 @@ class SortWidget extends StatelessWidget {
                         },
                       ),
                     ),
-                    if (isImportFeatureRequired)
+                    if (isImportFeatureRequired) ...[
                       _customIconButton(
                         icon: Icons.import_contacts,
                         tooltip: "importPlaylist".tr,
                         onPressed: () => _showImportDialog(context),
                       ),
+                      _customIconButton(
+                        icon: Icons.group_add_rounded,
+                        tooltip: "collabPlaylists".tr,
+                        onPressed: () => CollabPlaylistDialog.show(context),
+                      ),
+                    ],
                     if (isSearchFeatureRequired)
                       _customIconButton(
                         icon: Icons.search,
