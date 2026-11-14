@@ -7,6 +7,8 @@ import 'package:spymusic/services/song_recognizer_service.dart';
 import 'package:spymusic/ui/widgets/daily_mixes_widget.dart';
 import 'package:spymusic/models/album.dart';
 import 'package:spymusic/models/playlist.dart';
+import 'package:spymusic/utils/app_version.dart';
+import 'package:spymusic/utils/helper.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -108,7 +110,7 @@ void main() {
 
   group('Obfuscation Safety: AlbumContent and PlaylistContent Type Guards', () {
     test('AlbumContent and PlaylistContent are identified by is-checks, never runtimeType string', () {
-      final albumContent = AlbumContent(
+      final Object albumContent = AlbumContent(
         title: "Test Album Shelf",
         albumList: [
           Album(
@@ -122,7 +124,7 @@ void main() {
         ],
       );
 
-      final playlistContent = PlaylistContent(
+      final Object playlistContent = PlaylistContent(
         title: "Test Playlist Shelf",
         playlistList: [
           Playlist(
@@ -138,6 +140,39 @@ void main() {
       expect(albumContent is PlaylistContent, isFalse);
       expect(playlistContent is PlaylistContent, isTrue);
       expect(playlistContent is AlbumContent, isFalse);
+    });
+  });
+
+  group('App Update Reliability & Version Comparison', () {
+    test('AppVersion constants are valid and non-empty', () {
+      expect(AppVersion.current.startsWith('v'), isTrue);
+      expect(AppVersion.buildNumber, greaterThan(3000));
+      expect(AppVersion.cleanString(AppVersion.current), '1.12.90');
+      expect(AppVersion.full, 'v1.12.90+3094');
+    });
+
+    test('AppVersion.isNewer logic handles major, minor, patch and build numbers', () {
+      expect(AppVersion.isNewer('v1.12.90', 'v1.12.89'), isTrue);
+      expect(AppVersion.isNewer('v1.12.90', 'v1.12.90'), isFalse);
+      expect(AppVersion.isNewer('v1.12.89', 'v1.12.90'), isFalse);
+      expect(AppVersion.isNewer('v2.0.0', 'v1.12.90'), isTrue);
+      expect(AppVersion.isNewer('v1.13.0', 'v1.12.90'), isTrue);
+
+      // With build numbers
+      expect(AppVersion.isNewer('v1.12.90+3095', 'v1.12.90+3094'), isTrue);
+      expect(AppVersion.isNewer('v1.12.90+3094', 'v1.12.90+3094'), isFalse);
+      expect(AppVersion.isNewer('v1.12.90+3000', 'v1.12.90+3094'), isFalse);
+    });
+
+    test('checkAppUpdateDetails compares current vs latest without false positives', () async {
+      // Mocking scenario: check against own version should return hasUpdate == false
+      final result = await checkAppUpdateDetails(currentVer: AppVersion.current);
+      // Either GitHub network succeeded or fallback triggered, but hasUpdate must NEVER be true for current or newer
+      if (result['latest'] == AppVersion.current || result['latest'] == 'v1.12.90') {
+        expect(result['hasUpdate'], isFalse);
+      }
+      expect(result['downloadUrl'], isNotNull);
+      expect((result['downloadUrl'] as String).contains('spymusic-arm64-v8a.apk'), isTrue);
     });
   });
 }

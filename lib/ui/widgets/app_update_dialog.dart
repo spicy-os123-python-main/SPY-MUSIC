@@ -1,48 +1,108 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:hive/hive.dart';
+import '../../services/app_update_service.dart';
+import '../../utils/app_version.dart';
 
-class AppUpdateDialog extends StatelessWidget {
+class AppUpdateDialog extends StatefulWidget {
   final Map<String, dynamic> updateDetails;
 
   const AppUpdateDialog({super.key, required this.updateDetails});
 
-  Future<void> _openUrl(BuildContext context, String url) async {
-    try {
-      final uri = Uri.parse(url);
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched) {
-        await launchUrl(uri, mode: LaunchMode.platformDefault);
+  @override
+  State<AppUpdateDialog> createState() => _AppUpdateDialogState();
+}
+
+class _AppUpdateDialogState extends State<AppUpdateDialog> {
+  bool _isDownloading = false;
+  double _downloadProgress = 0.0;
+  String _downloadStatus = "";
+  String? _errorMessage;
+  bool _dontRemindAgain = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final latest = widget.updateDetails['latest']?.toString() ?? '';
+    final dismissed = Hive.box("AppPrefs").get("dismissedUpdateVersion");
+    _dontRemindAgain = dismissed != null && dismissed.toString() == latest;
+  }
+
+  void _startInAppDownload(String downloadUrl) async {
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0.01;
+      _downloadStatus = "downloadingUpdate".tr;
+      _errorMessage = null;
+    });
+
+    final success = await AppUpdateService.downloadAndInstallApk(
+      downloadUrl: downloadUrl,
+      onProgress: (progress, statusText) {
+        if (mounted) {
+          setState(() {
+            _downloadProgress = progress;
+            _downloadStatus = statusText;
+          });
+        }
+      },
+      onError: (err) {
+        if (mounted) {
+          setState(() {
+            _isDownloading = false;
+            _errorMessage = err;
+          });
+        }
+      },
+    );
+
+    if (mounted) {
+      setState(() {
+        _isDownloading = false;
+      });
+      if (success) {
+        Navigator.of(context).pop();
       }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("couldNotOpenLink".tr.replaceAll("{url}", url)),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
+    }
+  }
+
+  void _cancelDownload() {
+    AppUpdateService.cancelDownload();
+    if (mounted) {
+      setState(() {
+        _isDownloading = false;
+        _downloadProgress = 0.0;
+        _downloadStatus = "";
+      });
+    }
+  }
+
+  void _toggleDontRemind(bool? value, String latestVersion) {
+    final next = value ?? false;
+    setState(() {
+      _dontRemindAgain = next;
+    });
+    if (next) {
+      Hive.box("AppPrefs").put("dismissedUpdateVersion", latestVersion);
+    } else {
+      Hive.box("AppPrefs").delete("dismissedUpdateVersion");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final current = updateDetails['current']?.toString() ?? "v1.0.0";
-    final latest = updateDetails['latest']?.toString() ?? current;
-    final hasUpdate = updateDetails['hasUpdate'] == true;
-    final isSuccess =
-        updateDetails['success'] != false && updateDetails['error'] == null;
-    final errorMsg = updateDetails['error']?.toString();
-    final releaseBody = updateDetails['body']?.toString() ?? '';
-    final arm64Url = updateDetails['downloadUrl']?.toString() ??
-        "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk";
-    final universalUrl = updateDetails['universalUrl']?.toString() ??
-        "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic.apk";
-    final htmlUrl = updateDetails['htmlUrl']?.toString() ??
+    final current = widget.updateDetails['current']?.toString() ?? AppVersion.value;
+    final latest = widget.updateDetails['latest']?.toString() ?? current;
+    final hasUpdate = widget.updateDetails['hasUpdate'] == true;
+    final isSuccess = widget.updateDetails['success'] != false && widget.updateDetails['error'] == null;
+    final errorMsg = widget.updateDetails['error']?.toString();
+    final releaseBody = widget.updateDetails['body']?.toString() ?? '';
+    final arm64Url = widget.updateDetails['downloadUrl']?.toString() ??
+        "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic-arm64-v8a.apk";
+    final universalUrl = widget.updateDetails['universalUrl']?.toString() ??
+        "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic.apk";
+    final htmlUrl = widget.updateDetails['htmlUrl']?.toString() ??
         "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest";
 
     final Color statusColor = hasUpdate
@@ -137,6 +197,7 @@ class AppUpdateDialog extends StatelessWidget {
             _buildInfoRow("installedVersion".tr, current),
             const SizedBox(height: 6),
             _buildInfoRow("latestRelease".tr, latest),
+
             if (!isSuccess && errorMsg != null) ...[
               const SizedBox(height: 10),
               Container(
@@ -152,6 +213,40 @@ class AppUpdateDialog extends StatelessWidget {
                 ),
               ),
             ],
+
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Colors.redAccent, fontSize: 11.5),
+                    ),
+                    const SizedBox(height: 6),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.redAccent),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      ),
+                      onPressed: () => AppUpdateService.openInBrowser(arm64Url),
+                      icon: const Icon(Icons.open_in_browser_rounded, size: 14),
+                      label: Text("browserDownload".tr, style: const TextStyle(fontSize: 11)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             if (releaseBody.isNotEmpty) ...[
               const SizedBox(height: 14),
               Text(
@@ -178,60 +273,190 @@ class AppUpdateDialog extends StatelessWidget {
                 ),
               ),
             ],
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
+
+            // Active In-App Download Progress State
+            if (_isDownloading) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00D2FF).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF00D2FF).withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "downloadingUpdate".tr,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        Text(
+                          _downloadStatus,
+                          style: const TextStyle(
+                            color: Color(0xFF00D2FF),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: _downloadProgress > 0 ? _downloadProgress : null,
+                        backgroundColor: Colors.white12,
+                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF00D2FF)),
+                        minHeight: 6,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _cancelDownload,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white60,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        ),
+                        child: Text("cancel".tr, style: const TextStyle(fontSize: 11.5)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Action Buttons when Update is available and not actively downloading
+            if (hasUpdate && !_isDownloading) ...[
+              const SizedBox(height: 16),
+              if (Platform.isAndroid) ...[
+                // Primary: One-Click Direct In-App Download & Install
+                SizedBox(
+                  width: double.infinity,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00D2FF),
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    onPressed: () => _openUrl(context, arm64Url),
-                    icon: const Icon(Icons.download_rounded, size: 18),
-                    label: const Text(
-                      "ARM64 APK",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1DB954),
                       foregroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFF00D2FF)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: () => _openUrl(context, universalUrl),
-                    icon: const Icon(Icons.download_rounded, size: 18),
-                    label: const Text(
-                      "Universal APK",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 12),
+                    onPressed: () => _startInAppDownload(arm64Url),
+                    icon: const Icon(Icons.install_mobile_rounded, size: 20),
+                    label: Text(
+                      "directUpdateInstall".tr,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13.5,
+                      ),
                     ),
                   ),
                 ),
+                const SizedBox(height: 8),
               ],
-            ),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF00D2FF),
+                        side: const BorderSide(color: Color(0xFF00D2FF)),
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () => Platform.isAndroid
+                          ? _startInAppDownload(universalUrl)
+                          : AppUpdateService.openInBrowser(universalUrl),
+                      icon: const Icon(Icons.download_rounded, size: 16),
+                      label: const Text(
+                        "Universal APK",
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                        side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () => AppUpdateService.openInBrowser(arm64Url),
+                      icon: const Icon(Icons.open_in_browser_rounded, size: 16),
+                      label: Text(
+                        "browserDownload".tr,
+                        style: const TextStyle(fontSize: 11),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // "Don't remind again for this version" checkbox
+              Row(
+                children: [
+                  SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: Checkbox(
+                      value: _dontRemindAgain,
+                      activeColor: const Color(0xFF00D2FF),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      onChanged: (val) => _toggleDontRemind(val, latest),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _toggleDontRemind(!_dontRemindAgain, latest),
+                      child: Text(
+                        "dontRemindThisVersion".tr,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.65),
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (_isDownloading) {
+              _cancelDownload();
+            }
+            Navigator.of(context).pop();
+          },
           child: Text("close".tr, style: const TextStyle(color: Colors.white60)),
         ),
         TextButton.icon(
-          onPressed: () => _openUrl(context, htmlUrl),
+          onPressed: () => AppUpdateService.openInBrowser(htmlUrl),
           icon: const Icon(Icons.open_in_browser_rounded, size: 16),
           label: const Text("GitHub"),
         ),

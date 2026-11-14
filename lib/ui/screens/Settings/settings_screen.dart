@@ -803,10 +803,10 @@ class SettingsScreen extends StatelessWidget {
                         color: Theme.of(context).textTheme.bodyMedium?.color),
                     contentPadding: const EdgeInsets.only(left: 15, right: 10),
                     title: const Text("GitHub Repository"),
-                    subtitle: Text(
-                      "${"githubSource".tr}\n${settingsController.currentVersion} by SPY",
+                    subtitle: Obx(() => Text(
+                      "${"githubSource".tr}\n${settingsController.currentVersion.value} by SPY",
                       style: Theme.of(context).textTheme.bodyMedium,
-                    ),
+                    )),
                     isThreeLine: true,
                     onTap: () {
                       launchUrl(
@@ -832,10 +832,10 @@ class SettingsScreen extends StatelessWidget {
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            settingsController.currentVersion,
+                          Obx(() => Text(
+                            settingsController.currentVersion.value,
                             style: Theme.of(context).textTheme.titleMedium,
-                          ),
+                          )),
                         ],
                       ),
                     ),
@@ -863,10 +863,10 @@ class SettingsScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(
                         bottom: 20.0, top: 10.0, left: 24.0, right: 24.0),
-                    child: Text(
-                      "${settingsController.currentVersion} by SPY",
+                    child: Obx(() => Text(
+                      "${settingsController.currentVersion.value} by SPY",
                       style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    )),
                   ),
                 ),
               ),

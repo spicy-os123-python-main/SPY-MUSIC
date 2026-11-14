@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../services/app_log_service.dart';
 import '../services/discord_webhook_service.dart';
 import '../ui/screens/Settings/settings_screen_controller.dart';
+import 'app_version.dart';
 
 import '/ui/navigator.dart';
 import '/ui/widgets/sort_widget.dart';
@@ -174,12 +175,16 @@ void sortArtist(
 
 /// Checks GitHub releases and returns full update details
 Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
-  currentVer ??= "v1.0.0";
+  currentVer ??= AppVersion.value;
+  if (currentVer.trim().isEmpty || currentVer == "v1.0.0") {
+    currentVer = AppVersion.value;
+  }
+
   final dio = Dio(
     BaseOptions(
-      connectTimeout: const Duration(seconds: 20),
-      sendTimeout: const Duration(seconds: 20),
-      receiveTimeout: const Duration(seconds: 20),
+      connectTimeout: const Duration(seconds: 15),
+      sendTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 15),
       headers: {
         'User-Agent': 'SPY-MUSIC-App/1.0',
         'Accept': 'application/vnd.github.v3+json',
@@ -192,11 +197,11 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
   String htmlUrl =
       "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest";
   String downloadUrl =
-      "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk";
+      "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic-arm64-v8a.apk";
   String universalUrl =
-      "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic.apk";
+      "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic.apk";
   String ipaUrl =
-      "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/SPY-MUSIC.ipa";
+      "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/SPY-MUSIC.ipa";
   String? updatedAt;
   bool requestSucceeded = false;
   String? errorMsg;
@@ -239,8 +244,8 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
     try {
       final redirectDio = Dio(
         BaseOptions(
-          connectTimeout: const Duration(seconds: 6),
-          receiveTimeout: const Duration(seconds: 6),
+          connectTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 8),
           headers: {'User-Agent': 'Mozilla/5.0 (Linux; Android 10)'},
         ),
       );
@@ -265,7 +270,7 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
             .first
             .trim();
         if (extractedTag.isNotEmpty) {
-          latestTag = extractedTag;
+          latestTag = extractedTag.startsWith('v') ? extractedTag : 'v$extractedTag';
           htmlUrl =
               "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/tag/$latestTag";
           downloadUrl =
@@ -293,7 +298,8 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
       if (tagsRes.statusCode == 200 && tagsRes.data is List) {
         final tags = tagsRes.data as List;
         if (tags.isNotEmpty) {
-          latestTag = tags[0]['name']?.toString() ?? currentVer;
+          final firstTag = tags[0]['name']?.toString() ?? currentVer;
+          latestTag = firstTag.startsWith('v') ? firstTag : 'v$firstTag';
           htmlUrl =
               "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/tag/$latestTag";
           downloadUrl =
@@ -312,44 +318,7 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
     }
   }
 
-  final cleanCurrent = currentVer
-      .toLowerCase()
-      .replaceAll('v', '')
-      .split('+')
-      .first
-      .split('-')
-      .first
-      .trim();
-  final cleanLatest = latestTag
-      .toLowerCase()
-      .replaceAll('v', '')
-      .split('+')
-      .first
-      .split('-')
-      .first
-      .trim();
-
-  final curParts =
-      cleanCurrent.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-  final latParts =
-      cleanLatest.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-
-  while (curParts.length < 3) {
-    curParts.add(0);
-  }
-  while (latParts.length < 3) {
-    latParts.add(0);
-  }
-
-  bool hasUpdate = false;
-  for (int i = 0; i < 3; i++) {
-    if (latParts[i] > curParts[i]) {
-      hasUpdate = true;
-      break;
-    } else if (latParts[i] < curParts[i]) {
-      break;
-    }
-  }
+  final bool hasUpdate = AppVersion.isNewer(latestTag, currentVer);
 
   return {
     'hasUpdate': hasUpdate,

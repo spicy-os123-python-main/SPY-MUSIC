@@ -36,7 +36,7 @@ class NewVersionDialog extends StatelessWidget {
                       onPressed: () async {
                         try {
                           final uri = Uri.parse(
-                            'https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest',
+                            'https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic-arm64-v8a.apk',
                           );
                           final launched = await launchUrl(
                             uri,

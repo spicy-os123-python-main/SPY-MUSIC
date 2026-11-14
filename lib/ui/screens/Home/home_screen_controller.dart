@@ -12,7 +12,7 @@ import '/models/playlist.dart';
 import '/models/quick_picks.dart';
 import '/services/music_service.dart';
 import '../Settings/settings_screen_controller.dart';
-import '/ui/widgets/new_version_dialog.dart';
+import '/ui/widgets/app_update_dialog.dart';
 import '../../../models/music_source.dart';
 import '../../../services/soundcloud_service.dart';
 import '../../../services/platform_search_service.dart';
@@ -382,18 +382,31 @@ class HomeScreenController extends GetxController {
     tabIndex.value = index;
   }
 
-  void _checkNewVersion() {
+  Future<void> _checkNewVersion() async {
     showVersionDialog.value =
         Hive.box("AppPrefs").get("newVersionVisibility") ?? true;
-    if (showVersionDialog.isTrue) {
-      newVersionCheck(Get.find<SettingsScreenController>().currentVersion)
-          .then((value) {
-        if (value) {
-          showDialog(
-              context: Get.context!,
-              builder: (context) => const NewVersionDialog());
+    if (!showVersionDialog.isTrue) return;
+
+    try {
+      final settings = Get.find<SettingsScreenController>();
+      await settings.ensureVersionLoaded();
+      final details =
+          await checkAppUpdateDetails(currentVer: settings.currentVersion.value);
+
+      if (details['hasUpdate'] == true && Get.context != null) {
+        final dismissedVersion =
+            Hive.box("AppPrefs").get("dismissedUpdateVersion");
+        if (dismissedVersion != null &&
+            dismissedVersion.toString() == details['latest']?.toString()) {
+          return;
         }
-      });
+        showDialog(
+          context: Get.context!,
+          builder: (context) => AppUpdateDialog(updateDetails: details),
+        );
+      }
+    } catch (e) {
+      printWarning("Home screen update check error: $e");
     }
   }
 

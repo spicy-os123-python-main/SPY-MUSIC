@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -8,6 +9,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+
+import '../../../utils/app_version.dart';
 
 import '../../../utils/update_check_flag_file.dart';
 import '/utils/lang_mapping.dart';
@@ -69,7 +72,17 @@ class SettingsScreenController extends GetxController {
   final keepScreenAwake = false.obs;
   final restorePlaybackSession = false.obs;
   final cacheHomeScreenData = true.obs;
-  String currentVersion = "v1.12.73";
+  final currentVersion = AppVersion.current.obs;
+  final latestVersionTag = "".obs;
+  Completer<void>? _versionLoadedCompleter;
+
+  Future<void> ensureVersionLoaded() async {
+    if (_versionLoadedCompleter != null && !_versionLoadedCompleter!.isCompleted) {
+      try {
+        await _versionLoadedCompleter!.future.timeout(const Duration(seconds: 3));
+      } catch (_) {}
+    }
+  }
 
   int _devTapCount = 0;
   DateTime? _lastDevTapTime;
@@ -115,25 +128,38 @@ class SettingsScreenController extends GetxController {
   }
 
   void _loadAppVersion() {
+    _versionLoadedCompleter = Completer<void>();
     PackageInfo.fromPlatform().then((info) {
       if (info.version.isNotEmpty) {
-        currentVersion = "v${info.version}";
+        AppVersion.updateFromPackageInfo(info.version);
+        currentVersion.value = AppVersion.value;
+      }
+      if (_versionLoadedCompleter != null && !_versionLoadedCompleter!.isCompleted) {
+        _versionLoadedCompleter!.complete();
       }
       if (updateCheckFlag) _checkNewVersion();
     }).catchError((_) {
+      if (_versionLoadedCompleter != null && !_versionLoadedCompleter!.isCompleted) {
+        _versionLoadedCompleter!.complete();
+      }
       if (updateCheckFlag) _checkNewVersion();
     });
   }
 
-  get currentVision => currentVersion;
+  String get currentVersionString => currentVersion.value;
+  get currentVision => currentVersion.value;
   get isCurrentPathsupportDownDir =>
       _supportDir.isNotEmpty &&
       "$_supportDir/Music" == downloadLocationPath.toString();
   String get supportDirPath => _supportDir;
 
-  _checkNewVersion() {
-    newVersionCheck(currentVersion)
-        .then((value) => isNewVersionAvailable.value = value);
+  Future<void> _checkNewVersion() async {
+    await ensureVersionLoaded();
+    final details = await checkAppUpdateDetails(currentVer: currentVersion.value);
+    isNewVersionAvailable.value = details['hasUpdate'] == true;
+    if (details['latest'] != null) {
+      latestVersionTag.value = details['latest'].toString();
+    }
   }
 
   Future<void> checkForUpdatesManually(BuildContext context) async {
@@ -168,23 +194,27 @@ class SettingsScreenController extends GetxController {
 
     Map<String, dynamic> details;
     try {
-      details = await checkAppUpdateDetails(currentVer: currentVersion);
+      await ensureVersionLoaded();
+      details = await checkAppUpdateDetails(currentVer: currentVersion.value);
       if (details['hasUpdate'] == true) {
         isNewVersionAvailable.value = true;
+      }
+      if (details['latest'] != null) {
+        latestVersionTag.value = details['latest'].toString();
       }
     } catch (e) {
       details = {
         'hasUpdate': false,
         'success': false,
         'error': e.toString(),
-        'latest': currentVersion,
-        'current': currentVersion,
+        'latest': currentVersion.value,
+        'current': currentVersion.value,
         'downloadUrl':
-            "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk",
+            "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic-arm64-v8a.apk",
         'universalUrl':
-            "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic.apk",
+            "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic.apk",
         'ipaUrl':
-            "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/SPY-MUSIC.ipa",
+            "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/SPY-MUSIC.ipa",
         'htmlUrl':
             "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest",
       };
