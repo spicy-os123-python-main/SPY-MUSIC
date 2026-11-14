@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:spymusic/services/collab_playlist_service.dart';
@@ -8,7 +11,9 @@ import 'package:spymusic/ui/widgets/daily_mixes_widget.dart';
 import 'package:spymusic/models/album.dart';
 import 'package:spymusic/models/playlist.dart';
 import 'package:spymusic/utils/app_version.dart';
+import 'package:spymusic/utils/audio_resampler.dart';
 import 'package:spymusic/utils/helper.dart';
+import 'package:spymusic/utils/shazam_signature_generator.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -63,6 +68,7 @@ void main() {
         album: 'Starboy',
         artworkUrl: 'https://example.com/art.jpg',
         confidence: 0.98,
+        source: 'Shazam Acoustic Radar',
       );
 
       final mediaItem = recognized.toMediaItem();
@@ -82,6 +88,46 @@ void main() {
       expect(media.title, 'Blinding Lights');
       expect(media.artist, 'The Weeknd');
       expect(media.artUri, isNull);
+    });
+
+    test('AudioResampler correctly scales PCM byte lengths', () {
+      final inputBytes = Uint8List(44100 * 2); // 1 second of 44.1kHz 16-bit PCM
+      final decoded = DecodedAudio(
+        data: inputBytes,
+        channelCount: 1,
+        sampleRate: 44100,
+      );
+
+      final resampled = AudioResampler.resample(decoded, 16000);
+      expect(resampled.sampleRate, 16000);
+      expect(resampled.data.length, (16000 * 2)); // 1 second of 16kHz 16-bit PCM
+    });
+
+    test('VibraSignature produces valid Shazam signature URI', () {
+      // 1 second of silent/test PCM (16kHz 16-bit mono = 32000 bytes)
+      final pcm = Uint8List(32000);
+      final sig = VibraSignature.fromI16(pcm);
+      expect(sig.startsWith('data:audio/vnd.shazam.sig;base64,'), isTrue);
+      expect(sig.length, greaterThan(100));
+    });
+
+    test('SongRecognizerService handles empty query safely', () async {
+      final service = SongRecognizerService();
+      final results = await service.searchCandidates('   ');
+      expect(results, isEmpty);
+    });
+
+    test('SongRecognizerService parses iTunes & Deezer candidates cleanly', () async {
+      final dio = Dio();
+      dio.httpClientAdapter = _MockSongAdapter();
+      final service = SongRecognizerService()..dioForTesting = dio;
+
+      final candidates = await service.searchCandidates('Bohemian Rhapsody Queen');
+      expect(candidates.isNotEmpty, isTrue);
+      final top = candidates.first;
+      expect(top.title, 'Bohemian Rhapsody');
+      expect(top.artist, 'Queen');
+      expect(top.confidence, greaterThan(0.9));
     });
   });
 
@@ -147,8 +193,8 @@ void main() {
     test('AppVersion constants are valid and non-empty', () {
       expect(AppVersion.current.startsWith('v'), isTrue);
       expect(AppVersion.buildNumber, greaterThan(3000));
-      expect(AppVersion.cleanString(AppVersion.current), '1.12.90');
-      expect(AppVersion.full, 'v1.12.90+3094');
+      expect(AppVersion.cleanString(AppVersion.current), '1.12.91');
+      expect(AppVersion.full, 'v1.12.91+3095');
     });
 
     test('AppVersion.isNewer logic handles major, minor, patch and build numbers', () {
@@ -175,4 +221,37 @@ void main() {
       expect((result['downloadUrl'] as String).contains('spymusic-arm64-v8a.apk'), isTrue);
     });
   });
+}
+
+class _MockSongAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    final path = options.uri.toString();
+    if (path.contains('itunes.apple.com')) {
+      final jsonStr = jsonEncode({
+        'resultCount': 1,
+        'results': [
+          {
+            'trackName': 'Bohemian Rhapsody',
+            'artistName': 'Queen',
+            'collectionName': 'A Night at the Opera',
+            'artworkUrl100': 'https://example.com/art.jpg',
+          }
+        ]
+      });
+      return ResponseBody.fromString(jsonStr, 200, headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      });
+    }
+    return ResponseBody.fromString('{"data":[]}', 200, headers: {
+      Headers.contentTypeHeader: [Headers.jsonContentType],
+    });
+  }
+
+  @override
+  void close({bool force = false}) {}
 }
