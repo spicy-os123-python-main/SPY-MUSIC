@@ -724,6 +724,28 @@ class SettingsScreen extends StatelessWidget {
                       settingsController.setDownloadLocation();
                     },
                   ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.only(left: 5, right: 10),
+                    leading: const Icon(Icons.build_circle_outlined),
+                    title: Text("repairDownloads".tr),
+                    subtitle: Text(
+                      "repairDownloadsDes".tr,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    isThreeLine: true,
+                    trailing: Obx(
+                      () => settingsController.isRepairingDownloads.value
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.arrow_forward_ios, size: 16),
+                    ),
+                    onTap: settingsController.isRepairingDownloads.value
+                        ? null
+                        : () => settingsController.repairDownloads(context),
+                  ),
                   if (GetPlatform.isAndroid)
                     ListTile(
                       contentPadding: const EdgeInsets.only(left: 5, right: 10),

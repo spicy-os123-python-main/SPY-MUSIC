@@ -78,7 +78,9 @@ class MediaItemBuilder {
     extrasMap['length'] = json['length'] ?? extrasMap['length'];
     extrasMap['album'] = album ?? extrasMap['album'];
     extrasMap['artists'] = json['artists'] ?? extrasMap['artists'];
-    extrasMap['date'] = json['date'] ?? extrasMap['date'];
+    extrasMap['date'] = json['date'] ?? json['dateAdded'] ?? json['downloadDate'] ?? extrasMap['date'];
+    extrasMap['dateAdded'] = json['dateAdded'] ?? json['date'] ?? extrasMap['dateAdded'];
+    extrasMap['downloadDate'] = json['downloadDate'] ?? extrasMap['downloadDate'];
     extrasMap['trackDetails'] = json['trackDetails'] ?? extrasMap['trackDetails'];
     extrasMap['year'] = json['year'] ?? extrasMap['year'];
     if (isValidArtist(artistName)) {
@@ -195,7 +197,13 @@ class MediaItemBuilder {
               ? "${mediaItem.duration!.inMinutes}:${(mediaItem.duration!.inSeconds % 60).toString().padLeft(2, '0')}"
               : null),
       'duration': mediaItem.duration?.inSeconds,
-      'date': mediaItem.extras?['date'],
+      'date': mediaItem.extras?['date'] ??
+          mediaItem.extras?['dateAdded'] ??
+          DateTime.now().millisecondsSinceEpoch,
+      'dateAdded': mediaItem.extras?['dateAdded'] ??
+          mediaItem.extras?['date'] ??
+          DateTime.now().millisecondsSinceEpoch,
+      'downloadDate': mediaItem.extras?['downloadDate'],
       'thumbnails': [
         {'url': thumbUrl}
       ],

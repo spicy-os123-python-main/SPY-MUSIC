@@ -1,5 +1,7 @@
 // ignore_for_file: avoid_print
 
+import 'dart:io';
+import 'package:audio_service/audio_service.dart' show MediaItem;
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import '../services/app_log_service.dart';
@@ -49,13 +51,47 @@ void sortSongsNVideos(
 
   switch (sortType) {
     case SortType.Date:
-      compareFunction = (a, b) {
-        final aDate = a.extras?['date'];
-        final bDate = b.extras?['date'];
-        if (aDate == null || bDate == null) {
-          return 0.compareTo(0);
+      int getTimestamp(dynamic item) {
+        if (item == null) return 0;
+        dynamic raw;
+        if (item is MediaItem) {
+          raw = item.extras?['date'] ??
+              item.extras?['dateAdded'] ??
+              item.extras?['downloadDate'];
+        } else if (item is Map) {
+          raw = item['date'] ?? item['dateAdded'] ?? item['downloadDate'];
         }
-        return aDate.compareTo(bDate);
+        if (raw is int) return raw;
+        if (raw is num) return raw.toInt();
+        if (raw is DateTime) return raw.millisecondsSinceEpoch;
+        if (raw is String) {
+          final parsedInt = int.tryParse(raw);
+          if (parsedInt != null) return parsedInt;
+          final parsedDt = DateTime.tryParse(raw);
+          if (parsedDt != null) return parsedDt.millisecondsSinceEpoch;
+        }
+        // Fallback to local file last modified timestamp
+        String? url;
+        if (item is MediaItem) {
+          url = item.extras?['url']?.toString();
+        } else if (item is Map) {
+          url = item['url']?.toString();
+        }
+        if (url != null && url.isNotEmpty) {
+          try {
+            final f = File(url.replaceFirst('file://', ''));
+            if (f.existsSync()) {
+              return f.lastModifiedSync().millisecondsSinceEpoch;
+            }
+          } catch (_) {}
+        }
+        return 0;
+      }
+
+      compareFunction = (a, b) {
+        final tA = getTimestamp(a);
+        final tB = getTimestamp(b);
+        return tA.compareTo(tB);
       };
       break;
     case SortType.Duration:
@@ -86,17 +122,17 @@ void sortAlbumNSingles(
 
   switch (sortType) {
     case SortType.Date:
-      compareFunction =
-          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase());
-      break;
-    case SortType.Name:
-    default:
       compareFunction = (a, b) {
         if (a.year == null || b.year == null) {
           return 0.compareTo(0);
         }
         return a.year!.compareTo(b.year!);
       };
+      break;
+    case SortType.Name:
+    default:
+      compareFunction =
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase());
       break;
   }
 

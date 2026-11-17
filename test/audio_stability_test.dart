@@ -1,7 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:spymusic/services/nav_parser.dart';
 import 'package:spymusic/services/continuations.dart';
 import 'package:spymusic/services/soundcloud_service.dart';
+import 'package:spymusic/utils/helper.dart';
+import 'package:spymusic/ui/widgets/sort_widget.dart';
+import 'package:spymusic/models/media_Item_builder.dart';
 
 // Simulated obfuscated release class (like GPA / CNa) without containsKey or title
 class ObfuscatedGPA {
@@ -104,6 +108,91 @@ void main() {
       final cid = await service.getClientId();
       expect(cid, isNotEmpty);
       expect(cid.length, greaterThanOrEqualTo(10));
+    });
+  });
+
+  group('Playlist & Download Date Sorting and Persistence', () {
+    test('sortSongsNVideos sorts by date correctly (ascending and descending)', () {
+      const songOld = MediaItem(
+        id: '1',
+        title: 'Old Song',
+        extras: {'date': 1000},
+      );
+      const songMid = MediaItem(
+        id: '2',
+        title: 'Mid Song',
+        extras: {'date': 2000},
+      );
+      const songNew = MediaItem(
+        id: '3',
+        title: 'New Song',
+        extras: {'date': 3000},
+      );
+
+      final list = [songMid, songOld, songNew];
+
+      // Ascending: oldest first
+      sortSongsNVideos(list, SortType.Date, true);
+      expect(list.map((s) => s.id).toList(), equals(['1', '2', '3']));
+
+      // Descending: newest first
+      sortSongsNVideos(list, SortType.Date, false);
+      expect(list.map((s) => s.id).toList(), equals(['3', '2', '1']));
+    });
+
+    test('sortSongsNVideos handles diverse timestamp formats (int, String, DateTime, missing)', () {
+      const s1 = MediaItem(
+        id: '1',
+        title: 'String Date',
+        extras: {'date': '1700000000000'},
+      );
+      const s2 = MediaItem(
+        id: '2',
+        title: 'Int Date',
+        extras: {'date': 1710000000000},
+      );
+      const s3 = MediaItem(
+        id: '3',
+        title: 'Missing Date',
+        extras: {},
+      );
+
+      final list = [s2, s3, s1];
+      expect(() => sortSongsNVideos(list, SortType.Date, false), returnsNormally);
+      expect(list.first.id, equals('2')); // newest
+      expect(list.last.id, equals('3')); // timestamp 0 (missing)
+    });
+
+    test('MediaItemBuilder serialization preserves date and dateAdded', () {
+      const item = MediaItem(
+        id: 'test_song',
+        title: 'Test Song',
+        artist: 'Artist',
+        extras: {
+          'date': 1731500000000,
+          'dateAdded': 1731500000000,
+        },
+      );
+
+      final json = MediaItemBuilder.toJson(item);
+      expect(json['date'], equals(1731500000000));
+      expect(json['dateAdded'], equals(1731500000000));
+
+      final restored = MediaItemBuilder.fromJson(json);
+      expect(restored.extras?['date'], equals(1731500000000));
+      expect(restored.extras?['dateAdded'], equals(1731500000000));
+    });
+
+    test('MediaItemBuilder generates timestamp if missing on toJson', () {
+      const item = MediaItem(
+        id: 'undated_song',
+        title: 'Undated Song',
+        artist: 'Artist',
+      );
+
+      final json = MediaItemBuilder.toJson(item);
+      expect(json['date'], isA<int>());
+      expect(json['date'], greaterThan(1700000000000));
     });
   });
 }

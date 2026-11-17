@@ -405,9 +405,16 @@ class Downloader extends GetxService {
             File(thumbnailPath).existsSync() &&
             File(thumbnailPath).lengthSync() > 100;
 
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
         song.extras?['url'] = filePath;
+        song.extras?['date'] = nowMs;
+        song.extras?['dateAdded'] = nowMs;
+        song.extras?['downloadDate'] = nowMs;
         final songJson = MediaItemBuilder.toJson(song);
         songJson['url'] = filePath;
+        songJson['date'] = nowMs;
+        songJson['dateAdded'] = nowMs;
+        songJson['downloadDate'] = nowMs;
         if (hasLocalThumb) {
           songJson['artUri'] = "file://$thumbnailPath";
           songJson['localThumbnail'] = thumbnailPath;
@@ -427,12 +434,15 @@ class Downloader extends GetxService {
           extras: {
             ...Map<String, dynamic>.from(song.extras ?? {}),
             'url': filePath,
+            'date': nowMs,
+            'dateAdded': nowMs,
+            'downloadDate': nowMs,
             if (hasLocalThumb) 'localThumbnail': thumbnailPath,
           },
         );
         Get.find<LibrarySongsController>()
             .librarySongsList
-            .add(downloadedMediaItem);
+            .insert(0, downloadedMediaItem);
         printINFO(
             "Downloaded successfully: ${(File(filePath).lengthSync() / (1024 * 1024)).toStringAsFixed(2)} MB");
 

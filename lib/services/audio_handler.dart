@@ -777,26 +777,72 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     return null;
   }
 
+  File? _resolveLocalFile(String rawPath, {String? songId, String? title}) {
+    if (rawPath.isEmpty) return null;
+    final cleanPath = rawPath.replaceFirst("file://", "");
+    final directFile = File(cleanPath);
+    try {
+      if (directFile.existsSync() && directFile.lengthSync() > 1024) {
+        return directFile;
+      }
+    } catch (_) {}
+
+    // Fallback search across active download directories
+    try {
+      final fileName = cleanPath.split('/').last;
+      final candidateFolders = <String>[];
+      if (Get.isRegistered<SettingsScreenController>()) {
+        final settings = Get.find<SettingsScreenController>();
+        final dlPath = settings.downloadLocationPath.value;
+        if (dlPath.isNotEmpty) candidateFolders.add(dlPath);
+        final sup = settings.supportDirPath;
+        if (sup.isNotEmpty) {
+          candidateFolders.add("$sup/Music");
+          candidateFolders.add(sup);
+        }
+      }
+
+      for (final folder in candidateFolders) {
+        final candidate = File("$folder/$fileName");
+        if (candidate.existsSync() && candidate.lengthSync() > 1024) {
+          // Self-heal SongDownloads database entry
+          if (songId != null && Hive.box("SongDownloads").containsKey(songId)) {
+            final songJson = Hive.box("SongDownloads").get(songId);
+            if (songJson is Map) {
+              final updated = Map<String, dynamic>.from(songJson);
+              updated['url'] = candidate.path;
+              if (updated['streamInfo'] is List && (updated['streamInfo'] as List).length > 1) {
+                final sInfo = Map<String, dynamic>.from(updated['streamInfo'][1]);
+                sInfo['url'] = candidate.path;
+                updated['streamInfo'][1] = sInfo;
+              }
+              Hive.box("SongDownloads").put(songId, updated);
+            }
+          }
+          return candidate;
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   AudioSource _createAudioSource(MediaItem mediaItem) {
     // 0. ABSOLUTE PRIORITY: Check SongDownloads FIRST!
     // If this song is downloaded, ALWAYS play the local file (0 KB mobile data!),
     // even if mediaItem.extras?['url'] contains a remote stream URL!
     if (Hive.box("SongDownloads").containsKey(mediaItem.id)) {
       final songJson = Hive.box("SongDownloads").get(mediaItem.id);
-      final dlPath = (songJson is Map ? (songJson['url'] ?? '') : '')
-          .toString()
-          .replaceFirst('file://', '');
-      if (dlPath.isNotEmpty) {
-        final dlFile = File(dlPath);
-        if (dlFile.existsSync() && dlFile.lengthSync() > 1024) {
-          printINFO(
-              "Playing offline downloaded file from SongDownloads (0 mobile data): $dlPath");
-          isPlayingUsingLockCachingSource = false;
-          return AudioSource.file(
-            dlPath,
-            tag: mediaItem,
-          );
-        }
+      final rawPath = (songJson is Map ? (songJson['url'] ?? '') : '').toString();
+      final dlFile = _resolveLocalFile(rawPath, songId: mediaItem.id, title: mediaItem.title);
+      if (dlFile != null) {
+        printINFO(
+            "Playing offline downloaded file from SongDownloads (0 mobile data): ${dlFile.path}");
+        isPlayingUsingLockCachingSource = false;
+        return AudioSource.file(
+          dlFile.path,
+          tag: mediaItem,
+        );
       }
     }
 
@@ -804,13 +850,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     final isLocalFile =
         !url.startsWith('http://') && !url.startsWith('https://');
     if (isLocalFile && url.isNotEmpty) {
-      final cleanPath = url.replaceFirst('file://', '');
-      final file = File(cleanPath);
-      if (file.existsSync() && file.lengthSync() > 1024) {
-        printINFO("Playing offline local file: $cleanPath");
+      final file = _resolveLocalFile(url, songId: mediaItem.id, title: mediaItem.title);
+      if (file != null) {
+        printINFO("Playing offline local file: ${file.path}");
         isPlayingUsingLockCachingSource = false;
         return AudioSource.file(
-          cleanPath,
+          file.path,
           tag: mediaItem,
         );
       }
@@ -2218,37 +2263,34 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     if (songDownloadsBox.containsKey(songId)) {
       final song = songDownloadsBox.get(songId);
       final rawPath = song is Map ? (song['url']?.toString() ?? '') : '';
-      final filePath = rawPath.replaceFirst("file://", "");
-      if (filePath.isNotEmpty) {
-        final dlFile = File(filePath);
-        if (dlFile.existsSync() && dlFile.lengthSync() > 1024) {
-          printINFO(
-              "checkNGetUrl: Song ($songId) is DOWNLOADED (${dlFile.lengthSync()} bytes) -> Playing offline file with 0 mobile data");
-          final streamInfoJson = song["streamInfo"];
-          Audio? audio;
-          if (streamInfoJson != null &&
-              streamInfoJson is List &&
-              streamInfoJson.length > 1) {
-            audio = Audio.fromJson(streamInfoJson[1]);
-          }
-          audio ??= Audio(
-            itag: 140,
-            audioCodec: Codec.mp4a,
-            bitrate: 0,
-            duration: targetSong?.duration?.inMilliseconds ?? 0,
-            loudnessDb: 0,
-            url: "file://$filePath",
-            size: dlFile.lengthSync(),
-          );
-
-          return HMStreamingData(
-            playable: true,
-            statusMSG: "OK",
-            highQualityAudio: audio,
-            midQualityAudio: audio,
-            lowQualityAudio: audio,
-          );
+      final dlFile = _resolveLocalFile(rawPath, songId: songId, title: targetSong?.title);
+      if (dlFile != null) {
+        printINFO(
+            "checkNGetUrl: Song ($songId) is DOWNLOADED (${dlFile.lengthSync()} bytes) -> Playing offline file with 0 mobile data");
+        final streamInfoJson = song["streamInfo"];
+        Audio? audio;
+        if (streamInfoJson != null &&
+            streamInfoJson is List &&
+            streamInfoJson.length > 1) {
+          audio = Audio.fromJson(streamInfoJson[1]);
         }
+        audio ??= Audio(
+          itag: 140,
+          audioCodec: Codec.mp4a,
+          bitrate: 0,
+          duration: targetSong?.duration?.inMilliseconds ?? 0,
+          loudnessDb: 0,
+          url: "file://${dlFile.path}",
+          size: dlFile.lengthSync(),
+        );
+
+        return HMStreamingData(
+          playable: true,
+          statusMSG: "OK",
+          highQualityAudio: audio,
+          midQualityAudio: audio,
+          lowQualityAudio: audio,
+        );
       }
     }
 
@@ -2357,35 +2399,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
 
       SoundCloudService.invalidateStreamCache(songId);
-
-      // Attempt seamless studio fallback if SoundCloud stream is unavailable or unreachable
-      try {
-        final artistName = getSafeSongArtist(targetSong, fallback: '');
-        final query = (targetSong?.extras?['searchQuery'] as String?) ??
-            ('${targetSong?.title ?? ''} $artistName').trim();
-        if (query.isNotEmpty) {
-          printINFO("SoundCloud stream unreachable for $songId, attempting seamless fallback for '$query'...");
-          final matchedItem = await PlatformSearchService.resolveMatchedTrack(
-            songId,
-            query,
-            originalTrack: targetSong,
-            skipSoundCloud: true,
-          );
-          if (matchedItem != null && !matchedItem.id.startsWith("sc_")) {
-            final fallbackResolved = await checkNGetUrl(
-              matchedItem.id,
-              generateNewUrl: generateNewUrl,
-              targetMediaItem: matchedItem,
-              allowFallback: allowFallback,
-            );
-            if (fallbackResolved.playable) {
-              return fallbackResolved;
-            }
-          }
-        }
-      } catch (fallbackErr) {
-        printERROR("SoundCloud fallback error: $fallbackErr");
-      }
 
       return HMStreamingData(
         playable: false,

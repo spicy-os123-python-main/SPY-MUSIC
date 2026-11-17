@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:hive/hive.dart';
 
 import 'additional_operation_dialog.dart';
 import 'import_playlist_dialog.dart';
@@ -90,6 +91,7 @@ class SortWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = Get.put(SortWidgetController(), tag: tag);
+    controller.initSettings(tag);
     return Padding(
       padding: const EdgeInsets.only(top: 10.0),
       child: SizedBox(
@@ -304,6 +306,40 @@ class SortWidgetController extends GetxController {
   final isAddtoPlaylistEnabled = false.obs;
   final isAllSelected = false.obs;
   TextEditingController textEditingController = TextEditingController();
+  String? currentTag;
+
+  void initSettings(String tag) {
+    currentTag = tag;
+    try {
+      if (Hive.isBoxOpen("Settings")) {
+        final box = Hive.box("Settings");
+        final savedSort = box.get("sort_type_$tag");
+        final savedAsc = box.get("sort_asc_$tag");
+        if (savedSort is int &&
+            savedSort >= 0 &&
+            savedSort < SortType.values.length) {
+          sortType.value = SortType.values[savedSort];
+        } else if (tag == "SongDownloads" || tag == "LIBRP") {
+          sortType.value = SortType.Date;
+          isAscending.value = false;
+        }
+        if (savedAsc is bool) {
+          isAscending.value = savedAsc;
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _persistSortSettings() {
+    if (currentTag == null || currentTag!.isEmpty) return;
+    try {
+      if (Hive.isBoxOpen("Settings")) {
+        final box = Hive.box("Settings");
+        box.put("sort_type_$currentTag", sortType.value.index);
+        box.put("sort_asc_$currentTag", isAscending.value);
+      }
+    } catch (_) {}
+  }
 
   void setActiveMode(OperationMode mode) {
     isAddtoPlaylistEnabled.value = OperationMode.addToPlaylist == mode;
@@ -317,21 +353,25 @@ class SortWidgetController extends GetxController {
 
   void onSortByName(Function onSort) {
     sortType.value = SortType.Name;
+    _persistSortSettings();
     onSort(sortType.value, isAscending.value);
   }
 
   void onSortByDuration(Function onSort) {
     sortType.value = SortType.Duration;
+    _persistSortSettings();
     onSort(sortType.value, isAscending.value);
   }
 
   void onSortByDate(Function onSort) {
     sortType.value = SortType.Date;
+    _persistSortSettings();
     onSort(sortType.value, isAscending.value);
   }
 
   void onAscendNDescend(Function onSort) {
     isAscending.value = !isAscending.value;
+    _persistSortSettings();
     onSort(sortType.value, isAscending.value);
   }
 

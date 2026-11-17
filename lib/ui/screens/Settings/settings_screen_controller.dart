@@ -31,6 +31,7 @@ import '../../themes/interaction_animations/interaction_animation_types.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'developer_mode_sheet.dart';
+import '../../../services/playlist_repair_service.dart';
 
 enum DataSaverMode {
   normal,
@@ -66,6 +67,7 @@ class SettingsScreenController extends GetxController {
   final exportLocationPath = "".obs;
   final downloadingFormat = "".obs;
   final autoDownloadFavoriteSongEnabled = false.obs;
+  final isRepairingDownloads = false.obs;
   final isTransitionAnimationDisabled = false.obs;
   final isBottomNavBarEnabled = false.obs;
   final backgroundPlayEnabled = true.obs;
@@ -513,6 +515,39 @@ class SettingsScreenController extends GetxController {
     final defaultPath = "$_supportDir/Music";
     setBox.put("downloadLocationPath", defaultPath);
     downloadLocationPath.value = defaultPath;
+  }
+
+  Future<void> repairDownloads(BuildContext context) async {
+    if (isRepairingDownloads.value) return;
+    isRepairingDownloads.value = true;
+    try {
+      final res = await PlaylistRepairService().repairDownloadsDeep();
+      if (!context.mounted) return;
+      final repaired = res['repaired'] ?? 0;
+      final restored = res['restored'] ?? 0;
+      final total = res['total'] ?? 0;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        snackbar(
+          context,
+          "repairDownloadsSuccess".trParams({
+            'repaired': '$repaired',
+            'restored': '$restored',
+            'total': '$total',
+          }),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        snackbar(
+          context,
+          "Fehler bei der Reparatur: $e",
+        ),
+      );
+    } finally {
+      isRepairingDownloads.value = false;
+    }
   }
 
   void onThemeChange(dynamic val) {

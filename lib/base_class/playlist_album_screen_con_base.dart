@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:audio_service/audio_service.dart' show MediaItem;
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -8,6 +9,7 @@ import '../models/media_Item_builder.dart';
 import '../models/playlist.dart';
 import '../services/music_service.dart';
 import '../ui/widgets/sort_widget.dart';
+import '../utils/helper.dart';
 
 /// An abstract base class for managing playlist and album screens in the application.
 /// This class provides a set of methods and properties to handle various operations
@@ -63,21 +65,65 @@ abstract class PlaylistAlbumScreenControllerBase extends GetxController {
   void fetchSongsfromDatabase(String id) async {
     final box = await Hive.openBox(id);
     final sortedKeys = box.keys.toList();
+    List<MediaItem> loadedSongs = [];
     if (sortedKeys.isNotEmpty && sortedKeys.every((k) => k is int)) {
       sortedKeys.sort((a, b) => (a as int).compareTo(b as int));
-      songList.value = sortedKeys
-          .map((k) => MediaItemBuilder.fromJson(box.get(k)))
-          .whereType<MediaItem>()
-          .toList();
+      for (var k in sortedKeys) {
+        final raw = box.get(k);
+        if (raw != null) {
+          final item = MediaItemBuilder.fromJson(raw);
+          if (item.extras?['date'] == null) {
+            final extras = Map<String, dynamic>.from(item.extras ?? {});
+            extras['date'] = (k as int) * 1000;
+            loadedSongs.add(item.copyWith(extras: extras));
+          } else {
+            loadedSongs.add(item);
+          }
+        }
+      }
     } else {
-      songList.value = box.values
-          .map<MediaItem?>((item) => MediaItemBuilder.fromJson(item))
-          .whereType<MediaItem>()
-          .toList();
+      for (var raw in box.values) {
+        if (raw != null) {
+          final item = MediaItemBuilder.fromJson(raw);
+          if (item.extras?['date'] == null && item.extras?['url'] != null) {
+            try {
+              final f = File(item.extras!['url'].toString().replaceFirst('file://', ''));
+              if (f.existsSync()) {
+                final extras = Map<String, dynamic>.from(item.extras ?? {});
+                extras['date'] = f.lastModifiedSync().millisecondsSinceEpoch;
+                extras['downloadDate'] = extras['date'];
+                loadedSongs.add(item.copyWith(extras: extras));
+                continue;
+              }
+            } catch (_) {}
+          }
+          loadedSongs.add(item);
+        }
+      }
     }
     if (id != "SongDownloads") await box.close();
-    songList.value =
-        id == "LIBRP" ? songList.reversed.toList() : songList.toList();
+
+    // Apply saved or default sorting
+    try {
+      if (Hive.isBoxOpen("Settings")) {
+        final setBox = Hive.box("Settings");
+        final savedSort = setBox.get("sort_type_$id");
+        final savedAsc = setBox.get("sort_asc_$id");
+        if (savedSort != null || id == "SongDownloads" || id == "LIBRP") {
+          final sortType = (savedSort is int &&
+                  savedSort >= 0 &&
+                  savedSort < SortType.values.length)
+              ? SortType.values[savedSort]
+              : SortType.Date;
+          final isAsc = (savedAsc is bool)
+              ? savedAsc
+              : (id == "SongDownloads" || id == "LIBRP" ? false : true);
+          sortSongsNVideos(loadedSongs, sortType, isAsc);
+        }
+      }
+    } catch (_) {}
+
+    songList.value = loadedSongs;
     checkDownloadStatus();
   }
 

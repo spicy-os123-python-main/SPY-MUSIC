@@ -695,7 +695,7 @@ class PlaylistScreen extends StatelessWidget {
                                           itemIcon: Icons.music_note,
                                           titleLeftPadding: 9,
                                           requiredSortTypes:
-                                              buildSortTypeSet(false, true),
+                                              buildSortTypeSet(true, true),
                                           onSort: playlistController.onSort,
                                           onSearch: playlistController.onSearch,
                                           onSearchClose:
