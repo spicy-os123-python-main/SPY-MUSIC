@@ -21,16 +21,26 @@ class SoundCloudService {
   final Dio _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 10),
+    sendTimeout: const Duration(seconds: 10),
     headers: {
       'User-Agent':
           'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     },
   ));
 
+  static const List<String> _fallbackClientIds = [
+    'a3dd183dc579bc1bfc85791a0ce492ac',
+    'iZIs9mchVcX5lhVR1EzGCcyUbdafLEi9',
+    '2t9loNfh0ekOfbnLe6ebguFIQIprbmcx',
+    'b48b5295c3534d0b0ca347047fa55f65',
+  ];
+
   static String _clientId = AppSecrets.soundCloudDefaultClientId;
   static Future<void>? _refreshFuture;
   static DateTime? _lastRefreshAttempt;
-  static const Duration _refreshCooldown = Duration(minutes: 10);
+  static bool _lastRefreshSuccess = false;
+  static const Duration _successCooldown = Duration(minutes: 10);
+  static const Duration _failureCooldown = Duration(seconds: 30);
 
   /// Cache of resolved stream URLs with expiration
   static final Map<String, _CachedStream> _streamCache = {};
@@ -55,11 +65,13 @@ class SoundCloudService {
 
   /// Dynamically scrape latest client_id from SoundCloud assets and persist to Hive
   /// Includes cooldown and future sharing across concurrent callers with fast timeouts
-  Future<void> refreshClientId() {
-    if (_lastRefreshAttempt != null &&
-        DateTime.now().difference(_lastRefreshAttempt!) < _refreshCooldown) {
-      printINFO("SoundCloud client_id refresh skipped (cooldown active)");
-      return Future.value();
+  Future<void> refreshClientId({bool force = false}) {
+    if (!force && _lastRefreshAttempt != null) {
+      final cooldown = _lastRefreshSuccess ? _successCooldown : _failureCooldown;
+      if (DateTime.now().difference(_lastRefreshAttempt!) < cooldown) {
+        printINFO("SoundCloud client_id refresh skipped (cooldown active)");
+        return Future.value();
+      }
     }
     if (_refreshFuture != null) {
       return _refreshFuture!;
@@ -72,9 +84,10 @@ class SoundCloudService {
 
   Future<void> _doRefreshClientId() async {
     _lastRefreshAttempt = DateTime.now();
+    _lastRefreshSuccess = false;
     final scraperDio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 4),
-      receiveTimeout: const Duration(seconds: 4),
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 8),
       headers: {
         'User-Agent':
             'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -96,17 +109,32 @@ class SoundCloudService {
           final idMatch = RegExp(r'client_id[=:\"]+([a-zA-Z0-9]{32})').firstMatch(sRes.data.toString());
           if (idMatch != null) {
             _clientId = idMatch.group(1)!;
+            _lastRefreshSuccess = true;
             try {
               final box = Hive.box('AppPrefs');
               await box.put('soundcloud_client_id', _clientId);
             } catch (_) {}
             printINFO("SoundCloud client_id refreshed & saved to Hive: $_clientId");
-            break;
+            return;
           }
         } catch (_) {}
       }
     } catch (e) {
       printERROR("SoundCloud refreshClientId error: $e");
+    }
+
+    // Scrape failed or timed out: fall back to a known public client ID
+    for (final fallback in _fallbackClientIds) {
+      if (fallback != _clientId && fallback.isNotEmpty) {
+        _clientId = fallback;
+        _lastRefreshSuccess = true;
+        try {
+          final box = Hive.box('AppPrefs');
+          await box.put('soundcloud_client_id', _clientId);
+        } catch (_) {}
+        printINFO("Using SoundCloud fallback client ID: $_clientId");
+        break;
+      }
     }
   }
 
@@ -249,7 +277,7 @@ class SoundCloudService {
 
       if ((status == 401 || status == 403) && !isRetry) {
         printINFO("SoundCloud $status detected, refreshing client ID and retrying...");
-        await refreshClientId();
+        await refreshClientId(force: true);
         return await searchTracks(query, limit: limit, isRetry: true);
       }
       return [];
@@ -273,7 +301,8 @@ class SoundCloudService {
 
   /// Resolve the direct audio playback stream URL
   static Future<String?> resolveStreamUrl(String songId,
-      {String? transcodingUrl, String? trackAuthorization, bool isRetry = false}) async {
+      {String? transcodingUrl, String? trackAuthorization, bool isRetry = false, int retryCount = 0}) async {
+    final currentRetry = isRetry ? (retryCount > 0 ? retryCount : 1) : retryCount;
     if (_streamCache.containsKey(songId)) {
       final cached = _streamCache[songId]!;
       if (!cached.isExpired) {
@@ -352,28 +381,34 @@ class SoundCloudService {
       final trunc = errBody != null ? (errBody.length > 200 ? '${errBody.substring(0, 200)}...' : errBody) : 'none';
       printERROR("SoundCloud resolveStreamUrl failed [HTTP $status] for $songId: ${dioErr.message}, body: $trunc");
 
-      if (!isRetry &&
-          (dioErr.type == DioExceptionType.connectionError ||
-           dioErr.type == DioExceptionType.connectionTimeout ||
-           dioErr.type == DioExceptionType.sendTimeout ||
-           dioErr.type == DioExceptionType.receiveTimeout ||
-           dioErr.error is SocketException ||
-           dioErr.message?.contains('Failed host lookup') == true)) {
-        printINFO("SoundCloud resolveStreamUrl connection hiccup for $songId, retrying after 600ms...");
-        await Future.delayed(const Duration(milliseconds: 600));
-        return await resolveStreamUrl(songId,
-            transcodingUrl: transcodingUrl,
-            trackAuthorization: trackAuthorization,
-            isRetry: true);
-      }
+      if (currentRetry < 2) {
+        final isNetError = dioErr.type == DioExceptionType.connectionError ||
+            dioErr.type == DioExceptionType.connectionTimeout ||
+            dioErr.type == DioExceptionType.sendTimeout ||
+            dioErr.type == DioExceptionType.receiveTimeout ||
+            dioErr.error is SocketException ||
+            dioErr.message?.contains('Failed host lookup') == true;
 
-      if ((status == 401 || status == 403) && !isRetry) {
-        printINFO("SoundCloud resolveStreamUrl $status, refreshing client ID...");
-        await SoundCloudService().refreshClientId();
-        return await resolveStreamUrl(songId,
-            transcodingUrl: transcodingUrl,
-            trackAuthorization: trackAuthorization,
-            isRetry: true);
+        if (isNetError) {
+          final waitMs = 600 * (currentRetry + 1);
+          printINFO("SoundCloud resolveStreamUrl connection error for $songId, retrying in ${waitMs}ms (attempt ${currentRetry + 1})...");
+          await Future.delayed(Duration(milliseconds: waitMs));
+          return await resolveStreamUrl(songId,
+              transcodingUrl: transcodingUrl,
+              trackAuthorization: trackAuthorization,
+              retryCount: currentRetry + 1,
+              isRetry: true);
+        }
+
+        if (status == 401 || status == 403) {
+          printINFO("SoundCloud resolveStreamUrl $status, forcing client ID refresh (attempt ${currentRetry + 1})...");
+          await SoundCloudService().refreshClientId(force: true);
+          return await resolveStreamUrl(songId,
+              transcodingUrl: transcodingUrl,
+              trackAuthorization: trackAuthorization,
+              retryCount: currentRetry + 1,
+              isRetry: true);
+        }
       }
     } catch (e) {
       printERROR("SoundCloud resolveStreamUrl error: $e");

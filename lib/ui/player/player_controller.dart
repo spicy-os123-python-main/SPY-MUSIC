@@ -270,9 +270,12 @@ class PlayerController extends GetxController
                   progressBarStatus.value.total.inSeconds >=
               0.98) {
         if (_newSongFlag) {
-          _audioHandler.customAction(
-              "checkWithCacheDb", {'mediaItem': currentSong.value!});
-          _newSongFlag = false;
+          final s = currentSong.value;
+          if (s != null) {
+            _audioHandler.customAction(
+                "checkWithCacheDb", {'mediaItem': s});
+            _newSongFlag = false;
+          }
         }
       }
       progressBarStatus.update((val) {
@@ -297,11 +300,15 @@ class PlayerController extends GetxController
         isCurrentSongBuffered.value = false;
         currentSong.value = mediaItem;
         currentSongIndex.value = currentQueue
-            .indexWhere((element) => element.id == currentSong.value!.id);
+            .indexWhere((element) => element.id == mediaItem.id);
         await _checkFav();
-        await _addToRP(currentSong.value!);
-        if (isRadioModeOn && (currentSong.value!.id == currentQueue.last.id)) {
-          await _addRadioContinuation(radioInitiatorItem!);
+        await _addToRP(mediaItem);
+        if (isRadioModeOn &&
+            currentQueue.isNotEmpty &&
+            (mediaItem.id == currentQueue.last.id)) {
+          if (radioInitiatorItem != null) {
+            await _addRadioContinuation(radioInitiatorItem!);
+          }
         }
         lyrics.value = {"synced": "", "plainLyrics": ""};
         showLyricsflag.value = false;
@@ -1107,12 +1114,18 @@ class PlayerController extends GetxController
   }
 
   Future<void> _checkFav() async {
+    final s = currentSong.value;
+    if (s == null) {
+      isCurrentSongFav.value = false;
+      return;
+    }
     isCurrentSongFav.value =
-        (await Hive.openBox("LIBFAV")).containsKey(currentSong.value!.id);
+        (await Hive.openBox("LIBFAV")).containsKey(s.id);
   }
 
   Future<void> toggleFavourite() async {
-    final currMediaItem = currentSong.value!;
+    final currMediaItem = currentSong.value;
+    if (currMediaItem == null) return;
     final box = await Hive.openBox("LIBFAV");
     isCurrentSongFav.isFalse
         ? box.put(currMediaItem.id, MediaItemBuilder.toJson(currMediaItem))
@@ -1178,21 +1191,26 @@ class PlayerController extends GetxController
 
   Future<void> showLyrics() async {
     showLyricsflag.value = !showLyricsflag.value;
+    final song = currentSong.value;
+    if (song == null) {
+      lyrics.value = {"synced": "", "plainLyrics": "NA"};
+      return;
+    }
     if ((lyrics["synced"].isEmpty && lyrics['plainLyrics'].isEmpty) &&
         showLyricsflag.value) {
       isLyricsLoading.value = true;
       try {
         final Map<String, dynamic>? lyricsR =
             await SyncedLyricsService.getSyncedLyrics(
-                currentSong.value!, progressBarStatus.value.total.inSeconds);
+                song, progressBarStatus.value.total.inSeconds);
         if (lyricsR != null) {
           lyrics.value = lyricsR;
           isLyricsLoading.value = false;
           return;
         }
-        final songId = currentSong.value!.id;
+        final songId = song.id;
         if (!songId.startsWith('dev_') &&
-            currentSong.value?.extras?['isDeviceSong'] != true) {
+            song.extras?['isDeviceSong'] != true) {
           final related = await _musicServices.getWatchPlaylist(
               videoId: songId, onlyRelated: true);
           final relatedLyricsId = related['lyrics'];

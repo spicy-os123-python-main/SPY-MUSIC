@@ -28,7 +28,7 @@ class ContentListWidget extends StatelessWidget {
 
     final String contentTitle = albumContent?.title ??
         playlistContent?.title ??
-        (content != null ? (content.title?.toString() ?? "") : "");
+        (content is Map ? (content['title']?.toString() ?? "") : "");
 
     final int listLength = albumContent?.albumList.length ??
         playlistContent?.playlistList.length ??

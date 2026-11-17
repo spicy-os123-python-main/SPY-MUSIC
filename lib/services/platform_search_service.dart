@@ -444,7 +444,7 @@ class PlatformSearchService {
       final q1 = '$cleanTitle $primaryArtist'.trim();
       final res = await musicServices
           .search(q1, filter: 'songs', limit: 8)
-          .timeout(const Duration(milliseconds: 3500));
+          .timeout(const Duration(seconds: 6));
       final ytTracks = _extractYtTracks(res);
       final match = findBestMatch(ytTracks, originalTrack);
       if (match != null) {
@@ -453,7 +453,6 @@ class PlatformSearchService {
         return match;
       }
     } catch (e) {
-      musicServicesAvailable = false;
       printINFO("YouTube Music primary search error for $trackId: $e");
     }
 
@@ -465,7 +464,7 @@ class PlatformSearchService {
           final q2 = '$cleanTitle $allArtists'.trim();
           final res = await musicServices
               .search(q2, filter: 'songs', limit: 8)
-              .timeout(const Duration(milliseconds: 3000));
+              .timeout(const Duration(seconds: 6));
           final ytTracks = _extractYtTracks(res);
           final match = findBestMatch(ytTracks, originalTrack);
           if (match != null) {
@@ -484,7 +483,7 @@ class PlatformSearchService {
         final q3 = '$cleanTitle $primaryArtist Topic'.trim();
         final res = await musicServices
             .search(q3, limit: 6)
-            .timeout(const Duration(milliseconds: 3000));
+            .timeout(const Duration(seconds: 6));
         final ytTracks = _extractYtTracks(res);
         final match = findBestMatch(ytTracks, originalTrack);
         if (match != null) {
@@ -502,7 +501,7 @@ class PlatformSearchService {
         final q4 = '$cleanTitle $primaryArtist official audio'.trim();
         final res = await musicServices
             .search(q4, limit: 6)
-            .timeout(const Duration(milliseconds: 3000));
+            .timeout(const Duration(seconds: 6));
         final ytTracks = _extractYtTracks(res);
         final match = findBestMatch(ytTracks, originalTrack);
         if (match != null) {
@@ -520,7 +519,7 @@ class PlatformSearchService {
         final q5 = '$cleanTitle $primaryArtist'.trim();
         final res = await musicServices
             .search(q5, limit: 8)
-            .timeout(const Duration(milliseconds: 3000));
+            .timeout(const Duration(seconds: 6));
         final ytTracks = _extractYtTracks(res);
         final match = findBestMatch(ytTracks, originalTrack);
         if (match != null) {
@@ -539,7 +538,7 @@ class PlatformSearchService {
       try {
         final qYT = '$cleanTitle $primaryArtist'.trim();
         final searchResults =
-            await yt.search.search(qYT).timeout(const Duration(seconds: 4));
+            await yt.search.search(qYT).timeout(const Duration(seconds: 6));
         final ytCandidates = <MediaItem>[];
         try {
           for (final v in searchResults) {

@@ -55,7 +55,11 @@ class MusicServices extends getx.GetxService {
     super.onInit();
   }
 
-  final dio = Dio();
+  final dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 12),
+    receiveTimeout: const Duration(seconds: 12),
+    sendTimeout: const Duration(seconds: 12),
+  ));
 
   Future<void> init({bool forceRefresh = false}) async {
     final appPrefsBox = Hive.box('AppPrefs');
@@ -75,12 +79,13 @@ class MusicServices extends getx.GetxService {
       {additionalParams = "", int retryCount = 0}) async {
     final reqUrl = "$baseUrl$action$fixedParms$additionalParams";
     try {
-      final response =
-          await dio.post(reqUrl,
-              options: Options(
-                headers: _headers,
-              ),
-              data: data);
+      final response = await dio.post(
+        reqUrl,
+        options: Options(
+          headers: _headers,
+        ),
+        data: data,
+      );
 
       if (response.statusCode == 200) {
         final len = response.data?.toString().length ?? 0;
@@ -91,6 +96,11 @@ class MusicServices extends getx.GetxService {
         final trunc = respText.length > 150 ? '${respText.substring(0, 150)}...' : respText;
         printERROR("YTMusic API [$action] returned HTTP ${response.statusCode}: $trunc");
         if (retryCount < 2) {
+          if (response.statusCode != null && response.statusCode! >= 500) {
+            _headers.remove('cookie');
+            _headers.remove('X-Goog-Visitor-Id');
+            await Future.delayed(Duration(milliseconds: 350 * (retryCount + 1)));
+          }
           return _sendRequest(action, data,
               additionalParams: additionalParams, retryCount: retryCount + 1);
         }
@@ -101,11 +111,25 @@ class MusicServices extends getx.GetxService {
       final errBody = e.response?.data?.toString() ?? '';
       final trunc = errBody.length > 150 ? '${errBody.substring(0, 150)}...' : errBody;
       printERROR("YTMusic API [$action] error [HTTP $sCode]: ${e.message}, body: $trunc");
-      if ((sCode == 401 || sCode == 403) && retryCount < 2) {
-        _headers.remove('cookie');
-        _headers.remove('X-Goog-Visitor-Id');
-        return _sendRequest(action, data,
-            additionalParams: additionalParams, retryCount: retryCount + 1);
+
+      if (retryCount < 2) {
+        final isAuthError = sCode == 401 || sCode == 403;
+        final isServerError = sCode != null && sCode >= 500;
+        final isTimeout = e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout ||
+            e.type == DioExceptionType.connectionError;
+
+        if (isAuthError || isServerError || isTimeout) {
+          if (isAuthError || isServerError) {
+            _headers.remove('cookie');
+            _headers.remove('X-Goog-Visitor-Id');
+          }
+          final backoffMs = isServerError ? 400 * (retryCount + 1) : 300 * (retryCount + 1);
+          await Future.delayed(Duration(milliseconds: backoffMs));
+          return _sendRequest(action, data,
+              additionalParams: additionalParams, retryCount: retryCount + 1);
+        }
       }
       throw NetworkError();
     }
@@ -632,13 +656,14 @@ class MusicServices extends getx.GetxService {
 
     final response = (await _sendRequest("search", data)).data;
 
-    if (response['contents'] == null) {
+    if (response is! Map || response['contents'] == null) {
       return searchResults;
     }
 
     dynamic results;
 
-    if ((response['contents']).containsKey('tabbedSearchResultsRenderer')) {
+    if (response['contents'] is Map &&
+        (response['contents'] as Map).containsKey('tabbedSearchResultsRenderer')) {
       final tabIndex =
           scope == null || filter != null ? 0 : scopes.indexOf(scope) + 1;
       results = response['contents']['tabbedSearchResultsRenderer']['tabs']

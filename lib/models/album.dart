@@ -35,18 +35,27 @@ class Album {
   final String? year;
   final String thumbnailUrl;
 
-  factory Album.fromJson(Map<dynamic, dynamic> json) => Album(
-      title: json["title"],
-      browseId: json["browseId"],
-      artists: json["artists"] != null
-          ? List<Map<dynamic, dynamic>>.from(json["artists"])
-          : [
-              {'name': ''}
-            ],
-      year: json['year'],
-      audioPlaylistId: json['audioPlaylistId'],
-      description: json['description'] ?? json["type"] ?? "Album",
-      thumbnailUrl: Thumbnail(json["thumbnails"][0]["url"]).medium);
+  factory Album.fromJson(Map<dynamic, dynamic> json) {
+    String thumb = "";
+    if (json["thumbnails"] is List && (json["thumbnails"] as List).isNotEmpty) {
+      final firstThumb = json["thumbnails"][0];
+      if (firstThumb is Map && firstThumb["url"] != null) {
+        thumb = Thumbnail(firstThumb["url"].toString()).medium;
+      }
+    }
+    return Album(
+        title: json["title"]?.toString() ?? "",
+        browseId: json["browseId"]?.toString() ?? "",
+        artists: json["artists"] != null && json["artists"] is List
+            ? List<Map<dynamic, dynamic>>.from(json["artists"])
+            : [
+                {'name': ''}
+              ],
+        year: json['year']?.toString(),
+        audioPlaylistId: json['audioPlaylistId']?.toString(),
+        description: json['description']?.toString() ?? json["type"]?.toString() ?? "Album",
+        thumbnailUrl: thumb);
+  }
 
   Map<String, dynamic> toJson() => {
         "title": title,

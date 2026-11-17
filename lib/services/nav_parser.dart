@@ -143,26 +143,31 @@ const musicPlaylistShelfRenderer = [
 
 List<Map<String, dynamic>> parseMixedContent(List<dynamic> rows) {
   List<Map<String, dynamic>> items = [];
-  //inspect(rows);
 
   for (var row in rows) {
+    if (row is! Map || row.isEmpty) continue;
     dynamic title;
     dynamic contents = [];
-    if (description_shelf[0] == row.keys.first.toString()) {
+    final firstKey = row.keys.first.toString();
+    if (description_shelf[0] == firstKey) {
       var results = nav(row, description_shelf);
       title = nav(results, ['header', 'runs', 0, 'text']);
       contents = nav(results, description);
     } else {
       var results = row.values.first;
-      if (!results.containsKey('contents')) {
+      if (results is! Map || !results.containsKey('contents')) {
         continue;
       }
       title = nav(results, carousel_title + ['text']);
 
-      for (var result in results['contents']) {
+      final rawContents = results['contents'];
+      if (rawContents is! List) continue;
+
+      for (var result in rawContents) {
+        if (result is! Map) continue;
         var data = nav(result, [mtrir]);
         dynamic content;
-        if (data != null) {
+        if (data != null && data is Map) {
           var pageType = nav(data, n_title + navigation_browse + page_type,
               noneIfAbsent: true, funName: "mixed1");
           if (pageType == null) {
@@ -174,9 +179,9 @@ List<Map<String, dynamic>> parseMixedContent(List<dynamic> rows) {
           } else if (pageType == "MUSIC_PAGE_TYPE_ALBUM") {
             content = parseAlbum(data, reqAlbumObj: false);
           } else if (pageType == "MUSIC_PAGE_TYPE_ARTIST") {
-            content = parseRelatedArtist(data);
+            content = parseRelatedArtist(Map<String, dynamic>.from(data));
           } else if (pageType == "MUSIC_PAGE_TYPE_PLAYLIST") {
-            content = parsePlaylist(data);
+            content = parsePlaylist(Map<String, dynamic>.from(data));
           }
         } else {
           data = nav(result, [mrlir]);
@@ -199,9 +204,21 @@ List<Map<String, dynamic>> parseMixedContent(List<dynamic> rows) {
 }
 
 dynamic parseVideo(dynamic result) {
+  if (result is! Map) return null;
   final runs = nav(result, ['subtitle', 'runs']);
-  final runsLength = runs.length;
-  final artistsLen = runsLength == 3 ? 1 : getDotSeparatorIndex(runs);
+  final runsLength = runs is List ? runs.length : 0;
+  final rawSeparator = runs is List ? getDotSeparatorIndex(runs) : 0;
+  final artistsLen = runsLength == 3 ? 1 : (rawSeparator > 0 ? rawSeparator : 0);
+  final artistsRuns = (runs is List && artistsLen > 0 && runs.length >= artistsLen)
+      ? runs.sublist(0, artistsLen)
+      : <dynamic>[];
+  String views = "";
+  if (runs is List && runs.isNotEmpty) {
+    final lastItem = runs[runs.length - 1];
+    if (lastItem is Map && lastItem['text'] != null) {
+      views = lastItem['text'].toString().split(' ')[0];
+    }
+  }
   return MediaItemBuilder.fromJson({
     'title': nav(result, title_text),
     'videoId': nav(result, navigation_video_id) ??
@@ -209,20 +226,27 @@ dynamic parseVideo(dynamic result) {
           result,
           navigation_browse_id,
         ),
-    'artists': parseSongArtistsRuns(runs.sublist(0, artistsLen)),
+    'artists': parseSongArtistsRuns(artistsRuns),
     'playlistId': nav(result, navigation_playlist_id),
     'thumbnails': nav(result, thumbnail_renderer),
-    'views': runs[runs.length - 1]['text'].split(' ')[0]
+    'views': views,
   });
 }
 
 dynamic parseSingle(dynamic result) {
+  if (result is! Map) return null;
   dynamic year;
   try {
-    year = int.parse(nav(result, subtitle));
+    year = int.parse(nav(result, subtitle)?.toString() ?? "");
   } catch (e) {
     year = nav(result, ["subtitle", "runs", 2, "text"]);
   }
+  final subRuns = nav(result, ["subtitle", "runs"]);
+  final desc = (subRuns is List)
+      ? subRuns
+          .map((run) => (run is Map ? run['text']?.toString() : null) ?? '')
+          .join('')
+      : '';
   return Album.fromJson({
     'title': nav(result, title_text),
     'artists': [
@@ -232,13 +256,11 @@ dynamic parseSingle(dynamic result) {
     'year': "${year ?? ""}",
     'browseId': nav(result, ['title', 'runs', 0, ...navigation_browse_id]),
     'thumbnails': nav(result, thumbnail_renderer),
-    'description':
-        (nav(result, ["subtitle", "runs"])).map((run) => run['text']).join('')
+    'description': desc,
   });
 }
 
 MediaItem parseSong(Map<dynamic, dynamic> result) {
-  //inspect(result);
   var song = {
     'title': nav(result, title_text),
     'videoId':
@@ -248,19 +270,25 @@ MediaItem parseSong(Map<dynamic, dynamic> result) {
     'thumbnails': nav(result, thumbnail_renderer),
   };
 
-  song.addAll(parseSongRuns(result['subtitle']['runs']));
+  final runs = nav(result, ['subtitle', 'runs']);
+  if (runs is List) {
+    song.addAll(parseSongRuns(runs));
+  }
   return MediaItemBuilder.fromJson(song);
 }
 
-Map<String, dynamic> parseSongRuns(List<dynamic> runs) {
+Map<String, dynamic> parseSongRuns(List<dynamic>? runs) {
   Map<String, dynamic> parsed = {'artists': []};
+  if (runs == null) return parsed;
   for (int i = 0; i < runs.length; i++) {
-    Map<String, dynamic> run = runs[i];
+    final rawRun = runs[i];
+    if (rawRun is! Map) continue;
+    Map<String, dynamic> run = Map<String, dynamic>.from(rawRun);
     if (i % 2 != 0) {
       // uneven items are always separators
       continue;
     }
-    String text = run['text'];
+    String text = run['text']?.toString() ?? '';
     if (run.containsKey('navigationEndpoint')) {
       // artist or album
       Map<String, dynamic> item = {
@@ -270,8 +298,8 @@ Map<String, dynamic> parseSongRuns(List<dynamic> runs) {
       };
 
       if (item['id'] != null &&
-          (item['id'].startsWith('MPRE') ||
-              item['id'].contains("release_detail"))) {
+          (item['id'].toString().startsWith('MPRE') ||
+              item['id'].toString().contains("release_detail"))) {
         // album
         parsed['album'] = item;
       } else {
@@ -297,16 +325,20 @@ Map<String, dynamic> parseSongRuns(List<dynamic> runs) {
 }
 
 Album parseAlbum(Map<dynamic, dynamic> result, {bool reqAlbumObj = true}) {
-  final List runs = nav(result, ['subtitle', 'runs']);
-  final Map<String, dynamic> artistInfo = parseSongRuns(runs);
+  final runs = nav(result, ['subtitle', 'runs']);
+  final Map<String, dynamic> artistInfo =
+      runs is List ? parseSongRuns(runs) : {'artists': []};
+  final desc = (runs is List)
+      ? runs
+          .map((run) => (run is Map ? run['text']?.toString() : null) ?? '')
+          .join('')
+      : '';
   Map albumMap = {
     'title': nav(result, title_text),
     'browseId': nav(result, n_title + navigation_browse_id),
     'thumbnails': nav(result, thumbnail_renderer),
     'audioPlaylistId': nav(result, audio_watch_playlist_id),
-    'description':
-        (nav(result, ["subtitle", "runs"])).map((run) => run['text']).join('')
-    //'isExplicit': nav(result, subtitle_badge_label, noneIfAbsent: true) != null,
+    'description': desc,
   };
   albumMap.addAll(artistInfo);
   return Album.fromJson(albumMap);
@@ -321,7 +353,6 @@ Artist parseRelatedArtist(Map<String, dynamic> data) {
 }
 
 Playlist parsePlaylist(Map<String, dynamic> data) {
-  //inspect(data);
   Map<String, dynamic> playlist = {
     'title': nav(data, title_text),
     'playlistId': nav(data, ['title', 'runs', 0] + navigation_browse_id),
@@ -329,11 +360,13 @@ Playlist parsePlaylist(Map<String, dynamic> data) {
   };
 
   var subtitle = data['subtitle'];
-  if (subtitle.containsKey('runs')) {
-    var runs = subtitle['runs'];
-    playlist['description'] = runs.map((run) => run['text']).join('');
-    if (runs.length == 3 && RegExp(r'\d+ ').hasMatch(nav(data, subtitle2))) {
-      playlist['count'] = nav(data, subtitle2).split(' ')[0];
+  if (subtitle is Map && subtitle.containsKey('runs') && subtitle['runs'] is List) {
+    var runs = subtitle['runs'] as List;
+    playlist['description'] = runs
+        .map((run) => (run is Map ? run['text']?.toString() : null) ?? '')
+        .join('');
+    if (runs.length == 3 && RegExp(r'\d+ ').hasMatch(nav(data, subtitle2)?.toString() ?? '')) {
+      playlist['count'] = nav(data, subtitle2).toString().split(' ')[0];
       playlist['author'] = parseSongArtistsRuns(runs.sublist(0, 1));
     }
   }
@@ -341,16 +374,20 @@ Playlist parsePlaylist(Map<String, dynamic> data) {
   return Playlist.fromJson(playlist);
 }
 
-List<dynamic> parseSongArtistsRuns(List<dynamic> runs) {
-  //print(runs);
+List<dynamic> parseSongArtistsRuns(List<dynamic>? runs) {
+  if (runs == null || runs.isEmpty) return [];
   List<Map<String, dynamic>> artists = [];
   int n = (runs.length / 2).floor() + 1;
   for (var j = 0; j < n; j++) {
-    artists.add({
-      'name': runs[j * 2]['text'],
-      'id': nav(runs[j * 2], navigation_browse_id,
-          noneIfAbsent: false, funName: "parseSongArtistsRuns"),
-    });
+    final idx = j * 2;
+    if (idx < runs.length && runs[idx] is Map) {
+      final runMap = runs[idx] as Map;
+      artists.add({
+        'name': runMap['text']?.toString() ?? '',
+        'id': nav(runMap, navigation_browse_id,
+            noneIfAbsent: false, funName: "parseSongArtistsRuns"),
+      });
+    }
   }
   return artists;
 }
@@ -374,7 +411,8 @@ MediaItem parseSongFlat(Map<String, dynamic> data) {
   };
 //checkpoint .contains
   if (columns.length > 2 && columns[2].isNotEmpty) {
-    if (nav(columns[2], text_run).containsKey('navigationEndpoint')) {
+    final tr = nav(columns[2], text_run);
+    if (tr is Map && tr.containsKey('navigationEndpoint')) {
       song['album'] = {
         'name': nav(columns[2], text_run_text),
         'id': nav(columns[2], text_run + navigation_browse_id)
@@ -387,26 +425,34 @@ MediaItem parseSongFlat(Map<String, dynamic> data) {
 
 List<dynamic>? parseSongArtists(Map<String, dynamic> data, int index) {
   dynamic flexItem = getFlexColumnItem(data, index);
-  if (flexItem == null || flexItem.length == 0) {
+  if (flexItem is! Map || flexItem.isEmpty) {
     return null;
   } else {
-    var runs = flexItem['text']['runs'];
-    return parseSongArtistsRuns(runs);
+    final runs = nav(flexItem, ['text', 'runs']);
+    return runs is List ? parseSongArtistsRuns(runs) : null;
   }
 }
 
 Map<String, dynamic> getFlexColumnItem(Map<String, dynamic> item, int index) {
-  if ((item['flexColumns']).length <= index ||
-      !item['flexColumns'][index]['musicResponsiveListItemFlexColumnRenderer']
-          .containsKey('text') ||
-      !item['flexColumns'][index]['musicResponsiveListItemFlexColumnRenderer']
-              ['text']
-          .containsKey('runs')) {
+  if (item['flexColumns'] is! List ||
+      (item['flexColumns'] as List).length <= index) {
+    return {};
+  }
+  final col = item['flexColumns'][index];
+  if (col is! Map ||
+      col['musicResponsiveListItemFlexColumnRenderer'] is! Map) {
+    return {};
+  }
+  final renderer = col['musicResponsiveListItemFlexColumnRenderer'] as Map<String, dynamic>;
+  if (!renderer.containsKey('text') || renderer['text'] is! Map) {
+    return {};
+  }
+  final textMap = renderer['text'] as Map;
+  if (!textMap.containsKey('runs') || textMap['runs'] is! List) {
     return {};
   }
 
-  return item['flexColumns'][index]
-      ['musicResponsiveListItemFlexColumnRenderer'];
+  return renderer;
 }
 
 Map<String, dynamic> parseWatchPlaylistHome(Map<dynamic, dynamic> data) {
@@ -424,20 +470,26 @@ List<dynamic> parseWatchPlaylist(List<dynamic> results) {
   const PPVWR = 'playlistPanelVideoWrapperRenderer';
   const PPVR = 'playlistPanelVideoRenderer';
   for (var result in results) {
+    if (result is! Map) continue;
     Map<String, dynamic>? counterpart;
-    if (result.containsKey(PPVWR)) {
-      counterpart =
-          result[PPVWR]['counterpart'][0]['counterpartRenderer'][PPVR];
-      result = result[PPVWR]['primaryRenderer'];
+    if (result.containsKey(PPVWR) && result[PPVWR] is Map) {
+      final cpList = result[PPVWR]['counterpart'];
+      if (cpList is List && cpList.isNotEmpty && cpList[0] is Map) {
+        final cpRenderer = cpList[0]['counterpartRenderer'];
+        if (cpRenderer is Map && cpRenderer[PPVR] is Map) {
+          counterpart = Map<String, dynamic>.from(cpRenderer[PPVR]);
+        }
+      }
+      result = result[PPVWR]['primaryRenderer'] ?? result;
     }
-    if (!result.containsKey(PPVR)) {
+    if (result is! Map || !result.containsKey(PPVR) || result[PPVR] is! Map) {
       continue;
     }
-    final data = result[PPVR];
+    final data = result[PPVR] as Map;
     if (data.containsKey('unplayableText')) {
       continue;
     }
-    final track = parseWatchTrack(data);
+    final track = parseWatchTrack(Map<String, dynamic>.from(data));
     if (counterpart != null) {
       track['counterpart'] = parseWatchTrack(counterpart);
     }
@@ -447,10 +499,11 @@ List<dynamic> parseWatchPlaylist(List<dynamic> results) {
 }
 
 Map<String, dynamic> parseWatchTrack(Map<String, dynamic> data) {
-  final songInfo = parseSongRuns(data['longBylineText']['runs']);
+  final runs = nav(data, ['longBylineText', 'runs']);
+  final songInfo = runs is List ? parseSongRuns(runs) : {'artists': []};
 
   final track = {
-    'videoId': data['videoId'],
+    'videoId': data['videoId']?.toString(),
     'title': nav(data, title_text),
     'length': nav(data, ['lengthText', 'runs', 0, 'text']),
     'thumbnails': nav(data, thumbnail),
@@ -460,8 +513,9 @@ Map<String, dynamic> parseWatchTrack(Map<String, dynamic> data) {
   return track;
 }
 
-String? getTabBrowseId(Map<String, dynamic> watchNextRenderer, int tabId) {
+String? getTabBrowseId(dynamic watchNextRenderer, int tabId) {
   try {
+    if (watchNextRenderer is! Map) return null;
     final tabs = watchNextRenderer['tabs'] as List?;
     if (tabs != null && tabId < tabs.length) {
       final tabRenderer = tabs[tabId]?['tabRenderer'] as Map?;
@@ -490,10 +544,11 @@ List<dynamic> parsePlaylistItems(List<dynamic> results,
   //int count = 1;
   for (dynamic result in results) {
     // count += 1;
-    if (!result.containsKey('musicResponsiveListItemRenderer')) {
+    if (result is! Map || !result.containsKey('musicResponsiveListItemRenderer')) {
       continue;
     }
     dynamic data = result['musicResponsiveListItemRenderer'];
+    if (data is! Map) continue;
     String? videoId;
     String? trackDetails;
 
@@ -509,14 +564,19 @@ List<dynamic> parsePlaylistItems(List<dynamic> results,
         'navigationEndpoint',
         'browseEndpoint',
         'browseId'
-      ]);
-      videoId = creditId?.split("MPTC")[1];
+      ])?.toString();
+      if (creditId != null && creditId.contains("MPTC")) {
+        final parts = creditId.split("MPTC");
+        if (parts.length > 1) {
+          videoId = parts[1];
+        }
+      }
       
     }
 
     if(isAlbum){
       // Contains track number and total tracks 
-      trackDetails = data?["index"] != null
+      trackDetails = data["index"] != null
           ? "${nav(data, ['index', 'runs', 0, 'text'])}/${results.length}"
           : null;
     }
@@ -524,15 +584,17 @@ List<dynamic> parsePlaylistItems(List<dynamic> results,
     // if the item has a menu, find its setVideoId
     if (videoId == null) {
       if (data.containsKey('menu')) {
-        for (dynamic item in nav(data, menu_items)) {
-          if (item.containsKey('menuServiceItemRenderer')) {
-            dynamic menuService = nav(item, menu_service);
-            //inspect(menuService);
-
-            if (menuService.containsKey('playlistEditEndpoint')) {
-              videoId = menuService['playlistEditEndpoint']['actions'][0]
-                  ['removedVideoId'];
-              // print("$videoId");
+        final menuItems = nav(data, menu_items);
+        if (menuItems is Iterable) {
+          for (dynamic item in menuItems) {
+            if (item is Map && item.containsKey('menuServiceItemRenderer')) {
+              dynamic menuService = nav(item, menu_service);
+              if (menuService is Map && menuService.containsKey('playlistEditEndpoint')) {
+                final actions = menuService['playlistEditEndpoint']?['actions'];
+                if (actions is List && actions.isNotEmpty && actions[0] is Map) {
+                  videoId = actions[0]['removedVideoId']?.toString();
+                }
+              }
             }
           }
         }
@@ -541,27 +603,35 @@ List<dynamic> parsePlaylistItems(List<dynamic> results,
 
     // if item is not playable, the videoId was retrieved above
     if (videoId == null && nav(data, play_button) != null) {
-      if (nav(data, play_button).containsKey('playNavigationEndpoint')) {
-        videoId = nav(data, play_button)['playNavigationEndpoint']
-            ['watchEndpoint']['videoId'];
+      final pb = nav(data, play_button);
+      if (pb is Map && pb.containsKey('playNavigationEndpoint')) {
+        videoId = pb['playNavigationEndpoint']?['watchEndpoint']?['videoId']?.toString();
       }
     }
 
-    String? title = getItemText(data, 0);
+    final dataMap = Map<String, dynamic>.from(data);
+    String? title = getItemText(dataMap, 0);
     if (title == 'Song deleted') {
       continue;
     }
 
-    List? artists = parseSongArtists(data, 1);
+    List? artists = parseSongArtists(dataMap, 1);
 
-    dynamic album = isAlbum ? albumIdName : parseSongAlbum({...data}, 2);
+    dynamic album = isAlbum ? albumIdName : parseSongAlbum(dataMap, 2);
 
     dynamic duration;
     if (data.containsKey('fixedColumns')) {
-      if (getFixedColumnItem(data, 0)!['text'].containsKey('simpleText')) {
-        duration = getFixedColumnItem(data, 0)!['text']['simpleText'];
-      } else {
-        duration = getFixedColumnItem(data, 0)!['text']['runs'][0]['text'];
+      final fixedCol = getFixedColumnItem(dataMap, 0);
+      if (fixedCol != null &&
+          fixedCol.isNotEmpty &&
+          fixedCol.containsKey('text') &&
+          fixedCol['text'] is Map) {
+        final textObj = fixedCol['text'] as Map;
+        if (textObj.containsKey('simpleText')) {
+          duration = textObj['simpleText'];
+        } else if (textObj['runs'] is List && (textObj['runs'] as List).isNotEmpty) {
+          duration = textObj['runs'][0]?['text'];
+        }
       }
     }
     if (duration == null && data.containsKey('flexColumns')) {
@@ -695,10 +765,12 @@ dynamic parseTopResult(
 
   if (resultType == 'song' || resultType == 'video' || resultType == 'album') {
     searchResult['title'] = nav(data, title_text);
-    List runs = nav(data, ['subtitle', 'runs']);
-    List songInfoRuns = runs.sublist(2);
-    Map<String, dynamic> songInfo = parseSongRuns(songInfoRuns);
-    searchResult.addAll(songInfo);
+    final runs = nav(data, ['subtitle', 'runs']);
+    if (runs is List) {
+      List songInfoRuns = runs.length >= 2 ? runs.sublist(2) : runs;
+      Map<String, dynamic> songInfo = parseSongRuns(songInfoRuns);
+      searchResult.addAll(songInfo);
+    }
   }
 
   searchResult['thumbnails'] = nav(data, thumbnails);
@@ -749,7 +821,7 @@ List<dynamic> parseSearchResults(List<dynamic> results,
 dynamic parseSearchResult(Map<String, dynamic> data,
     List<String> searchResultTypes, String? resultType, String? category) {
   if ((resultType != null && resultType.contains("playlist")) ||
-      category!.contains("playlists")) {
+      (category != null && category.contains("playlists"))) {
     resultType = 'playlist';
   }
   int defaultOffset = (resultType == null) ? 2 : 0;
@@ -761,8 +833,8 @@ dynamic parseSearchResult(Map<String, dynamic> data,
   }
 
   resultType = ((resultType == null)
-      ? getSearchResultType(getItemText(data, 1), searchResultTypes)
-      : resultType)!;
+      ? (getSearchResultType(getItemText(data, 1), searchResultTypes) ?? 'song')
+      : resultType);
   searchResult['resultType'] = resultType;
 
   if (resultType != 'artist') {
@@ -771,27 +843,46 @@ dynamic parseSearchResult(Map<String, dynamic> data,
 
   if (resultType == 'artist') {
     searchResult['artist'] = getItemText(data, 0);
-    final list = data['flexColumns'][1]
-        ['musicResponsiveListItemFlexColumnRenderer']['text']['runs'];
-    searchResult['subscribers'] = list.length < 2 ? "" : list[2];
-    ['text'];
-    //final x = parseMenuPlaylists(data, searchResult);
+    final runs = nav(data, [
+      'flexColumns',
+      1,
+      'musicResponsiveListItemFlexColumnRenderer',
+      'text',
+      'runs'
+    ]);
+    if (runs is List && runs.length > 2 && runs[2] is Map) {
+      searchResult['subscribers'] = runs[2]['text']?.toString() ?? "";
+    } else {
+      searchResult['subscribers'] = "";
+    }
   } else if (resultType == 'album') {
     searchResult['type'] = getItemText(data, 1);
     searchResult['audioPlaylistId'] = nav(data, audio_watch_playlist_id);
     try {
-      final list = data['flexColumns'][1]
-          ['musicResponsiveListItemFlexColumnRenderer']['text']['runs'];
-      searchResult['description'] = list.map((run) => run['text']).join('');
+      final runs = nav(data, [
+        'flexColumns',
+        1,
+        'musicResponsiveListItemFlexColumnRenderer',
+        'text',
+        'runs'
+      ]);
+      if (runs is List) {
+        searchResult['description'] =
+            runs.map((run) => (run is Map ? run['text']?.toString() : null) ?? '').join('');
+      }
     } catch (e) {}
   } else if (resultType.contains('playlist')) {
-    List<dynamic> flexItem = getFlexColumnItem(data, 1)['text']['runs'];
-    bool hasAuthor = (flexItem.length == defaultOffset + 3);
-    searchResult['itemCount'] =
-        nav(flexItem, [defaultOffset + (hasAuthor ? 2 : 0), 'text'])
-            .split(' ')[0];
-    searchResult['description'] =
-        hasAuthor ? nav(flexItem, [defaultOffset, 'text']) : null;
+    final flexItemMap = getFlexColumnItem(data, 1);
+    final runs = nav(flexItemMap, ['text', 'runs']);
+    if (runs is List) {
+      bool hasAuthor = (runs.length == defaultOffset + 3);
+      final countText = nav(runs, [defaultOffset + (hasAuthor ? 2 : 0), 'text'])?.toString();
+      if (countText != null) {
+        searchResult['itemCount'] = countText.split(' ')[0];
+      }
+      searchResult['description'] =
+          hasAuthor ? nav(runs, [defaultOffset, 'text'])?.toString() : null;
+    }
   } else if (resultType == 'station') {
     searchResult['videoId'] =
         nav(data, navigation_video_id) ?? nav(data, navigation_browse_id);
@@ -821,10 +912,15 @@ dynamic parseSearchResult(Map<String, dynamic> data,
         searchResult['resultType'] = 'artist';
       } else {
         Map<String, dynamic> flexItem2 = getFlexColumnItem(data, 1);
-        List<dynamic> runs = [
-          for (int i = 0; i < flexItem2['text']['runs'].length; i++)
-            if (i % 2 == 0) flexItem2['text']['runs'][i]['text']
-        ];
+        final flexRuns = nav(flexItem2, ['text', 'runs']);
+        List<dynamic> runs = [];
+        if (flexRuns is List) {
+          for (int i = 0; i < flexRuns.length; i++) {
+            if (i % 2 == 0 && flexRuns[i] is Map) {
+              runs.add(flexRuns[i]['text']?.toString() ?? '');
+            }
+          }
+        }
         if (runs.length > 1) {
           searchResult['artist'] = runs[1];
         }
@@ -845,9 +941,11 @@ dynamic parseSearchResult(Map<String, dynamic> data,
     searchResult['length'] = null;
     searchResult['year'] = null;
     final flexItem = getFlexColumnItem(data, 1);
-    final runs = (flexItem['text']['runs']);
-    final songInfo = parseSongRuns(runs);
-    searchResult.addAll(songInfo);
+    final runs = nav(flexItem, ['text', 'runs']);
+    if (runs is List) {
+      final songInfo = parseSongRuns(runs);
+      searchResult.addAll(songInfo);
+    }
   }
 
   if ((['artist', 'album', 'playlist']).contains(resultType)) {
@@ -893,7 +991,8 @@ Map<String, dynamic> parseAlbumHeader(Map<String, dynamic> response) {
         0,
         "musicResponsiveHeaderRenderer"
       ]) ??
-      nav(response, ["header", "musicDetailHeaderRenderer"]);
+      nav(response, ["header", "musicDetailHeaderRenderer"]) ??
+      {};
   Map<String, dynamic> album = {
     'title': nav(header, title_text),
     'type': nav(header, subtitle),
@@ -902,39 +1001,57 @@ Map<String, dynamic> parseAlbumHeader(Map<String, dynamic> response) {
             ["thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"])
   };
 
-  album["description"] = nav(header, [
-        "description",
-        "musicDescriptionShelfRenderer",
-        "description",
-        "runs",
-        0,
-        "text"
-      ]) ??
-      (nav(header, ["subtitle", "runs"]))
-          .map((item) => item.values.first)
+  final descShelf = nav(header, [
+    "description",
+    "musicDescriptionShelfRenderer",
+    "description",
+    "runs",
+    0,
+    "text"
+  ]);
+  if (descShelf != null) {
+    album["description"] = descShelf;
+  } else {
+    final subRuns = nav(header, ["subtitle", "runs"]);
+    if (subRuns is List) {
+      album["description"] = subRuns
+          .map((item) => item is Map && item.values.isNotEmpty ? item.values.first?.toString() : '')
           .toList()
           .join(" ");
+    }
+  }
 
-  Map<String, dynamic> albumInfo =
-      parseSongRuns(header['subtitle']['runs'].sublist(2));
-  try {
-    albumInfo.addAll(parseSongRuns(header["straplineTextOne"]['runs']));
-  } catch (e) {}
-  album.addAll(albumInfo);
+  final subRuns = nav(header, ['subtitle', 'runs']);
+  if (subRuns is List) {
+    final subList = subRuns.length >= 2 ? subRuns.sublist(2) : subRuns;
+    Map<String, dynamic> albumInfo = parseSongRuns(subList);
+    try {
+      final strapRuns = nav(header, ["straplineTextOne", 'runs']);
+      if (strapRuns is List) {
+        albumInfo.addAll(parseSongRuns(strapRuns));
+      }
+    } catch (e) {}
+    album.addAll(albumInfo);
+  }
 
-  if (header['secondSubtitle']['runs'].length > 1) {
-    album['trackCount'] = (header['secondSubtitle']['runs'][0]['text']);
-    album['duration'] = header['secondSubtitle']['runs'][2]['text'];
-  } else {
-    album['duration'] = header['secondSubtitle']['runs'][0]['text'];
+  final secRuns = nav(header, ['secondSubtitle', 'runs']);
+  if (secRuns is List && secRuns.isNotEmpty) {
+    if (secRuns.length > 2 && secRuns[2] is Map) {
+      album['trackCount'] = secRuns[0]?['text']?.toString();
+      album['duration'] = secRuns[2]?['text']?.toString();
+    } else {
+      album['duration'] = secRuns[0]?['text']?.toString();
+    }
   }
 
   // add to library/uploaded
-
-  album['audioPlaylistId'] =
-      nav(response, ['microformat', "microformatDataRenderer", "urlCanonical"])
-          .toString()
-          .split("list=")[1];
+  final canonUrl = nav(response, ['microformat', "microformatDataRenderer", "urlCanonical"])?.toString();
+  if (canonUrl != null && canonUrl.contains("list=")) {
+    final parts = canonUrl.split("list=");
+    if (parts.length > 1) {
+      album['audioPlaylistId'] = parts[1];
+    }
+  }
 
   return album;
 }
@@ -948,23 +1065,26 @@ Map<String, dynamic> parseArtistContents(List results) {
   };
 
   for (dynamic result in results) {
+    if (result is! Map) continue;
     if (result.containsKey('musicShelfRenderer')) {
       final title =
-          nav(result, ['musicShelfRenderer', 'title', 'runs', 0])['text'];
+          nav(result, ['musicShelfRenderer', 'title', 'runs', 0])?['text'];
       final browseEndpoint = nav(
           result, ['musicShelfRenderer', 'bottomEndpoint', 'browseEndpoint']);
 
       final contentList = nav(result, ['musicShelfRenderer', 'contents']);
-      final content = parsePlaylistItems(contentList);
+      final content = contentList is List ? parsePlaylistItems(contentList) : [];
 
-      if (browseEndpoint == null) {
-        navigationEndpointsNContent[title] = {"content": content};
-      } else {
-        navigationEndpointsNContent[title] = {
-          'browseId': browseEndpoint['browseId'],
-          'params': browseEndpoint['params'],
-          "content": content
-        };
+      if (title != null) {
+        if (browseEndpoint == null) {
+          navigationEndpointsNContent[title] = {"content": content};
+        } else {
+          navigationEndpointsNContent[title] = {
+            'browseId': browseEndpoint['browseId'],
+            'params': browseEndpoint['params'],
+            "content": content
+          };
+        }
       }
     } else if (result.containsKey('musicCarouselShelfRenderer')) {
       final browseEndpoint = nav(result, [
@@ -984,33 +1104,40 @@ Map<String, dynamic> parseArtistContents(List results) {
         'title',
         'runs',
         0
-      ])['text'];
+      ])?['text'];
 
       final contentList =
           nav(result, ['musicCarouselShelfRenderer', 'contents']);
       dynamic content = [];
-      if (title == "Videos") {
-        content = contentList
-            .map((video) => parseVideo(video['musicTwoRowItemRenderer']))
-            .toList();
-      } else if (title == "Albums") {
-        content = contentList
-            .map((album) => parseAlbum(album['musicTwoRowItemRenderer']))
-            .toList();
-      } else if (title == "Singles") {
-        content = contentList
-            .map((single) => parseSingle(single['musicTwoRowItemRenderer']))
-            .toList();
+      if (contentList is List) {
+        if (title == "Videos") {
+          content = contentList
+              .map((video) => video is Map ? parseVideo(video['musicTwoRowItemRenderer']) : null)
+              .where((e) => e != null)
+              .toList();
+        } else if (title == "Albums") {
+          content = contentList
+              .map((album) => album is Map ? parseAlbum(album['musicTwoRowItemRenderer']) : null)
+              .where((e) => e != null)
+              .toList();
+        } else if (title == "Singles") {
+          content = contentList
+              .map((single) => single is Map ? parseSingle(single['musicTwoRowItemRenderer']) : null)
+              .where((e) => e != null)
+              .toList();
+        }
       }
 
-      if (browseEndpoint != null) {
-        navigationEndpointsNContent[title] = {
-          'browseId': browseEndpoint['browseId'],
-          'params': browseEndpoint['params'],
-          'content': content
-        };
-      } else {
-        navigationEndpointsNContent[title] = {'content': content};
+      if (title != null) {
+        if (browseEndpoint != null) {
+          navigationEndpointsNContent[title] = {
+            'browseId': browseEndpoint['browseId'],
+            'params': browseEndpoint['params'],
+            'content': content
+          };
+        } else {
+          navigationEndpointsNContent[title] = {'content': content};
+        }
       }
     }
   }
@@ -1019,15 +1146,18 @@ Map<String, dynamic> parseArtistContents(List results) {
 
 dynamic parseContentList(results, Function parseFunc) {
   var contents = [];
+  if (results is! Iterable) return contents;
   for (dynamic result in results) {
-    contents.add(parseFunc(result['musicTwoRowItemRenderer']));
+    if (result is Map) {
+      contents.add(parseFunc(result['musicTwoRowItemRenderer']));
+    }
   }
 
   return contents;
 }
 
 Map<String, dynamic> parseChartsItemBrowseId(dynamic result) {
-  final title = nav(result,["musicTwoRowItemRenderer","title","runs",0,"text"]);
+  final title = nav(result,["musicTwoRowItemRenderer","title","runs",0,"text"])?.toString() ?? "";
   final browseId = nav(result,
       ["musicTwoRowItemRenderer","title","runs",0,"navigationEndpoint","browseEndpoint","browseId"]);
   if (title.contains('Trending')) {
@@ -1042,33 +1172,37 @@ Map<String, dynamic> parseChartsItemBrowseId(dynamic result) {
 
 Map<String, dynamic> parseChartsItem(dynamic result) {
   final contentList = nav(result, ['musicCarouselShelfRenderer', 'contents']);
+  if (contentList is! List) return {};
   final String category = nav(result, [
     'musicCarouselShelfRenderer',
     'header',
     'musicCarouselShelfBasicHeaderRenderer',
     'title',
     ...run_text
-  ]);
+  ])?.toString() ?? "";
   if (category.contains('videos')) {
     final videoList = contentList
-        .map((video) => parseVideo(video['musicTwoRowItemRenderer']))
+        .map((video) => video is Map ? parseVideo(video['musicTwoRowItemRenderer']) : null)
+        .where((e) => e != null)
         .toList();
     return {'title': category, 'contents': videoList};
   } else if (category.contains('artists')) {
     final artists = contentList
         .map((artist) =>
-            parseChartsArtist(artist['musicResponsiveListItemRenderer']))
+            artist is Map ? parseChartsArtist(artist['musicResponsiveListItemRenderer']) : null)
+        .where((e) => e != null)
         .toList();
     return {'title': category, 'contents': artists};
   } else if (category.contains('Genres')) {
     final playlists = contentList
-        .map((playlist) => parsePlaylist(playlist['musicTwoRowItemRenderer']))
+        .map((playlist) => playlist is Map ? parsePlaylist(playlist['musicTwoRowItemRenderer']) : null)
+        .where((e) => e != null)
         .toList();
     return {'title': category, 'contents': playlists};
   } else if (category.contains('Trending')) {
     final videoList = contentList
         .map((video) =>
-            parseChartsTrending(video['musicResponsiveListItemRenderer']))
+            video is Map ? parseChartsTrending(video['musicResponsiveListItemRenderer']) : null)
         .whereType<MediaItem>()
         .toList();
     return {'title': category, 'contents': videoList};
@@ -1077,25 +1211,31 @@ Map<String, dynamic> parseChartsItem(dynamic result) {
 }
 
 Artist parseChartsArtist(dynamic data) {
-  final subscribers = getFlexColumnItem(data, 1);
+  if (data is! Map) {
+    return Artist.fromJson({'artist': '', 'thumbnails': []});
+  }
+  final map = Map<String, dynamic>.from(data);
+  final subscribers = getFlexColumnItem(map, 1);
   dynamic subs;
   if (subscribers.isNotEmpty) {
-    subs = nav(subscribers, text_run_text).split(' ')[0];
+    subs = nav(subscribers, text_run_text)?.toString().split(' ')[0];
   }
 
   final parsed = {
-    'artist': nav(getFlexColumnItem(data, 0), text_run_text),
-    'browseId': nav(data, navigation_browse_id),
+    'artist': nav(getFlexColumnItem(map, 0), text_run_text),
+    'browseId': nav(map, navigation_browse_id),
     'subscribers': subs,
-    'thumbnails': nav(data, thumbnails),
+    'thumbnails': nav(map, thumbnails),
   };
 
   return Artist.fromJson(parsed);
 }
 
 MediaItem? parseChartsTrending(dynamic data) {
-  final flex_0 = getFlexColumnItem(data, 0);
-  final artists = parseSongArtists(data, 1);
+  if (data is! Map) return null;
+  final map = Map<String, dynamic>.from(data);
+  final flex_0 = getFlexColumnItem(map, 0);
+  final artists = parseSongArtists(map, 1);
 
   final video = {
     'title': nav(flex_0, text_run_text),
@@ -1103,10 +1243,10 @@ MediaItem? parseChartsTrending(dynamic data) {
           flex_0,
           text_run + navigation_video_id,
         ) ??
-        nav(data, ['playlistItemData', 'videoId']),
+        nav(map, ['playlistItemData', 'videoId']),
     'playlistId': nav(flex_0, text_run + navigation_playlist_id),
     'artists': artists,
-    'thumbnails': nav(data, thumbnails),
+    'thumbnails': nav(map, thumbnails),
   };
   if (video['videoId'] == null) {
     return null;

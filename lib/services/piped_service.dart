@@ -7,7 +7,10 @@ import '../utils/helper.dart';
 
 class PipedServices extends GetxService {
   final Map<String, dynamic> _headers = {};
-  final _dio = Dio();
+  final _dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 10),
+  ));
   String _insApiUrl = "";
   bool _isLoggedIn = false;
 

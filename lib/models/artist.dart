@@ -13,18 +13,34 @@ class Artist {
   final String? radioId;
   final String? subscribers;
   final String thumbnailUrl;
-  factory Artist.fromJson(dynamic json) => Artist(
-      name: json['artist'],
-      browseId: json['browseId'],
-      radioId: json['radioId'],
-      subscribers: (json['subscribers']) == null
-          ? ""
-          : json['subscribers'] is String
-              ? json['subscribers']
-              : (json['subscribers'] is Map
-                  ? (json['subscribers']['text']?.toString() ?? "")
-                  : json['subscribers'].toString()),
-      thumbnailUrl: Thumbnail(json["thumbnails"][0]["url"]).high);
+  factory Artist.fromJson(dynamic json) {
+    if (json is! Map) {
+      return Artist(
+        name: "",
+        browseId: "",
+        thumbnailUrl: "",
+      );
+    }
+    String thumb = "";
+    if (json["thumbnails"] is List && (json["thumbnails"] as List).isNotEmpty) {
+      final firstThumb = json["thumbnails"][0];
+      if (firstThumb is Map && firstThumb["url"] != null) {
+        thumb = Thumbnail(firstThumb["url"].toString()).high;
+      }
+    }
+    return Artist(
+        name: json['artist']?.toString() ?? json['name']?.toString() ?? "",
+        browseId: json['browseId']?.toString() ?? "",
+        radioId: json['radioId']?.toString(),
+        subscribers: (json['subscribers']) == null
+            ? ""
+            : json['subscribers'] is String
+                ? json['subscribers']
+                : (json['subscribers'] is Map
+                    ? (json['subscribers']['text']?.toString() ?? "")
+                    : json['subscribers'].toString()),
+        thumbnailUrl: thumb);
+  }
 
   Map<String, dynamic> toJson() => {
         'artist': name,

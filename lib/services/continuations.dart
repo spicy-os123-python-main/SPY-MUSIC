@@ -119,7 +119,7 @@ Future<List<dynamic>> getContinuations(
     bool isAdditionparamReturnReq = false}) async {
   List<dynamic> items = [];
 
-  while ((additionalParams_ != null || results.containsKey('continuations')) &&
+  while ((additionalParams_ != null || (results is Map && results.containsKey('continuations'))) &&
       (limit > 0 && items.length < limit)) {
     final String additionalParams = additionalParams_ ??
         (reloadable
@@ -127,10 +127,13 @@ Future<List<dynamic>> getContinuations(
             : getContinuationParams(results, ctokenPath: ctokenPath));
     //print(additionalParams);
 
-    final Map<String, dynamic> response = await requestFunc(additionalParams);
-    //print("Checking........=${response.containsKey('continuationContents')}");
-    //inspect(response);
-    if (response.containsKey('continuationContents')) {
+    final dynamic respRaw = await requestFunc(additionalParams);
+    if (respRaw is! Map || !respRaw.containsKey('continuationContents')) {
+      break;
+    }
+    final Map<String, dynamic> response = Map<String, dynamic>.from(respRaw);
+    if (response['continuationContents'] is Map &&
+        (response['continuationContents'] as Map).containsKey(continuationType)) {
       results = response['continuationContents'][continuationType];
     } else {
       break;
@@ -214,7 +217,8 @@ String getContinuationString(dynamic ctoken) {
 }
 
 List<dynamic> getContinuationContents(
-    Map<String, dynamic> continuation, Function parseFunc) {
+    dynamic continuation, Function parseFunc) {
+  if (continuation is! Map) return [];
   final terms = ['contents', 'items'];
   for (var term in terms) {
     if (continuation.containsKey(term)) {

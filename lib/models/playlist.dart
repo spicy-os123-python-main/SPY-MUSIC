@@ -39,16 +39,23 @@ class Playlist {
   static const thumbPlaceholderUrl =
       "https://raw.githubusercontent.com/spicy-os123-python-main/SPY-MUSIC/refs/heads/main/playlist_placeholder.png";
 
-  factory Playlist.fromJson(Map<dynamic, dynamic> json) => Playlist(
-      title: json["title"],
-      playlistId: json["playlistId"] ?? json["browseId"],
-      thumbnailUrl: (json["thumbnails"][0]["url"]).isEmpty
-          ? Thumbnail(thumbPlaceholderUrl).extraHigh
-          : Thumbnail(json["thumbnails"][0]["url"]).extraHigh,
-      description: json["description"] ?? "Playlist",
-      songCount: json['itemCount'],
-      isPipedPlaylist: json["isPipedPlaylist"] ?? false,
-      isCloudPlaylist: json["isCloudPlaylist"] ?? true);
+  factory Playlist.fromJson(Map<dynamic, dynamic> json) {
+    String thumb = Thumbnail(thumbPlaceholderUrl).extraHigh;
+    if (json["thumbnails"] is List && (json["thumbnails"] as List).isNotEmpty) {
+      final firstThumb = json["thumbnails"][0];
+      if (firstThumb is Map && firstThumb["url"] != null && firstThumb["url"].toString().isNotEmpty) {
+        thumb = Thumbnail(firstThumb["url"].toString()).extraHigh;
+      }
+    }
+    return Playlist(
+        title: json["title"]?.toString() ?? "Playlist",
+        playlistId: (json["playlistId"] ?? json["browseId"])?.toString() ?? "",
+        thumbnailUrl: thumb,
+        description: json["description"]?.toString() ?? "Playlist",
+        songCount: json['itemCount']?.toString(),
+        isPipedPlaylist: json["isPipedPlaylist"] == true,
+        isCloudPlaylist: json["isCloudPlaylist"] != false);
+  }
 
   Map<String, dynamic> toJson() => {
         "title": title,

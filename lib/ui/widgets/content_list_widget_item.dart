@@ -264,7 +264,10 @@ class _ContentListItemState extends State<ContentListItem> {
                     Text(
                       isAlbum
                           ? (album?.title ?? "")
-                          : (playlist?.title ?? widget.content?.title?.toString() ?? ""),
+                          : (playlist?.title ??
+                              (widget.content is Map
+                                  ? (widget.content['title']?.toString() ?? "")
+                                  : "")),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -278,7 +281,10 @@ class _ContentListItemState extends State<ContentListItem> {
                       Text(
                         isAlbum
                             ? "${(album?.artists != null && album!.artists!.isNotEmpty) ? (album.artists![0]['name'] ?? "") : ""} | ${album?.year ?? ""}"
-                            : (playlist?.description ?? widget.content?.description?.toString() ?? ""),
+                            : (playlist?.description ??
+                                (widget.content is Map
+                                    ? (widget.content['description']?.toString() ?? "")
+                                    : "")),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(

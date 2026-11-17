@@ -353,18 +353,18 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         androidCompactActionIndices: const [0, 1, 2],
         processingState: isSongLoading
             ? AudioProcessingState.loading
-            : const {
+            : (const {
                 ProcessingState.idle: AudioProcessingState.idle,
                 ProcessingState.loading: AudioProcessingState.loading,
                 ProcessingState.buffering: AudioProcessingState.buffering,
                 ProcessingState.ready: AudioProcessingState.ready,
                 ProcessingState.completed: AudioProcessingState.completed,
-              }[_player.processingState]!,
+              }[_player.processingState] ?? AudioProcessingState.idle),
         repeatMode: const {
           LoopMode.off: AudioServiceRepeatMode.none,
           LoopMode.one: AudioServiceRepeatMode.one,
           LoopMode.all: AudioServiceRepeatMode.all,
-        }[_player.loopMode]!,
+        }[_player.loopMode] ?? AudioServiceRepeatMode.none,
         shuffleMode: (shuffleModeEnabled)
             ? AudioServiceShuffleMode.all
             : AudioServiceShuffleMode.none,
@@ -2369,6 +2369,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             songId,
             query,
             originalTrack: targetSong,
+            skipSoundCloud: true,
           );
           if (matchedItem != null && !matchedItem.id.startsWith("sc_")) {
             final fallbackResolved = await checkNGetUrl(
