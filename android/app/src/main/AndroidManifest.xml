@@ -2,6 +2,8 @@
         xmlns:tools="http://schemas.android.com/tools"
         package="com.spymusic.app">
 
+    <uses-sdk tools:overrideLibrary="com.llfbandit.record,com.llfbandit.record_android" />
+
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
