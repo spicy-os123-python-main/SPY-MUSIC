@@ -413,6 +413,8 @@ class PlaylistImportService {
                     'cleanTitle': PlatformSearchService.extractCleanTitle(trackName),
                     'primaryArtist': PlatformSearchService.extractPrimaryArtist(trackArtist),
                     'artist': trackArtist,
+                    'album': albumName,
+                    'playlistName': title,
                     'artists': artistNames.isNotEmpty
                         ? artistNames.map((name) => {'name': name, 'id': ''}).toList()
                         : [{'name': trackArtist, 'id': ''}],
@@ -512,6 +514,8 @@ class PlaylistImportService {
                 'cleanTitle': PlatformSearchService.extractCleanTitle(trackName),
                 'primaryArtist': PlatformSearchService.extractPrimaryArtist(trackArtist),
                 'artist': trackArtist,
+                'album': title,
+                'playlistName': title,
                 'artists': [
                   {'name': trackArtist, 'id': ''}
                 ],

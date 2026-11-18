@@ -4,6 +4,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import '../ui/player/player_controller.dart';
 import 'music_service.dart';
 import 'soundcloud_service.dart';
 import '../utils/helper.dart';
@@ -346,7 +347,20 @@ class PlatformSearchService {
     }
 
     // High-reliability fallback (iTunes Search API, no 403 blocks)
-    return await _searchItunes(query, prefix, platform, limit: limit);
+    final itunesTracks =
+        await _searchItunes(query, prefix, platform, limit: limit);
+    if (itunesTracks.isNotEmpty) return itunesTracks;
+
+    // Smart fallback if query had burner/alias words (e.g. "Brand New Car Squish")
+    final words = query.trim().split(RegExp(r'\s+'));
+    if (words.length >= 2) {
+      final relaxed = words.sublist(0, words.length - 1).join(' ');
+      final relaxedTracks =
+          await _searchItunes(relaxed, prefix, platform, limit: limit);
+      if (relaxedTracks.isNotEmpty) return relaxedTracks;
+    }
+
+    return [];
   }
 
   static Future<List<MediaItem>> _getChartTracks(
@@ -586,6 +600,146 @@ class PlatformSearchService {
       }
     }
 
+    // --- PHASE 2: Leak / Burner / Unreleased Platform Track Recovery ---
+    // For imported platform tracks (e.g. Spotify unreleased leaks by Juice WRLD, XXXTentacion, etc.
+    // uploaded under burner/podcast pseudonyms like "Squish", "swisssss", "Devafterdarkk"),
+    // standard searches for "$cleanTitle $primaryArtist" fail.
+    // Here we leverage playlist/album artist hints and high-fidelity Title+Duration audio master matching.
+    final artistHints = extractArtistHints(originalTrack);
+    printINFO("Starting Phase 2 Leak Recovery for '$cleanTitle' ($trackId). Artist hints: $artistHints");
+
+    // 8. Try each extracted artist hint on YouTube Music, YouTube, and SoundCloud
+    for (final hint in artistHints) {
+      if (musicServicesAvailable) {
+        // 8a. YouTube Music with Hint
+        try {
+          final musicServices = Get.find<MusicServices>();
+          final qHint = '$cleanTitle $hint'.trim();
+          final res = await musicServices
+              .search(qHint, filter: 'songs', limit: 8)
+              .timeout(const Duration(seconds: 5));
+          final ytTracks = _extractYtTracks(res);
+          final match = findBestMatch(ytTracks, originalTrack, allowFidelityTitleDurationMatch: true);
+          if (match != null) {
+            _remember(trackId, match);
+            printINFO("Phase 2: Matched $trackId via artist hint '$hint' on YouTube Music: '${match.title}' by '${match.artist}'");
+            return match;
+          }
+        } catch (e) {
+          printINFO("Phase 2 Hint YT Music error for '$hint': $e");
+        }
+
+        // 8b. YouTube with Hint
+        try {
+          final musicServices = Get.find<MusicServices>();
+          final qHint = '$cleanTitle $hint'.trim();
+          final res = await musicServices
+              .search(qHint, limit: 8)
+              .timeout(const Duration(seconds: 5));
+          final ytTracks = _extractYtTracks(res);
+          final match = findBestMatch(ytTracks, originalTrack, allowFidelityTitleDurationMatch: true);
+          if (match != null) {
+            _remember(trackId, match);
+            printINFO("Phase 2: Matched $trackId via artist hint '$hint' on YouTube: '${match.title}' by '${match.artist}'");
+            return match;
+          }
+        } catch (e) {
+          printINFO("Phase 2 Hint YouTube error for '$hint': $e");
+        }
+      }
+
+      // 8c. SoundCloud with Hint
+      if (!skipSoundCloud) {
+        try {
+          final qHint = '$cleanTitle $hint'.trim();
+          final scTracks = await SoundCloudService()
+              .searchTracks(qHint, limit: 6)
+              .timeout(const Duration(seconds: 5));
+          final match = findBestMatch(scTracks, originalTrack, allowFidelityTitleDurationMatch: true);
+          if (match != null) {
+            _remember(trackId, match);
+            printINFO("Phase 2: Matched $trackId via artist hint '$hint' on SoundCloud: '${match.title}' by '${match.artist}'");
+            return match;
+          }
+        } catch (e) {
+          printINFO("Phase 2 Hint SoundCloud error for '$hint': $e");
+        }
+      }
+    }
+
+    // 9. Clean Title Search on YouTube Music with High-Fidelity Title+Duration Matching
+    if (musicServicesAvailable) {
+      try {
+        final musicServices = Get.find<MusicServices>();
+        final res = await musicServices
+            .search(cleanTitle, filter: 'songs', limit: 8)
+            .timeout(const Duration(seconds: 5));
+        final ytTracks = _extractYtTracks(res);
+        final match = findBestMatch(ytTracks, originalTrack, allowFidelityTitleDurationMatch: true);
+        if (match != null) {
+          _remember(trackId, match);
+          printINFO("Phase 2: Matched $trackId via Clean Title on YouTube Music: '${match.title}' by '${match.artist}'");
+          return match;
+        }
+      } catch (e) {
+        printINFO("Phase 2 Clean Title YT Music error: $e");
+      }
+    }
+
+    // 10. Clean Title & Title + "unreleased" Search on YouTube (Direct YoutubeExplode)
+    final ytLeakQueries = ['$cleanTitle unreleased', cleanTitle];
+    for (final qYT in ytLeakQueries) {
+      try {
+        final yt = YoutubeExplode();
+        try {
+          final searchResults =
+              await yt.search.search(qYT).timeout(const Duration(seconds: 5));
+          final ytCandidates = <MediaItem>[];
+          for (final v in searchResults) {
+            try {
+              ytCandidates.add(MediaItem(
+                id: v.id.value,
+                title: v.title,
+                artist: v.author,
+                duration: v.duration,
+              ));
+              if (ytCandidates.length >= 8) break;
+            } catch (_) {}
+          }
+          final match = findBestMatch(ytCandidates, originalTrack, allowFidelityTitleDurationMatch: true);
+          if (match != null) {
+            _remember(trackId, match);
+            printINFO("Phase 2: Matched $trackId via YouTube ($qYT): '${match.title}' by '${match.artist}'");
+            return match;
+          }
+        } finally {
+          yt.close();
+        }
+      } catch (e) {
+        printINFO("Phase 2 YouTube leak search error for '$qYT': $e");
+      }
+    }
+
+    // 11. SoundCloud Clean Title & Unreleased Search
+    if (!skipSoundCloud) {
+      final scLeakQueries = ['$cleanTitle unreleased', cleanTitle];
+      for (final qSC in scLeakQueries) {
+        try {
+          final scTracks = await SoundCloudService()
+              .searchTracks(qSC, limit: 8)
+              .timeout(const Duration(seconds: 5));
+          final match = findBestMatch(scTracks, originalTrack, allowFidelityTitleDurationMatch: true);
+          if (match != null) {
+            _remember(trackId, match);
+            printINFO("Phase 2: Matched $trackId via SoundCloud ($qSC): '${match.title}' by '${match.artist}'");
+            return match;
+          }
+        } catch (e) {
+          printINFO("Phase 2 SoundCloud leak search error for '$qSC': $e");
+        }
+      }
+    }
+
     return null;
   }
 
@@ -631,6 +785,71 @@ class PlatformSearchService {
     if (artist == null || artist.trim().isEmpty) return '';
     final parts = artist.split(RegExp(r'[,;/&]|(\bfeat\b)|(\bft\b)', caseSensitive: false));
     return parts.first.trim();
+  }
+
+  /// Extracts candidate artist hints from a playlist or album name.
+  /// (e.g. "Juice wrld xxxtentacion Lil peep" -> ["Juice wrld", "xxxtentacion", "Lil peep"])
+  static List<String> extractArtistHints(MediaItem? item) {
+    if (item == null) return const [];
+    final hints = <String>{};
+
+    final playlistName = (item.extras?['playlistName'] as String?) ?? '';
+    final albumName = item.album ?? (item.extras?['album'] as String?) ?? '';
+    final candidateStrings = <String>[playlistName, albumName];
+
+    try {
+      if (Get.isRegistered<PlayerController>()) {
+        final currentPlayFrom =
+            Get.find<PlayerController>().playinfrom.value.name;
+        if (currentPlayFrom.isNotEmpty) {
+          candidateStrings.add(currentPlayFrom);
+        }
+      }
+    } catch (_) {}
+
+    final nonArtistStopWords = {
+      'playlist', 'album', 'songs', 'song', 'hits', 'best', 'top', 'unreleased',
+      'leak', 'leaks', 'favs', 'favorites', 'favourite', 'favourites', 'music',
+      'mix', 'rap', 'hip', 'hop', 'hiphop', 'trap', 'drill', 'r&b', 'pop', 'rock',
+      'vol', 'volume', 'pt', 'part', 'disc', 'cd', 'ep', 'lp', 'deluxe', 'edition',
+      'soundtrack', 'ost', 'audio', 'video', 'my', 'the', 'and', 'with', 'feat', 'ft'
+    };
+
+    for (final text in candidateStrings) {
+      if (text.isEmpty) continue;
+
+      // 1. Split on common artist delimiters
+      final parts = text.split(RegExp(r'[,/&+|\-•]|\bfeat\b|\bft\b|\bwith\b', caseSensitive: false));
+      for (final rawPart in parts) {
+        final part = rawPart.trim();
+        final words = part.split(RegExp(r'\s+'));
+        final filteredWords = words.where((w) => !nonArtistStopWords.contains(w.toLowerCase())).toList();
+        final cleanPart = filteredWords.join(' ').trim();
+        if (cleanPart.length >= 3) {
+          hints.add(cleanPart);
+        }
+      }
+
+      // 2. Look for well-known artist names if contained in playlist/album name
+      final lower = text.toLowerCase();
+      final commonArtists = [
+        'juice wrld', 'xxxtentacion', 'lil peep', 'playboi carti', 'kanye west',
+        'kanye', 'drake', 'travis scott', 'lil uzi vert', 'trippie redd',
+        'mac miller', 'post malone', 'kendrick lamar', 'j cole', 'eminem',
+        'the weeknd', 'billie eilish', 'frank ocean', 'asap rocky', 'ski mask'
+      ];
+      for (final ca in commonArtists) {
+        if (lower.contains(ca)) {
+          hints.add(ca);
+        }
+      }
+    }
+
+    // Exclude the track's existing primaryArtist if already known
+    final primary = extractPrimaryArtist(item.artist).toLowerCase();
+    hints.removeWhere((h) => h.toLowerCase() == primary || h.length < 3);
+
+    return hints.toList();
   }
 
   /// Backward-compatible method returning matched stream ID
@@ -681,7 +900,8 @@ class PlatformSearchService {
   /// Picks the candidate that fits the original studio track best.
   /// Strictly rejects sped-up, slowed, nightcore, remix, or wrong-length tracks.
   static MediaItem? findBestMatch(List<MediaItem> candidates, MediaItem? original,
-      {bool strictSpeedCheck = false}) {
+      {bool strictSpeedCheck = false,
+      bool allowFidelityTitleDurationMatch = false}) {
     if (candidates.isEmpty) return null;
     if (original == null) return candidates.first;
 
@@ -691,6 +911,7 @@ class PlatformSearchService {
     final rawArtist = original.artist ?? '';
     final primaryArtist = extractPrimaryArtist(rawArtist);
     final expectedArtist = _normalizeString(rawArtist);
+    final artistHints = extractArtistHints(original);
 
     final bool durationEstimated = original.extras?['durationEstimated'] == true;
     int expectedDurationSec =
@@ -751,26 +972,85 @@ class PlatformSearchService {
       final normCand = _normalizeArtist(cArtist);
       final normExp = _normalizeArtist(expectedArtist);
       final normPrim = _normalizeArtist(primaryArtist);
+      final normRawTitle = _normalizeArtist(rawTitleLower);
 
       final bool artistMatches = normCand == normExp ||
           normCand == normPrim ||
           normCand.contains(normPrim) ||
           normExp.contains(normCand) ||
-          rawTitleLower.contains(normPrim) ||
-          rawTitleLower.contains(normExp);
+          normRawTitle.contains(normPrim) ||
+          normRawTitle.contains(normExp) ||
+          (primaryArtist.isNotEmpty && rawTitleLower.contains(primaryArtist.toLowerCase()));
 
-      if (strictSpeedCheck && !artistMatches) {
+      // Check artist hints from playlist or album
+      bool hintMatched = false;
+      if (artistHints.isNotEmpty) {
+        for (final hint in artistHints) {
+          final normHint = _normalizeArtist(hint);
+          final lowerHint = hint.toLowerCase();
+          if (normHint.isNotEmpty &&
+              (normCand.contains(normHint) ||
+                  normRawTitle.contains(normHint) ||
+                  rawTitleLower.contains(lowerHint))) {
+            hintMatched = true;
+            break;
+          }
+        }
+      }
+
+      String candidateTitleOnly = cCleanTitle;
+      for (final hint in artistHints) {
+        final escaped = RegExp.escape(hint);
+        candidateTitleOnly = candidateTitleOnly
+            .replaceAll(RegExp('^$escaped\\s*-\\s*', caseSensitive: false), '')
+            .replaceAll(RegExp('\\s*-\\s*$escaped\$', caseSensitive: false), '')
+            .replaceAll(RegExp('\\bby\\s+$escaped\\b', caseSensitive: false), '')
+            .trim();
+      }
+      final cTitleOnlyNorm = _normalizeString(candidateTitleOnly);
+
+      final int durationDiff = (expectedDurationSec > 0 && cDurationSec > 0)
+          ? (expectedDurationSec - cDurationSec).abs()
+          : 999;
+
+      final bool isExactTitle = cTitle == expectedTitle ||
+          cTitleOnlyNorm == expectedTitle ||
+          (cTitle.length >= 4 &&
+              expectedTitle.length >= 4 &&
+              (cTitle.startsWith(expectedTitle) || expectedTitle.startsWith(cTitle)));
+
+      final bool isTitleAndDurationVerified = isExactTitle &&
+          expectedDurationSec > 0 &&
+          cDurationSec > 0 &&
+          durationDiff <= 4;
+
+      if (strictSpeedCheck && !artistMatches && !isTitleAndDurationVerified) {
         continue;
       }
 
-      // If the artist doesn't match at all:
-      // For short titles (1-2 words), NEVER allow a different artist!
+      // If the artist doesn't match:
       final titleWords = expectedTitle.split(' ').where((w) => w.length > 1).toList();
-      if (!artistMatches && expectedArtist.isNotEmpty) {
-        if (titleWords.length <= 2) {
+      if (!artistMatches && expectedArtist.isNotEmpty && !hintMatched) {
+        if (titleWords.length <= 2 &&
+            !isTitleAndDurationVerified &&
+            !allowFidelityTitleDurationMatch) {
           continue; // Disqualify wrong artist completely!
         }
-        score -= 85.0; // Heavy penalty for mismatching artist
+        if (isTitleAndDurationVerified) {
+          // Both title and duration match master recording precisely!
+          score -= 15.0; // Mild penalty for pseudonym / burner uploader
+          score += 35.0; // Fidelity master boost
+        } else if (allowFidelityTitleDurationMatch && durationDiff <= 8) {
+          score -= 25.0;
+          score += 15.0;
+        } else {
+          score -= 85.0; // Heavy penalty for mismatching artist
+        }
+      } else if (hintMatched) {
+        score += 55.0; // Major boost: matches the real artist from playlist/album!
+        if (isTitleAndDurationVerified) {
+          score += 35.0; // Audio master duration fidelity boost
+        }
       } else if (artistMatches) {
         if (normCand == normExp || normCand == normPrim) {
           score += 45.0;
@@ -789,8 +1069,8 @@ class PlatformSearchService {
 
       // 3. Duration matching: Studio master tracks on YT Music and Spotify match within seconds
       if (expectedDurationSec > 0 && cDurationSec > 0) {
-        final diff = (expectedDurationSec - cDurationSec).abs();
-        if (strictSpeedCheck && diff > 5) {
+        final diff = durationDiff;
+        if (strictSpeedCheck && diff > 5 && !isTitleAndDurationVerified) {
           continue; // SoundCloud track differs too much -> skip
         }
         if (diff <= 3) {
@@ -817,7 +1097,7 @@ class PlatformSearchService {
       }
 
       // 5. Title matching
-      if (cTitle == expectedTitle) {
+      if (cTitle == expectedTitle || cTitleOnlyNorm == expectedTitle) {
         score += 55.0;
       } else if (cTitle.startsWith(expectedTitle) || expectedTitle.startsWith(cTitle)) {
         score += 45.0;
@@ -838,7 +1118,9 @@ class PlatformSearchService {
       }
     }
 
-    final minThreshold = strictSpeedCheck ? 75.0 : 45.0;
+    final minThreshold = strictSpeedCheck
+        ? 75.0
+        : (allowFidelityTitleDurationMatch ? 40.0 : 45.0);
     return bestScore >= minThreshold ? bestMatch : null;
   }
 

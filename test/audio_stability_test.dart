@@ -4,6 +4,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:spymusic/services/nav_parser.dart';
 import 'package:spymusic/services/continuations.dart';
 import 'package:spymusic/services/soundcloud_service.dart';
+import 'package:spymusic/services/platform_search_service.dart';
 import 'package:spymusic/utils/helper.dart';
 import 'package:spymusic/ui/widgets/sort_widget.dart';
 import 'package:spymusic/models/media_Item_builder.dart';
@@ -350,6 +351,148 @@ void main() {
       final shuffled = shuffleList(1, queueIds);
       expect(shuffled.first, equals('song_2'));
       expect(shuffled.length, equals(2));
+    });
+  });
+
+  group('Leak & Burner Track Platform Matching (e.g. Brand New Car by Squish / Juice WRLD)', () {
+    test('extractArtistHints correctly parses multiple artists from playlist or album names', () {
+      const itemWithPlaylist = MediaItem(
+        id: 'sp_123',
+        title: 'Brand New Car',
+        artist: 'Squish',
+        extras: {
+          'playlistName': 'Juice wrld xxxtentacion Lil peep',
+        },
+      );
+
+      final hints = PlatformSearchService.extractArtistHints(itemWithPlaylist);
+      expect(hints.map((h) => h.toLowerCase()), containsAll(['juice wrld', 'xxxtentacion', 'lil peep']));
+      // Pseudonym/burner artist 'Squish' must not be in hints
+      expect(hints.map((h) => h.toLowerCase()), isNot(contains('squish')));
+    });
+
+    test('findBestMatch with fidelity matching selects accurate leak recording and rejects wrong tracks', () {
+      const originalSpotifyLeak = MediaItem(
+        id: 'sp_brand_new_car',
+        title: 'Brand New Car',
+        artist: 'Squish',
+        duration: Duration(seconds: 183), // 3:03
+        extras: {
+          'playlistName': 'Juice wrld xxxtentacion Lil peep',
+        },
+      );
+
+      final candidates = [
+        const MediaItem(
+          id: 'yt_car_crush',
+          title: 'Crushing Crunchy & Soft Things by Car! - Floral Foam, Squishy',
+          artist: 'CrushChannel',
+          duration: Duration(seconds: 612), // 10:12
+        ),
+        const MediaItem(
+          id: 'yt_stones',
+          title: 'Brand New Car',
+          artist: 'The Rolling Stones',
+          duration: Duration(seconds: 254), // 4:14
+        ),
+        const MediaItem(
+          id: 'yt_action_bronson',
+          title: 'Brand New Car',
+          artist: 'Action Bronson',
+          duration: Duration(seconds: 142), // 2:22
+        ),
+        const MediaItem(
+          id: 'yt_leak_swisssss',
+          title: 'Brand New Car',
+          artist: 'swisssss',
+          duration: Duration(seconds: 184), // 3:04 (diff = 1s!)
+        ),
+      ];
+
+      final match = PlatformSearchService.findBestMatch(
+        candidates,
+        originalSpotifyLeak,
+        allowFidelityTitleDurationMatch: true,
+      );
+
+      expect(match, isNotNull);
+      expect(match!.id, equals('yt_leak_swisssss'));
+      expect(match.title, equals('Brand New Car'));
+    });
+
+    test('findBestMatch prioritizes candidate with playlist artist hint in title/author', () {
+      const originalSpotifyLeak = MediaItem(
+        id: 'sp_brand_new_car',
+        title: 'Brand New Car',
+        artist: 'Squish',
+        duration: Duration(seconds: 183), // 3:03
+        extras: {
+          'playlistName': 'Juice wrld xxxtentacion Lil peep',
+        },
+      );
+
+      final candidates = [
+        const MediaItem(
+          id: 'yt_unknown_uploader',
+          title: 'Brand New Car',
+          artist: 'RandomUser123',
+          duration: Duration(seconds: 184), // 3:04
+        ),
+        const MediaItem(
+          id: 'yt_juice_wrld_upload',
+          title: 'Juice WRLD - Brand New Car',
+          artist: 'lljw 999',
+          duration: Duration(seconds: 181), // 3:01
+        ),
+      ];
+
+      final match = PlatformSearchService.findBestMatch(
+        candidates,
+        originalSpotifyLeak,
+        allowFidelityTitleDurationMatch: true,
+      );
+
+      expect(match, isNotNull);
+      // 'yt_juice_wrld_upload' has the artist hint "Juice WRLD" from playlistName
+      expect(match!.id, equals('yt_juice_wrld_upload'));
+    });
+
+    test('findBestMatch strictly rejects unwanted modifications even with fidelity matching', () {
+      const originalSpotifyLeak = MediaItem(
+        id: 'sp_brand_new_car',
+        title: 'Brand New Car',
+        artist: 'Squish',
+        duration: Duration(seconds: 183),
+      );
+
+      final candidates = [
+        const MediaItem(
+          id: 'yt_sped_up',
+          title: 'Brand New Car (Sped Up)',
+          artist: 'swisssss',
+          duration: Duration(seconds: 183),
+        ),
+        const MediaItem(
+          id: 'yt_nightcore',
+          title: 'Brand New Car [Nightcore]',
+          artist: 'swisssss',
+          duration: Duration(seconds: 183),
+        ),
+        const MediaItem(
+          id: 'yt_remix',
+          title: 'Brand New Car (Remix)',
+          artist: 'swisssss',
+          duration: Duration(seconds: 183),
+        ),
+      ];
+
+      final match = PlatformSearchService.findBestMatch(
+        candidates,
+        originalSpotifyLeak,
+        allowFidelityTitleDurationMatch: true,
+      );
+
+      expect(match, isNull);
     });
   });
 }

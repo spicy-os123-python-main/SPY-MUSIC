@@ -231,7 +231,23 @@ class SearchResultScreenController extends GetxController
             "Songs": spTracks,
           };
         } else {
-          resultContent.value = {};
+          // If no Spotify catalog track for a leak/burner search (e.g. "Brand New Car Squish"),
+          // relax query or search YouTube Music / SoundCloud fallback, tagged as Spotify
+          final words = finalQuery.trim().split(RegExp(r'\s+'));
+          final relaxedQuery = words.length >= 2 ? words.sublist(0, words.length - 1).join(' ') : finalQuery;
+          final fallbackYt = await musicServices.search(relaxedQuery, filter: 'songs', limit: 10);
+          final fallbackSongs = (fallbackYt['Songs'] as List?)?.whereType<MediaItem>().toList() ?? [];
+          if (fallbackSongs.isNotEmpty) {
+            resultContent.value = {
+              "Songs": fallbackSongs.map((s) {
+                final extras = Map<String, dynamic>.from(s.extras ?? {});
+                extras['platform'] = 'Spotify';
+                return s.copyWith(extras: extras);
+              }).toList(),
+            };
+          } else {
+            resultContent.value = {};
+          }
         }
       } else if (selectedPlatform == MusicSource.amazon) {
         printINFO("Exclusive Amazon Search for: $finalQuery");
@@ -248,8 +264,11 @@ class SearchResultScreenController extends GetxController
         }
       } else {
         printINFO("All Platforms Search for: $finalQuery");
+        final words = finalQuery.trim().split(RegExp(r'\s+'));
+        final relaxedQuery = words.length >= 2 ? words.sublist(0, words.length - 1).join(' ') : '';
         final queries = [
           finalQuery,
+          if (relaxedQuery.isNotEmpty) relaxedQuery,
           if (finalQuery.contains(" - ")) finalQuery.split(" - ").last.trim(),
         ];
 
