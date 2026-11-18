@@ -323,26 +323,34 @@ class StreamProvider {
   Audio? get highestQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // 1. Guaranteed unthrottled ratebypass progressive stream (itag 18 ~1.5 MB, HTTP 206, immune to 403 blocks)
-    final rateBypass = audioFormats!.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
-
-    // 2. High-quality pure AAC stream (itag 140 ~128k, ~3 MB)
+    // 1. High-quality pure AAC stream (itag 140 ~128k, pure audio ~3 MB, 0 video overhead)
     final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
     if (aac140 != null) return aac140;
 
-    // 3. High-bitrate pure Opus (itag 251 ~160k, ~3 MB)
+    // 2. High-bitrate pure Opus (itag 251 ~160k, pure audio ~3 MB)
     final highOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
     if (highOpus != null) return highOpus;
 
-    // 4. Medium Opus (itag 250 ~70k, ~1.8 MB)
+    // 3. Medium Opus (itag 250 ~70k, ~1.8 MB)
     final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
     if (midOpus != null) return midOpus;
 
-    // 5. Low AAC (itag 139 ~48k, ~1.2 MB)
+    // 4. Low AAC (itag 139 ~48k, ~1.2 MB)
     final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
     if (lowAac != null) return lowAac;
+
+    // 5. Low Opus (itag 249 ~50k, ~1.2 MB)
+    final lowOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 249);
+    if (lowOpus != null) return lowOpus;
+
+    // 6. Any other pure audio stream
+    final pureAudio = audioFormats!.firstWhereOrNull((item) => item.itag != 18 && item.itag != 22);
+    if (pureAudio != null) return pureAudio;
+
+    // 7. Last resort emergency fallback: ratebypass muxed video stream (itag 18)
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
 
     if (audioFormats!.isNotEmpty) {
       final sorted = List<Audio>.from(audioFormats!)
@@ -371,13 +379,16 @@ class StreamProvider {
 
   Audio? get highestBitrateMp4aAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
+    // 1. Pure AAC 140
+    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (aac140 != null) return aac140;
+    // 2. Pure AAC 139
+    final aac139 = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
+    if (aac139 != null) return aac139;
+    // 3. Fallback to muxed stream if no pure aac
     final rateBypass = audioFormats!.firstWhereOrNull(
         (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
     if (rateBypass != null) return rateBypass;
-    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
-    if (aac140 != null) return aac140;
-    final aac139 = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
-    if (aac139 != null) return aac139;
     return audioFormats!
             .firstWhereOrNull((item) => item.audioCodec == Codec.mp4a) ??
         audioFormats!.first;
@@ -399,28 +410,28 @@ class StreamProvider {
   Audio? get lowQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // 1. Guaranteed unthrottled ratebypass progressive stream (itag 18 ~1.5 MB, HTTP 206)
-    final rateBypass = audioFormats!.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
-
-    // 2. Ultra Data Saver pure AAC (itag 139 ~48k, ~1.1-1.3 MB per song)
+    // 1. Ultra Data Saver pure AAC (itag 139 ~48k, ~1.1-1.3 MB per song, 0 video overhead)
     final lowAac = audioFormats!.firstWhereOrNull(
         (item) => item.itag == 139 || item.itag == 599);
     if (lowAac != null) return lowAac;
 
-    // 3. Ultra Data Saver pure Opus (itag 249 ~50k, ~1.1-1.3 MB per song)
+    // 2. Ultra Data Saver pure Opus (itag 249 ~50k, ~1.1-1.3 MB per song, 0 video overhead)
     final lowOpus = audioFormats!.firstWhereOrNull(
         (item) => item.itag == 249 || item.itag == 600);
     if (lowOpus != null) return lowOpus;
 
-    // 4. Medium Opus (itag 250 ~70k, ~1.8 MB per song)
+    // 3. Medium Opus (itag 250 ~70k, ~1.8 MB per song)
     final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
     if (midOpus != null) return midOpus;
 
-    // 5. Standard pure AAC (itag 140 ~128k)
+    // 4. Standard pure AAC (itag 140 ~128k, ~3 MB)
     final midAac = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
     if (midAac != null) return midAac;
+
+    // 5. Emergency fallback only: muxed video stream (itag 18)
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
 
     return fallbackAudio;
   }
@@ -428,22 +439,26 @@ class StreamProvider {
   Audio? get midQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // 1. Guaranteed unthrottled ratebypass progressive stream (itag 18 ~1.5 MB, HTTP 206)
-    final rateBypass = audioFormats!.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
-
-    // 2. Pure AAC 140 (~128k, ~3 MB)
+    // 1. Pure AAC 140 (~128k, ~3 MB, 0 video overhead)
     final midAac = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
     if (midAac != null) return midAac;
 
-    // 3. 70 kbps Opus (itag 250 ~1.8 MB per song)
+    // 2. 70 kbps Opus (itag 250 ~1.8 MB per song)
     final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
     if (midOpus != null) return midOpus;
 
-    // 4. 160 kbps Opus (itag 251 ~3 MB per song)
+    // 3. 160 kbps Opus (itag 251 ~3 MB per song)
     final highOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
     if (highOpus != null) return highOpus;
+
+    // 4. Low AAC (itag 139)
+    final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
+    if (lowAac != null) return lowAac;
+
+    // 5. Emergency fallback: muxed video stream (itag 18)
+    final rateBypass = audioFormats!.firstWhereOrNull(
+        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
+    if (rateBypass != null) return rateBypass;
 
     return lowQualityAudio;
   }

@@ -1,6 +1,7 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:spymusic/ui/screens/Settings/settings_screen_controller.dart';
 
 import '../../../models/music_source.dart';
@@ -290,6 +291,37 @@ class SearchResultScreenController extends GetxController
         }).toList();
         final scSongs = (responses[1] as List).whereType<MediaItem>().toList();
         final spSongs = (responses[2] as List).whereType<MediaItem>().toList();
+
+        // If catalog search returns few/no songs for this query (e.g. unreleased leaks, creator uploads),
+        // query YouTube directly via YoutubeExplode so creator uploads like "Brand New Car" are discovered!
+        if (ytSongs.isEmpty || (ytSongs.length + scSongs.length + spSongs.length) < 5) {
+          try {
+            final yt = YoutubeExplode();
+            try {
+              final directResults =
+                  await yt.search.search(finalQuery).timeout(const Duration(seconds: 4));
+              for (final v in directResults.take(10)) {
+                if (!ytSongs.any((s) => s.id == v.id.value)) {
+                  ytSongs.add(MediaItem(
+                    id: v.id.value,
+                    title: v.title,
+                    artist: v.author,
+                    duration: v.duration,
+                    artUri: Uri.tryParse(v.thumbnails.highResUrl),
+                    extras: {
+                      'platform': 'YouTube',
+                      'searchQuery': '${v.title} ${v.author}',
+                      'artist': v.author,
+                    },
+                  ));
+                }
+              }
+            } finally {
+              yt.close();
+            }
+          } catch (_) {}
+        }
+
         final songs = _interleave([
           ytSongs,
           scSongs,

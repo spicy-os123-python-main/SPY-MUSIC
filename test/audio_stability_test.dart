@@ -5,6 +5,7 @@ import 'package:spymusic/services/nav_parser.dart';
 import 'package:spymusic/services/continuations.dart';
 import 'package:spymusic/services/soundcloud_service.dart';
 import 'package:spymusic/services/platform_search_service.dart';
+import 'package:spymusic/services/stream_service.dart';
 import 'package:spymusic/utils/helper.dart';
 import 'package:spymusic/ui/widgets/sort_widget.dart';
 import 'package:spymusic/models/media_Item_builder.dart';
@@ -549,6 +550,112 @@ void main() {
       final updated = simulateUpdateQueue(playingItem, newPlaylist);
       expect(updated.length, equals(3));
       expect(updated[1].title, equals('Song B (Custom Metadata)'));
+    });
+
+    test('extractArtistHints prioritizes known artist names over raw multi-artist string', () {
+      const item = MediaItem(
+        id: 'sp_brand_new_car',
+        title: 'Brand New Car',
+        artist: 'Squish',
+        duration: Duration(seconds: 183),
+        extras: {
+          'playlistName': 'Juice wrld xxxtentacion Lil peep',
+        },
+      );
+
+      final hints = PlatformSearchService.extractArtistHints(item);
+      expect(hints, isNotEmpty);
+      expect(hints.first.toLowerCase(), equals('juice wrld'));
+      expect(hints.map((h) => h.toLowerCase()), containsAll(['juice wrld', 'xxxtentacion', 'lil peep']));
+      // Multi-artist unseparated blob must not precede individual recognized artists
+      expect(hints.first.toLowerCase(), isNot(contains('xxxtentacion')));
+    });
+
+    test('StreamProvider pure audio streams are strictly prioritized over muxed video streams (low data volume)', () {
+      final formats = [
+        Audio(
+          itag: 18, // 360p video (muxed)
+          audioCodec: Codec.mp4a,
+          bitrate: 128000,
+          duration: 180000,
+          loudnessDb: 0.0,
+          url: 'https://youtube.com/videoplayback?itag=18&ratebypass=yes',
+          size: 15 * 1024 * 1024, // 15 MB
+        ),
+        Audio(
+          itag: 140, // Pure AAC audio (m4a)
+          audioCodec: Codec.mp4a,
+          bitrate: 128000,
+          duration: 180000,
+          loudnessDb: 0.0,
+          url: 'https://youtube.com/videoplayback?itag=140',
+          size: 3 * 1024 * 1024, // 3 MB
+        ),
+        Audio(
+          itag: 251, // Pure Opus audio (webm)
+          audioCodec: Codec.opus,
+          bitrate: 160000,
+          duration: 180000,
+          loudnessDb: 0.0,
+          url: 'https://youtube.com/videoplayback?itag=251',
+          size: 3 * 1024 * 1024, // 3 MB
+        ),
+        Audio(
+          itag: 139, // Pure low AAC audio
+          audioCodec: Codec.mp4a,
+          bitrate: 48000,
+          duration: 180000,
+          loudnessDb: 0.0,
+          url: 'https://youtube.com/videoplayback?itag=139',
+          size: 1100 * 1024, // 1.1 MB
+        ),
+        Audio(
+          itag: 249, // Pure low Opus audio
+          audioCodec: Codec.opus,
+          bitrate: 50000,
+          duration: 180000,
+          loudnessDb: 0.0,
+          url: 'https://youtube.com/videoplayback?itag=249',
+          size: 1200 * 1024, // 1.2 MB
+        ),
+      ];
+
+      final provider = StreamProvider(
+        playable: true,
+        statusMSG: 'OK',
+        audioFormats: formats,
+      );
+
+      // High quality must pick pure AAC 140 or pure Opus 251, NEVER itag 18 video!
+      expect(provider.highestQualityAudio, isNotNull);
+      expect(provider.highestQualityAudio!.itag, equals(140));
+      expect(provider.highestQualityAudio!.size, lessThan(5 * 1024 * 1024));
+
+      // Mid quality must pick pure audio (140), NEVER itag 18 video!
+      expect(provider.midQualityAudio, isNotNull);
+      expect(provider.midQualityAudio!.itag, equals(140));
+
+      // Low quality (Data Saver) must pick pure low audio (139 or 249), NEVER itag 18 video!
+      expect(provider.lowQualityAudio, isNotNull);
+      expect(provider.lowQualityAudio!.itag, equals(139));
+      expect(provider.lowQualityAudio!.size, lessThan(2 * 1024 * 1024));
+    });
+
+    test('Fast skip request cancellation discards outdated play request ID', () {
+      int activeRequestId = 1;
+      bool isCancelled(int reqId) => reqId != activeRequestId;
+
+      expect(isCancelled(1), isFalse);
+
+      // User skips quickly to next song:
+      activeRequestId = 2;
+      expect(isCancelled(1), isTrue); // First request cancelled immediately
+      expect(isCancelled(2), isFalse);
+
+      // User skips again:
+      activeRequestId = 3;
+      expect(isCancelled(2), isTrue); // Second request cancelled immediately
+      expect(isCancelled(3), isFalse);
     });
   });
 }

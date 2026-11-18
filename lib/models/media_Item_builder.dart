@@ -83,6 +83,8 @@ class MediaItemBuilder {
     extrasMap['downloadDate'] = json['downloadDate'] ?? extrasMap['downloadDate'];
     extrasMap['trackDetails'] = json['trackDetails'] ?? extrasMap['trackDetails'];
     extrasMap['year'] = json['year'] ?? extrasMap['year'];
+    extrasMap['playlistName'] = json['playlistName'] ?? extrasMap['playlistName'];
+    extrasMap['searchQuery'] = json['searchQuery'] ?? extrasMap['searchQuery'];
     if (isValidArtist(artistName)) {
       extrasMap['artist'] = artistName;
       if (extrasMap['artists'] == null) {

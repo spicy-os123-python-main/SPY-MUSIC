@@ -546,7 +546,24 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _downloadSongToCache(songId, url, currentSong);
   }
 
+  HttpClient? _activeCacheDownloadClient;
+  String? _activeCacheDownloadSongId;
+
+  void _cancelActiveCacheDownload() {
+    try {
+      _activeCacheDownloadClient?.close(force: true);
+      _activeCacheDownloadClient = null;
+      _activeCacheDownloadSongId = null;
+    } catch (_) {}
+  }
+
   void _downloadSongToCache(String songId, String url, MediaItem song) async {
+    _cancelActiveCacheDownload();
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 15);
+    _activeCacheDownloadClient = client;
+    _activeCacheDownloadSongId = songId;
+
     try {
       final cacheDir = Directory("$_cacheDir/cachedSongs");
       if (!cacheDir.existsSync()) {
@@ -555,8 +572,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       final tempFile = File("$_cacheDir/cachedSongs/${songId}_temp.mp3");
       final targetFile = File("$_cacheDir/cachedSongs/$songId.mp3");
 
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 15);
       final req = await client.getUrl(Uri.parse(url));
       final headers = buildStreamHeaders(url);
       headers?.forEach((key, value) {
@@ -567,6 +582,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         final sink = tempFile.openWrite();
         await resp.pipe(sink);
         await sink.close();
+
+        // Discard download immediately if active track changed during streaming!
+        if (mediaItem.value?.id != songId) {
+          if (tempFile.existsSync()) tempFile.deleteSync();
+          return;
+        }
 
         if (tempFile.existsSync() && tempFile.lengthSync() >= 250 * 1024) {
           if (targetFile.existsSync()) targetFile.deleteSync();
@@ -594,9 +615,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       } else {
         await resp.drain();
       }
-      client.close();
     } catch (e) {
       printINFO("Background cache download encountered: $e");
+    } finally {
+      if (_activeCacheDownloadSongId == songId) {
+        _activeCacheDownloadClient = null;
+        _activeCacheDownloadSongId = null;
+      }
+      try {
+        client.close();
+      } catch (_) {}
     }
   }
 
@@ -1088,6 +1116,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   @override
   Future<void> skipToNext() async {
+    _cancelActiveCacheDownload();
     _checkAndRecordSongCompletion();
     _currentSongCompletedRecorded = false;
     _currentSongPlayedSeconds = 0;
@@ -1130,6 +1159,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
   @override
   Future<void> skipToPrevious() async {
+    _cancelActiveCacheDownload();
     if (_player.position.inMilliseconds > 4000) {
       await _player.seek(Duration.zero);
       return;
@@ -1207,6 +1237,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         break;
 
       case 'playByIndex':
+        _cancelActiveCacheDownload();
         if (queue.value.isEmpty) {
           return;
         }
@@ -1243,7 +1274,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             currentSong.id,
             targetMediaItem: currentSong,
             generateNewUrl: isNewUrlReq,
-          ).timeout(const Duration(seconds: 30));
+            playRequestId: reqId,
+          ).timeout(const Duration(seconds: 12));
 
           if (reqId != _activePlayRequestId) {
             return;
@@ -1605,6 +1637,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         break;
 
       case 'setSourceNPlay':
+        _cancelActiveCacheDownload();
         final currMed = (extras!['mediaItem'] as MediaItem);
         _songErrorRetryCount = 0;
         final int reqId = ++_activePlayRequestId;
@@ -1634,7 +1667,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           final streamInfo = await checkNGetUrl(
             currMed.id,
             targetMediaItem: currMed,
-          ).timeout(const Duration(seconds: 30));
+            playRequestId: reqId,
+          ).timeout(const Duration(seconds: 12));
 
           if (reqId != _activePlayRequestId) return;
           _isTriggeringNext = false;
@@ -2332,8 +2366,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       {MediaItem? targetMediaItem,
       bool generateNewUrl = false,
       bool offlineReplacementUrl = false,
-      bool allowFallback = true}) async {
+      bool allowFallback = true,
+      int? playRequestId}) async {
     printINFO("Requested id : $songId");
+
+    if (playRequestId != null && playRequestId != _activePlayRequestId) {
+      return HMStreamingData(playable: false, statusMSG: "Cancelled");
+    }
 
     final targetSong = targetMediaItem ??
         queue.value.firstWhereOrNull((item) => item.id == songId) ??
@@ -2536,12 +2575,20 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         );
       }
 
+      if (playRequestId != null && playRequestId != _activePlayRequestId) {
+        return HMStreamingData(playable: false, statusMSG: "Cancelled");
+      }
+
       if (query.isNotEmpty) {
         MediaItem? matchedItem = await PlatformSearchService.resolveMatchedTrack(
           songId,
           query,
           originalTrack: targetSong,
         );
+
+        if (playRequestId != null && playRequestId != _activePlayRequestId) {
+          return HMStreamingData(playable: false, statusMSG: "Cancelled");
+        }
 
         if (matchedItem != null &&
             !matchedItem.id.startsWith("sp_") &&
@@ -2551,6 +2598,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             generateNewUrl: generateNewUrl,
             targetMediaItem: matchedItem,
             allowFallback: allowFallback,
+            playRequestId: playRequestId,
           );
 
           if (!resolved.playable || resolved.audio == null) {
@@ -2573,6 +2621,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 generateNewUrl: true,
                 targetMediaItem: retryMatch,
                 allowFallback: allowFallback,
+                playRequestId: playRequestId,
               );
             }
           }
@@ -2721,12 +2770,15 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     }
 
     if (streamInfo == null || !streamInfo.playable) {
+      if (playRequestId != null && playRequestId != _activePlayRequestId) {
+        return HMStreamingData(playable: false, statusMSG: "Cancelled");
+      }
       final token = RootIsolateToken.instance;
       Map<String, dynamic> streamInfoJson;
       try {
         streamInfoJson = await Isolate.run(
           () => getStreamInfo(songId, token),
-        ).timeout(const Duration(seconds: 28));
+        ).timeout(const Duration(seconds: 12));
       } catch (e) {
         printERROR("YouTube stream lookup failed for $songId: $e");
         streamInfoJson = {"playable": false, "statusMSG": e.toString()};
@@ -2747,8 +2799,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           final yt = YoutubeExplode();
           try {
             final searchResults =
-                await yt.search.search(query).timeout(const Duration(seconds: 7));
-            for (final candidate in searchResults.take(6)) {
+                await yt.search.search(query).timeout(const Duration(seconds: 4));
+            for (final candidate in searchResults.take(3)) {
               final candidateId = candidate.id.value;
               if (candidateId == songId) continue;
 
