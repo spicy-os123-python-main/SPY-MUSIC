@@ -116,6 +116,7 @@ class PlayerController extends GetxController
 
   var _newSongFlag = true;
   final isCurrentSongBuffered = false.obs;
+  int _pushQueueRequestId = 0;
 
   late StreamSubscription<bool> keyboardSubscription;
 
@@ -289,10 +290,11 @@ class PlayerController extends GetxController
   void _listenForChangesInDuration() {
     _audioHandler.mediaItem.listen((mediaItem) async {
       final oldState = progressBarStatus.value;
+      final isSameSong = currentSong.value?.id == mediaItem?.id;
       progressBarStatus.update((val) {
         val!.total = mediaItem?.duration ?? Duration.zero;
-        val.current = oldState.current;
-        val.buffered = oldState.buffered;
+        val.current = isSameSong ? oldState.current : Duration.zero;
+        val.buffered = isSameSong ? oldState.buffered : Duration.zero;
       });
       if (mediaItem != null) {
         printINFO(mediaItem.title);
@@ -376,6 +378,8 @@ class PlayerController extends GetxController
   ///songs into Queue
   Future<void> pushSongToQueue(MediaItem? mediaItem,
       {String? playlistid, bool radio = false}) async {
+    final int reqId = ++_pushQueueRequestId;
+
     /// update playing from value
     playinfrom.value = PlaylingFrom(
         type: PlaylingFromType.SELECTION,
@@ -400,6 +404,7 @@ class PlayerController extends GetxController
         try {
           final content = await _musicServices.getWatchPlaylist(
               videoId: mediaItem?.id ?? "", radio: radio, playlistId: playlistid);
+          if (reqId != _pushQueueRequestId) return;
           radioContinuationParam = content['additionalParamsForNext'];
           await _audioHandler
               .updateQueue(List<MediaItem>.from(content['tracks']));
@@ -418,6 +423,7 @@ class PlayerController extends GetxController
         }
       },
     ).then((value) async {
+      if (reqId != _pushQueueRequestId) return;
       if (playlistid != null) {
         _playerPanelCheck();
         await _audioHandler.customAction("playByIndex", {"index": 0});
@@ -452,6 +458,8 @@ class PlayerController extends GetxController
 
   Future<void> playPlayListSong(List<MediaItem> mediaItems, int index,
       {PlaylingFrom? playfrom}) async {
+    if (mediaItems.isEmpty) return;
+    final safeIndex = index.clamp(0, mediaItems.length - 1);
     isRadioModeOn = false;
     //open player pane,set current song and push first song into playing list,
 
@@ -462,7 +470,7 @@ class PlayerController extends GetxController
     //for changing home content based on last interation
     Future.delayed(const Duration(seconds: 3), () {
       if (Hive.box("AppPrefs").get("discoverContentType") == "BOLI") {
-        final songId = mediaItems[index].id;
+        final songId = mediaItems[safeIndex].id;
         if (!songId.startsWith('sc_') && !songId.startsWith('sp_') && !songId.startsWith('az_')) {
           Get.find<HomeScreenController>()
               .changeDiscoverContent("BOLI", songId: songId);
@@ -473,9 +481,9 @@ class PlayerController extends GetxController
     _playerPanelCheck();
     await _audioHandler.updateQueue(mediaItems);
     if (isShuffleModeEnabled.value) {
-      await _audioHandler.customAction("shuffleCmd", {"index": index});
+      await _audioHandler.customAction("shuffleCmd", {"index": safeIndex});
     }
-    await _audioHandler.customAction("playByIndex", {"index": index});
+    await _audioHandler.customAction("playByIndex", {"index": safeIndex});
   }
 
   Future<void> startRadio(MediaItem? mediaItem, {String? playlistid}) async {

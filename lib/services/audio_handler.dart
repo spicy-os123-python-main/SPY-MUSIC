@@ -62,8 +62,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   AndroidEqualizer? _equalizer;
   AndroidLoudnessEnhancer? _loudnessEnhancer;
   late MediaLibrary _mediaLibrary;
-  // ignore: prefer_typing_uninitialized_variables
-  dynamic currentIndex;
+  int currentIndex = 0;
   int currentShuffleIndex = 0;
   String? currentSongUrl;
   bool isPlayingUsingLockCachingSource = false;
@@ -96,6 +95,36 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   int _activePlayRequestId = 0;
   bool _isTriggeringNext = false;
   DateTime? _lastStreamErrorTime;
+
+  bool _isInterruptionOrCancellation(dynamic error, [int? reqId]) {
+    if (reqId != null && reqId != _activePlayRequestId) {
+      return true;
+    }
+    if (error == null) return false;
+    final errStr = error.toString().toLowerCase();
+    if (errStr.contains("abort") ||
+        errStr.contains("loading interrupted") ||
+        errStr.contains("connection aborted") ||
+        errStr.contains("interrupted") ||
+        errStr.contains("source error") ||
+        errStr.contains("cancelled") ||
+        errStr.contains("canceled") ||
+        errStr.contains("disposed")) {
+      return true;
+    }
+    if (error is PlatformException) {
+      final code = error.code.toLowerCase();
+      final msg = (error.message ?? '').toLowerCase();
+      if (code == '0' ||
+          code == '-1004' ||
+          msg.contains('source error') ||
+          msg.contains('abort') ||
+          msg.contains('interrupt')) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   // list of shuffled queue songs ids
   List<String> shuffledQueue = [];
@@ -377,13 +406,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
       //print("set ${playbackState.value.queueIndex},${event.currentIndex}");
     }, onError: (Object e, StackTrace st) async {
-      printERROR("playbackEventStream error: $e");
-      final errStr = e.toString().toLowerCase();
-
       // Normal cancellations when switching tracks or replacing media sources: ignore completely!
-      if (errStr.contains("abort") ||
-          errStr.contains("loading interrupted") ||
-          errStr.contains("connection aborted")) {
+      if (_isInterruptionOrCancellation(e)) {
+        printINFO("playbackEventStream ignored cancellation/transition: $e");
         return;
       }
 
@@ -401,9 +426,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
       _lastStreamErrorTime = now;
 
+      printERROR("playbackEventStream error: $e");
+
       final currentId = mediaItem.value?.id ??
-          (currentIndex != null && queue.value.isNotEmpty
-              ? queue.value[currentIndex!].id
+          (queue.value.isNotEmpty && currentIndex >= 0 && currentIndex < queue.value.length
+              ? queue.value[currentIndex].id
               : null);
 
       if (currentId != null) {
@@ -425,7 +452,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         printINFO(
             "Retrying playback for $currentId (attempt $_songErrorRetryCount of 2)...");
         customAction(
-            "playByIndex", {'index': currentIndex ?? 0, 'newUrl': true});
+            "playByIndex", {'index': currentIndex, 'newUrl': true});
       } else {
         printERROR(
             "Playback failed after $_songErrorRetryCount retries for $currentId: $e");
@@ -601,9 +628,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           _preloadNextSongStream();
         }
 
-        final bool isNearEnd = currentMs >= (totalMs - playerDurationOffset);
+        final bool isNearEnd = totalMs > 10000 &&
+            currentMs > 5000 &&
+            currentMs >= (totalMs - playerDurationOffset);
         final bool isCompletedAtEnd =
             _player.processingState == ProcessingState.completed &&
+                totalMs > 10000 &&
                 currentMs >= (totalMs - 2500);
         if (!isSongLoading &&
             !_isTriggeringNext &&
@@ -683,12 +713,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   void _listenForDurationChanges() {
     _player.durationStream.listen((duration) async {
       final currQueue = queue.value;
-      if (currentIndex == null ||
+      if (currentIndex < 0 ||
+          currentIndex >= currQueue.length ||
           currQueue.isEmpty ||
           duration == null ||
           duration == Duration.zero ||
           duration.inSeconds == 0) return;
-      final currentSong = queue.value[currentIndex];
+      final currentSong = currQueue[currentIndex];
       // Only set duration from player if metadata did not already have a valid non-zero duration
       if (currentSong.duration == null ||
           currentSong.duration == Duration.zero ||
@@ -734,6 +765,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
     }
     this.queue.add(newQueue);
+    if (shuffleModeEnabled && newQueue.isNotEmpty) {
+      _shuffleCmd(currentIndex);
+    }
   }
 
   @override
@@ -998,42 +1032,60 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   int _getNextSongIndex() {
+    if (queue.value.isEmpty) return 0;
+    final int safeCurrent = currentIndex.clamp(0, queue.value.length - 1);
+
     if (shuffleModeEnabled) {
+      if (shuffledQueue.isEmpty) {
+        _shuffleCmd(safeCurrent);
+      }
+      if (shuffledQueue.isEmpty) return safeCurrent;
+
       if (currentShuffleIndex + 1 >= shuffledQueue.length) {
         shuffledQueue.shuffle();
         currentShuffleIndex = 0;
       } else {
         currentShuffleIndex += 1;
       }
-      return queue.value
-          .indexWhere((item) => item.id == shuffledQueue[currentShuffleIndex]);
+      final nextId = shuffledQueue[currentShuffleIndex];
+      final targetIdx = queue.value.indexWhere((item) => item.id == nextId);
+      return targetIdx != -1 ? targetIdx : safeCurrent;
     }
 
-    if (queue.value.length > currentIndex + 1) {
-      return currentIndex + 1;
+    if (queue.value.length > safeCurrent + 1) {
+      return safeCurrent + 1;
     } else if (queueLoopModeEnabled) {
       return 0;
     } else {
-      return currentIndex;
+      return safeCurrent;
     }
   }
 
   int _getPrevSongIndex() {
+    if (queue.value.isEmpty) return 0;
+    final int safeCurrent = currentIndex.clamp(0, queue.value.length - 1);
+
     if (shuffleModeEnabled) {
+      if (shuffledQueue.isEmpty) {
+        _shuffleCmd(safeCurrent);
+      }
+      if (shuffledQueue.isEmpty) return safeCurrent;
+
       if (currentShuffleIndex - 1 < 0) {
         shuffledQueue.shuffle();
         currentShuffleIndex = shuffledQueue.length - 1;
       } else {
         currentShuffleIndex -= 1;
       }
-      return queue.value
-          .indexWhere((item) => item.id == shuffledQueue[currentShuffleIndex]);
+      final prevId = shuffledQueue[currentShuffleIndex];
+      final targetIdx = queue.value.indexWhere((item) => item.id == prevId);
+      return targetIdx != -1 ? targetIdx : safeCurrent;
     }
 
-    if (currentIndex - 1 >= 0) {
-      return currentIndex - 1;
+    if (safeCurrent - 1 >= 0) {
+      return safeCurrent - 1;
     } else {
-      return currentIndex;
+      return safeCurrent;
     }
   }
 
@@ -1042,6 +1094,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     _checkAndRecordSongCompletion();
     _currentSongCompletedRecorded = false;
     _currentSongPlayedSeconds = 0;
+    if (queue.value.isEmpty) return;
+
+    if (queue.value.length == 1) {
+      await _player.seek(Duration.zero);
+      if (!_player.playing) {
+        await _player.play();
+      }
+      return;
+    }
+
     final index = _getNextSongIndex();
     if (index != currentIndex && index >= 0 && index < queue.value.length) {
       try {
@@ -1060,20 +1122,34 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           }
         }
       } catch (_) {}
-      _player.seek(Duration.zero);
-      _player.pause();
+      if (queueLoopModeEnabled) {
+        await customAction("playByIndex", {'index': 0});
+      } else {
+        _player.seek(Duration.zero);
+        _player.pause();
+      }
     }
   }
 
   @override
   Future<void> skipToPrevious() async {
-    if (_player.position.inMilliseconds > 5000) {
-      _player.seek(Duration.zero);
+    if (_player.position.inMilliseconds > 4000) {
+      await _player.seek(Duration.zero);
       return;
     }
     _checkAndRecordSongCompletion();
     _currentSongCompletedRecorded = false;
     _currentSongPlayedSeconds = 0;
+    if (queue.value.isEmpty) return;
+
+    if (queue.value.length == 1 || currentIndex <= 0) {
+      await _player.seek(Duration.zero);
+      if (!_player.playing) {
+        await _player.play();
+      }
+      return;
+    }
+
     try {
       if (_player.playing) {
         await _player.pause();
@@ -1082,6 +1158,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     final index = _getPrevSongIndex();
     if (index != currentIndex && index >= 0 && index < queue.value.length) {
       await customAction("playByIndex", {'index': index});
+    } else {
+      await _player.seek(Duration.zero);
     }
   }
 
@@ -1132,8 +1210,15 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         break;
 
       case 'playByIndex':
-        final songIndex = extras!['index'];
-        currentIndex = songIndex;
+        if (queue.value.isEmpty) {
+          return;
+        }
+        final dynamic rawIndex = extras!['index'];
+        final int targetIndex = (rawIndex is int)
+            ? rawIndex
+            : (int.tryParse(rawIndex?.toString() ?? '0') ?? 0);
+        final safeIndex = targetIndex.clamp(0, queue.value.length - 1);
+        currentIndex = safeIndex;
         final isNewUrlReq = extras['newUrl'] ?? false;
         if (!isNewUrlReq) {
           _songErrorRetryCount = 0;
@@ -1152,6 +1237,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           playbackState.add(playbackState.value.copyWith(
             playing: false,
             processingState: AudioProcessingState.loading,
+            updatePosition: Duration.zero,
             queueIndex: currentIndex,
           ));
 
@@ -1176,6 +1262,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 errorCode: 404,
                 errorMessage: streamInfo.statusMSG,
                 playing: false));
+            if (queue.value.length > 1 && !_isTriggeringNext) {
+              Future.delayed(const Duration(milliseconds: 1200), () {
+                if (reqId == _activePlayRequestId && !_player.playing) {
+                  skipToNext();
+                }
+              });
+            }
             return;
           }
 
@@ -1207,8 +1300,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             duration: resolvedDuration,
             extras: updatedExtras,
           );
-          if (songIndex < queue.value.length) {
-            queue.value[songIndex] = playableSong;
+          if (currentIndex < queue.value.length) {
+            queue.value[currentIndex] = playableSong;
           }
           mediaItem.add(playableSong);
           WatchtimeService.recordSongStart(playableSong);
@@ -1280,13 +1373,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               },
             );
           } catch (loadErr) {
-            final errStr = loadErr.toString().toLowerCase();
-            if (reqId != _activePlayRequestId) {
-              return;
-            }
-            if (errStr.contains("abort") ||
-                errStr.contains("loading interrupted") ||
-                errStr.contains("connection aborted")) {
+            if (_isInterruptionOrCancellation(loadErr, reqId)) {
               printINFO("playByIndex setAudioSource interrupted for $reqId: $loadErr");
               return;
             }
@@ -1341,6 +1428,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 ).timeout(const Duration(seconds: 10));
                 streamLoaded = true;
               } catch (fallbackErr) {
+                if (_isInterruptionOrCancellation(fallbackErr, reqId)) return;
                 printINFO("Fallback stream (${fallback.itag}) also failed: $fallbackErr");
               }
             }
@@ -1374,6 +1462,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   streamLoaded = true;
                 }
               } catch (freshErr) {
+                if (_isInterruptionOrCancellation(freshErr, reqId)) return;
                 printINFO("Fresh stream retry failed for ${currentSong.id}: $freshErr");
               }
             }
@@ -1400,13 +1489,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             _syncDiscordPlaying();
           }
         } catch (e, st) {
-          final errStr = e.toString().toLowerCase();
-          if (reqId != _activePlayRequestId) {
-            return;
-          }
-          if (errStr.contains("abort") ||
-              errStr.contains("loading interrupted") ||
-              errStr.contains("connection aborted")) {
+          if (_isInterruptionOrCancellation(e, reqId)) {
             printINFO("playByIndex interrupted for $reqId: $e");
             return;
           }
@@ -1534,15 +1617,22 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               await _player.pause();
             }
           } catch (_) {}
+          final existingIdx =
+              queue.value.indexWhere((item) => item.id == currMed.id);
+          if (existingIdx != -1) {
+            currentIndex = existingIdx;
+          } else {
+            queue.add([currMed]);
+            currentIndex = 0;
+          }
           playbackState.add(playbackState.value.copyWith(
             playing: false,
             processingState: AudioProcessingState.loading,
-            queueIndex: 0,
+            updatePosition: Duration.zero,
+            queueIndex: currentIndex,
           ));
           mediaItem.add(currMed);
-          queue.add([currMed]);
           isSongLoading = true;
-          currentIndex = 0;
 
           final streamInfo = await checkNGetUrl(
             currMed.id,
@@ -1665,13 +1755,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               },
             );
           } catch (loadErr) {
-            final errStr = loadErr.toString().toLowerCase();
-            if (reqId != _activePlayRequestId) {
-              return;
-            }
-            if (errStr.contains("abort") ||
-                errStr.contains("loading interrupted") ||
-                errStr.contains("connection aborted")) {
+            if (_isInterruptionOrCancellation(loadErr, reqId)) {
               printINFO("setSourceNPlay setAudioSource interrupted for $reqId: $loadErr");
               return;
             }
@@ -1724,6 +1808,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 ).timeout(const Duration(seconds: 10));
                 streamLoaded = true;
               } catch (fallbackErr) {
+                if (_isInterruptionOrCancellation(fallbackErr, reqId)) return;
                 printINFO("Fallback stream (${fallback.itag}) also failed: $fallbackErr");
               }
             }
@@ -1755,6 +1840,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   streamLoaded = true;
                 }
               } catch (freshErr) {
+                if (_isInterruptionOrCancellation(freshErr, reqId)) return;
                 printINFO("Fresh stream retry failed for ${currMed.id}: $freshErr");
               }
             }
@@ -1779,13 +1865,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           await _player.play();
           _syncDiscordPlaying();
         } catch (e, st) {
-          final errStr = e.toString().toLowerCase();
-          if (reqId != _activePlayRequestId) {
-            return;
-          }
-          if (errStr.contains("abort") ||
-              errStr.contains("loading interrupted") ||
-              errStr.contains("connection aborted")) {
+          if (_isInterruptionOrCancellation(e, reqId)) {
             printINFO("setSourceNPlay interrupted for $reqId: $e");
             return;
           }
@@ -2153,11 +2233,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   void _shuffleCmd(int index) {
-    final queueIds = queue.value.toList().map((item) => item.id).toList();
-    final currentSongId = queueIds.removeAt(index);
+    if (queue.value.isEmpty) {
+      shuffledQueue.clear();
+      currentShuffleIndex = 0;
+      return;
+    }
+    final queueIds = queue.value.map((item) => item.id).toList();
+    final safeIndex = index.clamp(0, queueIds.length - 1);
+    final currentSongId = queueIds.removeAt(safeIndex);
     queueIds.shuffle();
     queueIds.insert(0, currentSongId);
-    shuffledQueue.replaceRange(0, shuffledQueue.length, queueIds);
+    shuffledQueue = queueIds;
     currentShuffleIndex = 0;
   }
 
@@ -2182,7 +2268,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     if (currQueue.isNotEmpty) {
       final queueData =
           currQueue.map((e) => MediaItemBuilder.toJson(e)).toList();
-      final currIndex = currentIndex ?? 0;
+      final currIndex = currentIndex;
       final position = _player.position.inMilliseconds;
       final prevSessionData = await Hive.openBox("prevSessionData");
       await prevSessionData.clear();
@@ -2373,10 +2459,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 targetSong?.duration!.inSeconds == 0)) {
           final updatedSong = targetSong!
               .copyWith(duration: Duration(milliseconds: durationMs));
-          if (currentIndex != null &&
-              currentIndex! < queue.value.length &&
-              queue.value[currentIndex!].id == targetSong.id) {
-            queue.value[currentIndex!] = updatedSong;
+          if (currentIndex >= 0 &&
+              currentIndex < queue.value.length &&
+              queue.value[currentIndex].id == targetSong.id) {
+            queue.value[currentIndex] = updatedSong;
           }
           mediaItem.add(updatedSong);
         }
@@ -2513,10 +2599,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 duration: Duration(milliseconds: fullDurationMs),
                 extras: updatedExtras,
               );
-              if (currentIndex != null &&
-                  currentIndex! < queue.value.length &&
-                  queue.value[currentIndex!].id == targetSong.id) {
-                queue.value[currentIndex!] = updatedSong;
+              if (currentIndex >= 0 &&
+                  currentIndex < queue.value.length &&
+                  queue.value[currentIndex].id == targetSong.id) {
+                queue.value[currentIndex] = updatedSong;
               }
               mediaItem.add(updatedSong);
             }

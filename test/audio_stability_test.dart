@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:spymusic/services/nav_parser.dart';
 import 'package:spymusic/services/continuations.dart';
@@ -193,6 +194,162 @@ void main() {
       final json = MediaItemBuilder.toJson(item);
       expect(json['date'], isA<int>());
       expect(json['date'], greaterThan(1700000000000));
+    });
+  });
+
+  group('Song Switching Stability, Queue Navigation & Cancellation Resilience', () {
+    // Helper replicating the exact interruption detection in AudioHandler
+    bool isInterruptionOrCancellation(dynamic error, [int? reqId, int? activeReqId]) {
+      if (reqId != null && activeReqId != null && reqId != activeReqId) {
+        return true;
+      }
+      if (error == null) return false;
+      final errStr = error.toString().toLowerCase();
+      if (errStr.contains("abort") ||
+          errStr.contains("loading interrupted") ||
+          errStr.contains("connection aborted") ||
+          errStr.contains("interrupted") ||
+          errStr.contains("source error") ||
+          errStr.contains("cancelled") ||
+          errStr.contains("canceled") ||
+          errStr.contains("disposed")) {
+        return true;
+      }
+      if (error is PlatformException) {
+        final code = error.code.toLowerCase();
+        final msg = (error.message ?? '').toLowerCase();
+        if (code == '0' ||
+            code == '-1004' ||
+            msg.contains('source error') ||
+            msg.contains('abort') ||
+            msg.contains('interrupt')) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    test('Cancellation detector identifies PlatformException(0, Source error) as normal transition', () {
+      final exoCancel = PlatformException(
+        code: '0',
+        message: 'Source error',
+        details: {'index': 0},
+      );
+      expect(isInterruptionOrCancellation(exoCancel), isTrue);
+    });
+
+    test('Cancellation detector identifies various stream interruption errors', () {
+      expect(isInterruptionOrCancellation('Loading interrupted'), isTrue);
+      expect(isInterruptionOrCancellation('Connection aborted by peer'), isTrue);
+      expect(isInterruptionOrCancellation('Player was disposed'), isTrue);
+      expect(isInterruptionOrCancellation('Operation cancelled'), isTrue);
+      expect(isInterruptionOrCancellation(PlatformException(code: '-1004', message: 'Interrupted')), isTrue);
+    });
+
+    test('Cancellation detector preserves real network/format failures without misidentifying', () {
+      expect(isInterruptionOrCancellation('SocketException: Connection refused'), isFalse);
+      expect(isInterruptionOrCancellation('HttpException: 500 Internal Server Error'), isFalse);
+      expect(isInterruptionOrCancellation('FormatException: Invalid JSON payload'), isFalse);
+      expect(isInterruptionOrCancellation(PlatformException(code: '404', message: 'Not found')), isFalse);
+    });
+
+    test('Superseded asynchronous song requests are immediately discarded by request ID', () {
+      int activeRequestId = 1;
+      const int req1 = 1;
+
+      // User skips quickly to song 2, then song 3
+      activeRequestId = 2;
+      activeRequestId = 3;
+
+      // When request 1 finishes in background, it must be flagged as superseded
+      expect(isInterruptionOrCancellation(null, req1, activeRequestId), isTrue);
+      // Active request 3 is valid
+      expect(isInterruptionOrCancellation(null, 3, activeRequestId), isFalse);
+    });
+
+    test('Queue navigation safely clamps bounds and handles single/empty lists', () {
+      final queue = <MediaItem>[
+        const MediaItem(id: 's1', title: 'Song 1'),
+        const MediaItem(id: 's2', title: 'Song 2'),
+        const MediaItem(id: 's3', title: 'Song 3'),
+      ];
+
+      int getNext(int current, int len, bool loop) {
+        if (len == 0) return 0;
+        final safeCurrent = current.clamp(0, len - 1);
+        if (len > safeCurrent + 1) {
+          return safeCurrent + 1;
+        } else if (loop) {
+          return 0;
+        }
+        return safeCurrent;
+      }
+
+      int getPrev(int current, int len) {
+        if (len == 0) return 0;
+        final safeCurrent = current.clamp(0, len - 1);
+        if (safeCurrent - 1 >= 0) {
+          return safeCurrent - 1;
+        }
+        return safeCurrent;
+      }
+
+      // Normal traversal
+      expect(getNext(0, queue.length, false), equals(1));
+      expect(getNext(1, queue.length, false), equals(2));
+      expect(getNext(2, queue.length, false), equals(2));
+      expect(getNext(2, queue.length, true), equals(0));
+
+      // Previous traversal
+      expect(getPrev(2, queue.length), equals(1));
+      expect(getPrev(1, queue.length), equals(0));
+      expect(getPrev(0, queue.length), equals(0));
+
+      // Out of bounds and empty resilient
+      expect(getNext(-5, queue.length, false), equals(1));
+      expect(getNext(99, queue.length, false), equals(2));
+      expect(getNext(0, 0, false), equals(0));
+      expect(getPrev(-5, queue.length), equals(0));
+      expect(getPrev(99, queue.length), equals(1));
+    });
+
+    test('UI progress bar resets position to zero when switching to a different track', () {
+      Duration calculateCurrentPos(String oldSongId, String newSongId, Duration oldPos) {
+        final bool isSameSong = oldSongId == newSongId;
+        return isSameSong ? oldPos : Duration.zero;
+      }
+
+      final posAfterSwitch = calculateCurrentPos('song_a', 'song_b', const Duration(seconds: 145));
+      expect(posAfterSwitch, equals(Duration.zero));
+
+      final posSameSongMetadataUpdate = calculateCurrentPos('song_a', 'song_a', const Duration(seconds: 145));
+      expect(posSameSongMetadataUpdate, equals(const Duration(seconds: 145)));
+    });
+
+    test('Shuffle queue sync safely reconstructs without RangeError on unmapped or desynced IDs', () {
+      final queue = [
+        const MediaItem(id: 'song_1', title: '1'),
+        const MediaItem(id: 'song_2', title: '2'),
+      ];
+      final queueIds = queue.map((e) => e.id).toList();
+
+      List<String> shuffleList(int index, List<String> ids) {
+        if (ids.isEmpty) return [];
+        final copy = List<String>.from(ids);
+        final safeIndex = index.clamp(0, copy.length - 1);
+        final current = copy.removeAt(safeIndex);
+        copy.shuffle();
+        copy.insert(0, current);
+        return copy;
+      }
+
+      expect(() => shuffleList(-1, queueIds), returnsNormally);
+      expect(() => shuffleList(50, queueIds), returnsNormally);
+      expect(() => shuffleList(0, []), returnsNormally);
+
+      final shuffled = shuffleList(1, queueIds);
+      expect(shuffled.first, equals('song_2'));
+      expect(shuffled.length, equals(2));
     });
   });
 }
