@@ -34,7 +34,8 @@ class Equalizer {
             AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION,
             context
         )
-        applyLoudnessBoost(sessionId)
+        // Note: Do not unconditionally apply LoudnessEnhancer here as it boosts the noise floor
+        // and causes background hiss/noise on quiet playback.
         println("Sent AudioEffect intent for opening")
     }
 
@@ -44,6 +45,9 @@ class Equalizer {
             AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION,
             context
         )
+        synchronized(loudnessLock) {
+            releaseLoudnessBoostLocked()
+        }
         println("Sent AudioEffect intent for closure")
     }
 

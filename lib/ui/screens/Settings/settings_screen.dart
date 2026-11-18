@@ -724,27 +724,83 @@ class SettingsScreen extends StatelessWidget {
                       settingsController.setDownloadLocation();
                     },
                   ),
-                  ListTile(
-                    contentPadding: const EdgeInsets.only(left: 5, right: 10),
-                    leading: const Icon(Icons.build_circle_outlined),
-                    title: Text("repairDownloads".tr),
-                    subtitle: Text(
-                      "repairDownloadsDes".tr,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.secondary.withOpacity(0.35),
+                          width: 1,
+                        ),
+                      ),
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.build_circle_rounded,
+                                  color: Theme.of(context).colorScheme.secondary,
+                                  size: 22),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "repairDownloads".tr,
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            "repairDownloadsDes".tr,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Colors.white70,
+                                  fontSize: 12.5,
+                                ),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: Obx(
+                              () => ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Theme.of(context).colorScheme.secondary,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                onPressed: settingsController.isRepairingDownloads.value
+                                    ? null
+                                    : () => settingsController.repairDownloads(context),
+                                icon: settingsController.isRepairingDownloads.value
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(Icons.auto_fix_high_rounded, size: 18),
+                                label: Text(
+                                  settingsController.isRepairingDownloads.value
+                                      ? "repairingDownloadsBtn".tr
+                                      : "repairDownloadsNowBtn".tr,
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    isThreeLine: true,
-                    trailing: Obx(
-                      () => settingsController.isRepairingDownloads.value
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.arrow_forward_ios, size: 16),
-                    ),
-                    onTap: settingsController.isRepairingDownloads.value
-                        ? null
-                        : () => settingsController.repairDownloads(context),
                   ),
                   if (GetPlatform.isAndroid)
                     ListTile(

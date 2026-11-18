@@ -6,7 +6,9 @@ import '../ui/screens/Playlist/playlist_screen_controller.dart';
 import '../ui/screens/Settings/settings_screen_controller.dart';
 import '../ui/screens/Library/library_controller.dart';
 import 'device_music_service.dart';
+import 'downloader.dart';
 import 'stream_service.dart';
+import '../models/media_Item_builder.dart';
 
 class PlaylistRepairService {
   static final PlaylistRepairService _instance =
@@ -215,6 +217,30 @@ class PlaylistRepairService {
           indexedFilePaths.add(matchedFile.path);
           repairedCount++;
           debugPrint("[PlaylistRepair] Relinked $key to ${matchedFile.path}");
+        } else {
+          // File was missing or corrupted (0 bytes or truncated)
+          if (cleanPath.isNotEmpty) {
+            try {
+              final deadFile = File(cleanPath);
+              if (deadFile.existsSync()) deadFile.deleteSync();
+            } catch (_) {}
+          }
+          try {
+            Hive.box("SongsUrlCache").delete(key);
+          } catch (_) {}
+
+          // If the song has a valid ID, queue clean re-download
+          try {
+            final songItem = MediaItemBuilder.fromJson(songMap);
+            if (Get.isRegistered<Downloader>()) {
+              final downloader = Get.find<Downloader>();
+              downloader.downloadSongList([songItem]);
+              repairedCount++;
+              debugPrint("[PlaylistRepair] Re-queued corrupted download for re-fetching: $key");
+            }
+          } catch (e) {
+            debugPrint("[PlaylistRepair] Error re-queuing corrupted download $key: $e");
+          }
         }
       } else {
         bool updated = false;

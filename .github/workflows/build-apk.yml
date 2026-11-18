@@ -35,10 +35,11 @@ jobs:
       - name: Get Flutter Packages
         run: flutter pub get
 
-      - name: Patch media_kit_video for Flutter compatibility
+      - name: Patch dependencies for Flutter & Android compatibility
         run: |
           python3 -c "
           import glob
+          # 1. Patch media_kit_video VideoOutput.java
           files = glob.glob('/home/runner/.pub-cache/hosted/pub.dev/media_kit_video-*/android/src/main/java/com/alexmercerind/media_kit_video/VideoOutput.java')
           for f in files:
               with open(f, 'r') as fp:
@@ -47,7 +48,21 @@ jobs:
               content = content.replace('@Override\n    public void onSurfaceCleanup()', 'public void onSurfaceCleanup()')
               with open(f, 'w') as fp:
                   fp.write(content)
-              print('Successfully patched', f)
+              print('Successfully patched media_kit_video:', f)
+
+          # 2. Patch compileSdk for plugins without flutter extension (e.g. record_android, speech_to_text)
+          for f in glob.glob('/home/runner/.pub-cache/hosted/pub.dev/*/android/build.gradle'):
+              try:
+                  with open(f, 'r') as fp:
+                      c = fp.read()
+                  if 'compileSdk = flutter.compileSdkVersion' in c or 'compileSdkVersion flutter.compileSdkVersion' in c:
+                      c = c.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 34')
+                      c = c.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 34')
+                      with open(f, 'w') as fp:
+                          fp.write(c)
+                      print('Successfully patched compileSdk in:', f)
+              except Exception as e:
+                  print('Error patching', f, e)
           "
 
       - name: Build Android APKs (Release & Split)

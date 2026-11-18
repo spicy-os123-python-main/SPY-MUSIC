@@ -759,14 +759,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       if (existingIdx != -1) {
         newQueue[existingIdx] = currentItem;
         currentIndex = existingIdx;
-      } else {
-        newQueue.insert(0, currentItem);
-        currentIndex = 0;
       }
     }
     this.queue.add(newQueue);
     if (shuffleModeEnabled && newQueue.isNotEmpty) {
-      _shuffleCmd(currentIndex);
+      _shuffleCmd(currentIndex.clamp(0, newQueue.length - 1));
     }
   }
 

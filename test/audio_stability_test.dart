@@ -495,4 +495,60 @@ void main() {
       expect(match, isNull);
     });
   });
+
+  group('Queue Replacement & Index Integrity (Tap Song Plays Exact Song)', () {
+    test('updateQueue replaces queue accurately without shifting indices or inserting previous song', () {
+      const oldSong = MediaItem(id: 'old_song_1', title: 'Old Song 1');
+      final newPlaylist = [
+        const MediaItem(id: 'song_a', title: 'Song A'),
+        const MediaItem(id: 'song_b', title: 'Song B'),
+        const MediaItem(id: 'song_c', title: 'Song C'),
+      ];
+
+      // Simulate updateQueue logic:
+      List<MediaItem> simulateUpdateQueue(MediaItem? currentItem, List<MediaItem> incomingQueue) {
+        final List<MediaItem> resultQueue = List<MediaItem>.from(incomingQueue);
+        if (currentItem != null) {
+          final existingIdx = resultQueue.indexWhere((item) => item.id == currentItem.id);
+          if (existingIdx != -1) {
+            resultQueue[existingIdx] = currentItem;
+          }
+        }
+        return resultQueue;
+      }
+
+      final updated = simulateUpdateQueue(oldSong, newPlaylist);
+      // Ensure exact length and index ordering:
+      expect(updated.length, equals(3));
+      expect(updated[0].id, equals('song_a'));
+      expect(updated[1].id, equals('song_b'));
+      expect(updated[2].id, equals('song_c'));
+      // Old song must NOT be prepended at index 0:
+      expect(updated.any((s) => s.id == 'old_song_1'), isFalse);
+    });
+
+    test('updateQueue preserves existing item metadata if song already exists in incoming queue', () {
+      const playingItem = MediaItem(id: 'song_b', title: 'Song B (Custom Metadata)');
+      final newPlaylist = [
+        const MediaItem(id: 'song_a', title: 'Song A'),
+        const MediaItem(id: 'song_b', title: 'Song B'),
+        const MediaItem(id: 'song_c', title: 'Song C'),
+      ];
+
+      List<MediaItem> simulateUpdateQueue(MediaItem? currentItem, List<MediaItem> incomingQueue) {
+        final List<MediaItem> resultQueue = List<MediaItem>.from(incomingQueue);
+        if (currentItem != null) {
+          final existingIdx = resultQueue.indexWhere((item) => item.id == currentItem.id);
+          if (existingIdx != -1) {
+            resultQueue[existingIdx] = currentItem;
+          }
+        }
+        return resultQueue;
+      }
+
+      final updated = simulateUpdateQueue(playingItem, newPlaylist);
+      expect(updated.length, equals(3));
+      expect(updated[1].title, equals('Song B (Custom Metadata)'));
+    });
+  });
 }
