@@ -319,7 +319,7 @@ class SortWidgetController extends GetxController {
             savedSort >= 0 &&
             savedSort < SortType.values.length) {
           sortType.value = SortType.values[savedSort];
-        } else if (tag == "SongDownloads" || tag == "LIBRP") {
+        } else {
           sortType.value = SortType.Date;
           isAscending.value = false;
         }

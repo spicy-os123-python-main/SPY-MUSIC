@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:math';
 
 import 'package:flutter/services.dart';
@@ -12,11 +11,11 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart' hide Playlist;
 // ignore: depend_on_referenced_packages
 import 'package:rxdart/rxdart.dart';
 
 import 'soundcloud_service.dart';
+import 'music_service.dart';
 import 'platform_search_service.dart';
 import 'watchtime_service.dart';
 import 'data_usage_tracker.dart';
@@ -27,7 +26,6 @@ import '/services/stream_service.dart';
 import '/models/hm_streaming_data.dart';
 import '/ui/player/player_controller.dart';
 import '../ui/screens/Home/home_screen_controller.dart';
-import '/services/background_task.dart';
 import '../utils/helper.dart';
 import '/models/media_Item_builder.dart';
 import '/services/utils.dart';
@@ -141,8 +139,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         handleAudioSessionActivation: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 4),
-          maxBufferDuration: Duration(seconds: 12),
+          minBufferDuration: Duration(seconds: 5),
+          maxBufferDuration: Duration(seconds: 8),
           bufferForPlaybackDuration: Duration(milliseconds: 500),
           bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1000),
           prioritizeTimeOverSizeThresholds: true,
@@ -1137,7 +1135,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           await _player.pause();
         }
       } catch (_) {}
-      await customAction("playByIndex", {'index': index});
+      await customAction("playByIndex", {'index': index, 'isSkip': true});
     } else {
       try {
         if (Get.isRegistered<PlayerController>()) {
@@ -1149,7 +1147,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         }
       } catch (_) {}
       if (queueLoopModeEnabled) {
-        await customAction("playByIndex", {'index': 0});
+        await customAction("playByIndex", {'index': 0, 'isSkip': true});
       } else {
         _player.seek(Duration.zero);
         _player.pause();
@@ -1184,7 +1182,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     } catch (_) {}
     final index = _getPrevSongIndex();
     if (index != currentIndex && index >= 0 && index < queue.value.length) {
-      await customAction("playByIndex", {'index': index});
+      await customAction("playByIndex", {'index': index, 'isSkip': true});
     } else {
       await _player.seek(Duration.zero);
     }
@@ -1270,6 +1268,16 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           ));
 
           mediaItem.add(currentSong);
+
+          final bool isSkip = extras['isSkip'] == true;
+          if (isSkip) {
+            await Future.delayed(const Duration(milliseconds: 1300));
+            if (reqId != _activePlayRequestId) {
+              printINFO("Skipped past song index $safeIndex before playback debounce elapsed (0 KB downloaded)");
+              return;
+            }
+          }
+
           final streamInfo = await checkNGetUrl(
             currentSong.id,
             targetMediaItem: currentSong,
@@ -2773,12 +2781,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       if (playRequestId != null && playRequestId != _activePlayRequestId) {
         return HMStreamingData(playable: false, statusMSG: "Cancelled");
       }
-      final token = RootIsolateToken.instance;
       Map<String, dynamic> streamInfoJson;
       try {
-        streamInfoJson = await Isolate.run(
-          () => getStreamInfo(songId, token),
-        ).timeout(const Duration(seconds: 15));
+        final cleanSongId =
+            songId.startsWith("MPED") ? songId.substring(4) : songId;
+        final providerRes = await StreamProvider.fetch(cleanSongId)
+            .timeout(const Duration(seconds: 15));
+        streamInfoJson = providerRes.hmStreamingData;
       } catch (e) {
         printERROR("YouTube stream lookup failed for $songId: $e");
         streamInfoJson = {"playable": false, "statusMSG": e.toString()};
@@ -2792,18 +2801,45 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         final String rawTitle = targetSong?.title ?? '';
         final String rawArtist = targetSong?.artist ?? '';
 
-        // 1. First recovery attempt: Search YouTube for an unblocked alternative upload of the exact same track
+        // 1. First recovery attempt: Search YouTube Music for an unblocked alternative upload of the exact same track
         if (rawTitle.isNotEmpty) {
           final query = '$rawTitle $rawArtist'.trim();
-          printINFO("Searching YouTube for alternative unblocked stream: $query");
-          final yt = YoutubeExplode();
+          printINFO(
+              "Searching YouTube Music for alternative unblocked stream: $query");
           try {
-            final searchResults =
-                await yt.search.search(query).timeout(const Duration(seconds: 4));
-            for (final candidate in searchResults.take(3)) {
-              final candidateId = candidate.id.value;
-              if (candidateId == songId) continue;
+            final musicServices = Get.isRegistered<MusicServices>()
+                ? Get.find<MusicServices>()
+                : Get.put(MusicServices(), permanent: true);
+            final searchResults = await musicServices
+                .search(query, filter: 'songs', limit: 5)
+                .timeout(const Duration(seconds: 4));
+            final ytTracks = <MediaItem>[];
+            for (final val in searchResults.values) {
+              if (val is List) {
+                for (final item in val) {
+                  if (item is MediaItem && item.id != songId) {
+                    ytTracks.add(item);
+                  }
+                }
+              }
+            }
+            if (ytTracks.isEmpty) {
+              final videoResults = await musicServices
+                  .search(query, filter: 'videos', limit: 5)
+                  .timeout(const Duration(seconds: 4));
+              for (final val in videoResults.values) {
+                if (val is List) {
+                  for (final item in val) {
+                    if (item is MediaItem && item.id != songId) {
+                      ytTracks.add(item);
+                    }
+                  }
+                }
+              }
+            }
 
+            for (final candidate in ytTracks.take(3)) {
+              final candidateId = candidate.id;
               final origDur = targetSong?.duration?.inSeconds ?? 0;
               final candDur = candidate.duration?.inSeconds ?? 0;
               if (origDur > 0 && candDur > 0 && (origDur - candDur).abs() > 35) {
@@ -2817,7 +2853,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 if (candStream.playable &&
                     candStream.highestQualityAudio != null) {
                   printINFO(
-                      "Successfully recovered age-restricted song via alternative YouTube upload: $candidateId!");
+                      "Successfully recovered song via alternative YouTube upload: $candidateId!");
                   songsUrlCacheBox.put(songId, candStream.hmStreamingData);
                   streamInfo =
                       HMStreamingData.fromJson(candStream.hmStreamingData);
@@ -2827,8 +2863,6 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             }
           } catch (e) {
             printERROR("YouTube alternative search error: $e");
-          } finally {
-            yt.close();
           }
         }
 

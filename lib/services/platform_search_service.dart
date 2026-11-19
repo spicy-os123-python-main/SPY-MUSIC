@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../ui/player/player_controller.dart';
 import 'music_service.dart';
 import 'soundcloud_service.dart';
@@ -360,6 +359,23 @@ class PlatformSearchService {
       if (relaxedTracks.isNotEmpty) return relaxedTracks;
     }
 
+    // Ultimate fallback for leaks, pseudonym titles & burner artist tracks via YouTube API
+    try {
+      final ytTracks = await _searchYoutube(query, limit: limit);
+      if (ytTracks.isNotEmpty) {
+        return ytTracks.map((item) {
+          final extras = Map<String, dynamic>.from(item.extras ?? {});
+          extras['platform'] = platform;
+          extras['is$platform'] = true;
+          extras['originalId'] = item.id;
+          return item.copyWith(
+            id: '${prefix}_${item.id}',
+            extras: extras,
+          );
+        }).toList();
+      }
+    } catch (_) {}
+
     return [];
   }
 
@@ -416,6 +432,28 @@ class PlatformSearchService {
       _getChartTracks('az', 'Amazon',
           limit: limit, index: 25, country: 'us', fallbackQuery: 'Popular Hits');
 
+  /// Safe accessor for MusicServices that ensures it is registered in GetX
+  static MusicServices get _musicServices {
+    if (Get.isRegistered<MusicServices>()) {
+      return Get.find<MusicServices>();
+    }
+    return Get.put(MusicServices(), permanent: true);
+  }
+
+  /// Search YouTube / YouTube Music using the official InnerTube API without HTML scrapers
+  static Future<List<MediaItem>> _searchYoutube(String query,
+      {String? filter, int limit = 15}) async {
+    try {
+      final res = await _musicServices
+          .search(query, filter: filter, limit: limit)
+          .timeout(const Duration(seconds: 4));
+      return _extractYtTracks(res);
+    } catch (e) {
+      printINFO("YouTube search error for '$query': $e");
+      return [];
+    }
+  }
+
   /// Spotify and Amazon tracks carry official studio metadata (from Deezer/Spotify),
   /// so the audio is matched against official studio releases on YouTube Music FIRST.
   static List<MediaItem> _extractYtTracks(Map<String, dynamic> res) {
@@ -451,204 +489,90 @@ class PlatformSearchService {
         .trim();
     final artistHints = extractArtistHints(originalTrack);
 
-    bool musicServicesAvailable = true;
-
     // 1. YouTube Music - Studio Tracks with Clean Title + Primary Artist
-    try {
-      final musicServices = Get.find<MusicServices>();
-      final q1 = '$cleanTitle $primaryArtist'.trim();
-      final res = await musicServices
-          .search(q1, filter: 'songs', limit: 8)
-          .timeout(const Duration(seconds: 4));
-      final ytTracks = _extractYtTracks(res);
-      final match = findBestMatch(ytTracks, originalTrack);
-      if (match != null) {
-        _remember(trackId, match);
-        printINFO("Matched $trackId to YouTube Music (Primary): '${match.title}' by '${match.artist}'");
-        return match;
-      }
-    } catch (e) {
-      printINFO("YouTube Music primary search error for $trackId: $e");
-      musicServicesAvailable = false;
+    final q1 = '$cleanTitle $primaryArtist'.trim();
+    final ytTracks1 = await _searchYoutube(q1, filter: 'songs', limit: 8);
+    final match1 = findBestMatch(ytTracks1, originalTrack);
+    if (match1 != null) {
+      _remember(trackId, match1);
+      printINFO("Matched $trackId to YouTube Music (Primary): '${match1.title}' by '${match1.artist}'");
+      return match1;
     }
 
-    // Direct YouTube Search for Official / Studio Track via YoutubeExplode (<1s fast path)
-    try {
-      final yt = YoutubeExplode();
-      try {
-        final qYT = '$cleanTitle $primaryArtist'.trim();
-        final searchResults =
-            await yt.search.search(qYT).timeout(const Duration(seconds: 4));
-        final ytCandidates = <MediaItem>[];
-        for (final v in searchResults.take(15)) {
-          try {
-            ytCandidates.add(MediaItem(
-              id: v.id.value,
-              title: v.title,
-              artist: v.author,
-              duration: v.duration,
-            ));
-          } catch (_) {}
-        }
-        final match = findBestMatch(ytCandidates, originalTrack);
-        if (match != null) {
-          _remember(trackId, match);
-          printINFO("Matched $trackId via direct YouTube search: '${match.title}' by '${match.artist}'");
-          return match;
-        }
-      } finally {
-        yt.close();
-      }
-    } catch (e) {
-      printINFO("Direct YouTube search error for $trackId: $e");
+    // Direct YouTube Search for Official / Studio Track via YouTube API (<1s fast path)
+    final ytFast = await _searchYoutube(q1, limit: 15);
+    final matchFast = findBestMatch(ytFast, originalTrack);
+    if (matchFast != null) {
+      _remember(trackId, matchFast);
+      printINFO("Matched $trackId via direct YouTube search: '${matchFast.title}' by '${matchFast.artist}'");
+      return matchFast;
     }
 
     // FAST-PATH for Leaks / Pseudonym Tracks with Artist Hints:
     // If primary search returned no songs and we have a verified artist hint from playlist/album,
-    // test the top hint on YouTube Explode immediately (<1s) before slow multi-query fallbacks!
+    // test the top hint on YouTube immediately (<1s) before slow multi-query fallbacks!
     if (artistHints.isNotEmpty) {
       final topHint = artistHints.first;
-      try {
-        final yt = YoutubeExplode();
-        try {
-          final qHint = '$cleanTitle $topHint'.trim();
-          final searchResults =
-              await yt.search.search(qHint).timeout(const Duration(seconds: 4));
-          final ytCandidates = <MediaItem>[];
-          for (final v in searchResults) {
-            try {
-              ytCandidates.add(MediaItem(
-                id: v.id.value,
-                title: v.title,
-                artist: v.author,
-                duration: v.duration,
-              ));
-              if (ytCandidates.length >= 20) break;
-            } catch (_) {}
-          }
-          final match = findBestMatch(ytCandidates, originalTrack, allowFidelityTitleDurationMatch: true);
-          if (match != null) {
-            _remember(trackId, match);
-            printINFO("Fast-Path: Matched $trackId via top artist hint '$topHint' on YouTube Explode: '${match.title}' by '${match.artist}'");
-            return match;
-          }
-        } finally {
-          yt.close();
-        }
-      } catch (e) {
-        printINFO("Fast-Path YouTube Explode error for '$topHint': $e");
+      final qHint = '$cleanTitle $topHint'.trim();
+      final ytHintFast = await _searchYoutube(qHint, limit: 15);
+      final matchHintFast = findBestMatch(ytHintFast, originalTrack,
+          allowFidelityTitleDurationMatch: true);
+      if (matchHintFast != null) {
+        _remember(trackId, matchHintFast);
+        printINFO(
+            "Fast-Path: Matched $trackId via top artist hint '$topHint' on YouTube: '${matchHintFast.title}' by '${matchHintFast.artist}'");
+        return matchHintFast;
       }
     }
 
-    if (musicServicesAvailable) {
-      // 2. YouTube Music - Studio Tracks with All Artists if primary differed
-      if (allArtists.isNotEmpty && allArtists != primaryArtist) {
-        try {
-          final musicServices = Get.find<MusicServices>();
-          final q2 = '$cleanTitle $allArtists'.trim();
-          final res = await musicServices
-              .search(q2, filter: 'songs', limit: 8)
-              .timeout(const Duration(seconds: 6));
-          final ytTracks = _extractYtTracks(res);
-          final match = findBestMatch(ytTracks, originalTrack);
-          if (match != null) {
-            _remember(trackId, match);
-            printINFO("Matched $trackId to YouTube Music (All Artists): '${match.title}' by '${match.artist}'");
-            return match;
-          }
-        } catch (e) {
-          printINFO("YouTube Music all-artists search error for $trackId: $e");
-        }
+    // 2. YouTube Music - Studio Tracks with All Artists if primary differed
+    if (allArtists.isNotEmpty && allArtists != primaryArtist) {
+      final q2 = '$cleanTitle $allArtists'.trim();
+      final ytTracks2 = await _searchYoutube(q2, filter: 'songs', limit: 8);
+      final match2 = findBestMatch(ytTracks2, originalTrack);
+      if (match2 != null) {
+        _remember(trackId, match2);
+        printINFO("Matched $trackId to YouTube Music (All Artists): '${match2.title}' by '${match2.artist}'");
+        return match2;
       }
+    }
 
-      // 3. YouTube - Record Label Topic Releases ('- Topic' channels)
-      try {
-        final musicServices = Get.find<MusicServices>();
-        final q3 = '$cleanTitle $primaryArtist Topic'.trim();
-        final res = await musicServices
-            .search(q3, limit: 6)
-            .timeout(const Duration(seconds: 6));
-        final ytTracks = _extractYtTracks(res);
-        final match = findBestMatch(ytTracks, originalTrack);
-        if (match != null) {
-          _remember(trackId, match);
-          printINFO("Matched $trackId to YouTube Topic Release: '${match.title}' by '${match.artist}'");
-          return match;
-        }
-      } catch (e) {
-        printINFO("YouTube Topic search error for $trackId: $e");
-      }
+    // 3. YouTube - Record Label Topic Releases ('- Topic' channels)
+    final q3 = '$cleanTitle $primaryArtist Topic'.trim();
+    final ytTracks3 = await _searchYoutube(q3, limit: 6);
+    final match3 = findBestMatch(ytTracks3, originalTrack);
+    if (match3 != null) {
+      _remember(trackId, match3);
+      printINFO("Matched $trackId to YouTube Topic Release: '${match3.title}' by '${match3.artist}'");
+      return match3;
+    }
 
-      // 4. YouTube - Official Audio label releases
-      try {
-        final musicServices = Get.find<MusicServices>();
-        final q4 = '$cleanTitle $primaryArtist official audio'.trim();
-        final res = await musicServices
-            .search(q4, limit: 6)
-            .timeout(const Duration(seconds: 6));
-        final ytTracks = _extractYtTracks(res);
-        final match = findBestMatch(ytTracks, originalTrack);
-        if (match != null) {
-          _remember(trackId, match);
-          printINFO("Matched $trackId to YouTube Official Audio: '${match.title}' by '${match.artist}'");
-          return match;
-        }
-      } catch (e) {
-        printINFO("YouTube Official Audio search error for $trackId: $e");
-      }
+    // 4. YouTube - Official Audio label releases
+    final q4 = '$cleanTitle $primaryArtist official audio'.trim();
+    final ytTracks4 = await _searchYoutube(q4, limit: 6);
+    final match4 = findBestMatch(ytTracks4, originalTrack);
+    if (match4 != null) {
+      _remember(trackId, match4);
+      printINFO("Matched $trackId to YouTube Official Audio: '${match4.title}' by '${match4.artist}'");
+      return match4;
+    }
 
-      // 5. YouTube - Clean Title + Primary Artist General Search (includes Videos & Cards)
-      try {
-        final musicServices = Get.find<MusicServices>();
-        final q5 = '$cleanTitle $primaryArtist'.trim();
-        final res = await musicServices
-            .search(q5, limit: 8)
-            .timeout(const Duration(seconds: 6));
-        final ytTracks = _extractYtTracks(res);
-        final match = findBestMatch(ytTracks, originalTrack);
-        if (match != null) {
-          _remember(trackId, match);
-          printINFO("Matched $trackId to YouTube General Audio: '${match.title}' by '${match.artist}'");
-          return match;
-        }
-      } catch (e) {
-        printINFO("YouTube General search error for $trackId: $e");
-      }
+    // 5. YouTube - Clean Title + Primary Artist General Search (includes Videos & Cards)
+    final ytTracks5 = await _searchYoutube(q1, limit: 8);
+    final match5 = findBestMatch(ytTracks5, originalTrack);
+    if (match5 != null) {
+      _remember(trackId, match5);
+      printINFO("Matched $trackId to YouTube General Audio: '${match5.title}' by '${match5.artist}'");
+      return match5;
     }
 
     // 6. Direct YouTube Search for Creator & Indie Tracks (e.g. Execute gaming songs, YouTube music videos)
-    try {
-      final yt = YoutubeExplode();
-      try {
-        final qYT = '$cleanTitle $primaryArtist'.trim();
-        final searchResults =
-            await yt.search.search(qYT).timeout(const Duration(seconds: 6));
-        final ytCandidates = <MediaItem>[];
-        try {
-          for (final v in searchResults) {
-            try {
-              ytCandidates.add(MediaItem(
-                id: v.id.value,
-                title: v.title,
-                artist: v.author,
-                duration: v.duration,
-              ));
-              if (ytCandidates.length >= 20) break;
-            } catch (_) {}
-          }
-        } catch (_) {}
-        final match = findBestMatch(ytCandidates, originalTrack);
-        if (match != null) {
-          _remember(trackId, match);
-          printINFO(
-              "Matched $trackId to YouTube Creator Upload: '${match.title}' by '${match.artist}'");
-          return match;
-        }
-      } finally {
-        yt.close();
-      }
-    } catch (e) {
-      printERROR("YouTube Creator search error for $trackId: $e");
+    final ytVideos = await _searchYoutube(q1, filter: 'videos', limit: 15);
+    final match6 = findBestMatch(ytVideos, originalTrack);
+    if (match6 != null) {
+      _remember(trackId, match6);
+      printINFO("Matched $trackId to YouTube Creator Upload: '${match6.title}' by '${match6.artist}'");
+      return match6;
     }
 
     // 7. SoundCloud - Strict verified fallback ONLY (strictly rejects non-matching artists or covers)
@@ -658,10 +582,12 @@ class PlatformSearchService {
         final scTracks = await SoundCloudService()
             .searchTracks(qSC, limit: 6)
             .timeout(const Duration(seconds: 6));
-        final match = findBestMatch(scTracks, originalTrack, strictSpeedCheck: true);
+        final match =
+            findBestMatch(scTracks, originalTrack, strictSpeedCheck: true);
         if (match != null) {
           _remember(trackId, match);
-          printINFO("Matched $trackId to SoundCloud verified fallback: '${match.title}' by '${match.artist}'");
+          printINFO(
+              "Matched $trackId to SoundCloud verified fallback: '${match.title}' by '${match.artist}'");
           return match;
         }
         printINFO("No suitable SoundCloud verified match for $trackId ('$qSC')");
@@ -675,91 +601,59 @@ class PlatformSearchService {
     // uploaded under burner/podcast pseudonyms like "Squish", "swisssss", "Devafterdarkk"),
     // standard searches for "$cleanTitle $primaryArtist" fail.
     // Here we leverage playlist/album artist hints and high-fidelity Title+Duration audio master matching.
-    printINFO("Starting Phase 2 Leak Recovery for '$cleanTitle' ($trackId). Artist hints: $artistHints");
+    printINFO(
+        "Starting Phase 2 Leak Recovery for '$cleanTitle' ($trackId). Artist hints: $artistHints");
 
-    // 8. Try each extracted artist hint on YouTube Explode, YouTube Music, and SoundCloud
+    // 8. Try each extracted artist hint on YouTube and SoundCloud
     for (final hint in artistHints) {
-      // 8a. YouTube Explode with Artist Hint (direct creator uploads/leaks)
-      try {
-        final yt = YoutubeExplode();
-        try {
-          final qHint = '$cleanTitle $hint'.trim();
-          final searchResults =
-              await yt.search.search(qHint).timeout(const Duration(seconds: 4));
-          final ytCandidates = <MediaItem>[];
-          for (final v in searchResults) {
-            try {
-              ytCandidates.add(MediaItem(
-                id: v.id.value,
-                title: v.title,
-                artist: v.author,
-                duration: v.duration,
-              ));
-              if (ytCandidates.length >= 20) break;
-            } catch (_) {}
-          }
-          final match = findBestMatch(ytCandidates, originalTrack, allowFidelityTitleDurationMatch: true);
-          if (match != null) {
-            _remember(trackId, match);
-            printINFO("Phase 2: Matched $trackId via artist hint '$hint' on YouTube Explode: '${match.title}' by '${match.artist}'");
-            return match;
-          }
-        } finally {
-          yt.close();
-        }
-      } catch (e) {
-        printINFO("Phase 2 Hint YouTube Explode error for '$hint': $e");
+      // 8a. YouTube with Artist Hint (direct creator uploads/leaks)
+      final qHint = '$cleanTitle $hint'.trim();
+      final ytCandidates = await _searchYoutube(qHint, limit: 15);
+      final matchHint = findBestMatch(ytCandidates, originalTrack,
+          allowFidelityTitleDurationMatch: true);
+      if (matchHint != null) {
+        _remember(trackId, matchHint);
+        printINFO(
+            "Phase 2: Matched $trackId via artist hint '$hint' on YouTube: '${matchHint.title}' by '${matchHint.artist}'");
+        return matchHint;
       }
 
-      if (musicServicesAvailable) {
-        // 8b. YouTube Music with Hint
-        try {
-          final musicServices = Get.find<MusicServices>();
-          final qHint = '$cleanTitle $hint'.trim();
-          final res = await musicServices
-              .search(qHint, filter: 'songs', limit: 8)
-              .timeout(const Duration(seconds: 4));
-          final ytTracks = _extractYtTracks(res);
-          final match = findBestMatch(ytTracks, originalTrack, allowFidelityTitleDurationMatch: true);
-          if (match != null) {
-            _remember(trackId, match);
-            printINFO("Phase 2: Matched $trackId via artist hint '$hint' on YouTube Music: '${match.title}' by '${match.artist}'");
-            return match;
-          }
-        } catch (e) {
-          printINFO("Phase 2 Hint YT Music error for '$hint': $e");
-        }
+      // 8b. YouTube Music Songs with Hint
+      final ytTracksHint =
+          await _searchYoutube(qHint, filter: 'songs', limit: 8);
+      final matchHintSongs = findBestMatch(ytTracksHint, originalTrack,
+          allowFidelityTitleDurationMatch: true);
+      if (matchHintSongs != null) {
+        _remember(trackId, matchHintSongs);
+        printINFO(
+            "Phase 2: Matched $trackId via artist hint '$hint' on YouTube Music: '${matchHintSongs.title}' by '${matchHintSongs.artist}'");
+        return matchHintSongs;
+      }
 
-        // 8c. YouTube with Hint
-        try {
-          final musicServices = Get.find<MusicServices>();
-          final qHint = '$cleanTitle $hint'.trim();
-          final res = await musicServices
-              .search(qHint, limit: 8)
-              .timeout(const Duration(seconds: 4));
-          final ytTracks = _extractYtTracks(res);
-          final match = findBestMatch(ytTracks, originalTrack, allowFidelityTitleDurationMatch: true);
-          if (match != null) {
-            _remember(trackId, match);
-            printINFO("Phase 2: Matched $trackId via artist hint '$hint' on YouTube: '${match.title}' by '${match.artist}'");
-            return match;
-          }
-        } catch (e) {
-          printINFO("Phase 2 Hint YouTube error for '$hint': $e");
-        }
+      // 8c. YouTube Videos with Hint
+      final ytVideosHint =
+          await _searchYoutube(qHint, filter: 'videos', limit: 8);
+      final matchHintVideos = findBestMatch(ytVideosHint, originalTrack,
+          allowFidelityTitleDurationMatch: true);
+      if (matchHintVideos != null) {
+        _remember(trackId, matchHintVideos);
+        printINFO(
+            "Phase 2: Matched $trackId via artist hint '$hint' on YouTube Videos: '${matchHintVideos.title}' by '${matchHintVideos.artist}'");
+        return matchHintVideos;
       }
 
       // 8d. SoundCloud with Hint
       if (!skipSoundCloud) {
         try {
-          final qHint = '$cleanTitle $hint'.trim();
           final scTracks = await SoundCloudService()
               .searchTracks(qHint, limit: 6)
               .timeout(const Duration(seconds: 4));
-          final match = findBestMatch(scTracks, originalTrack, allowFidelityTitleDurationMatch: true);
+          final match = findBestMatch(scTracks, originalTrack,
+              allowFidelityTitleDurationMatch: true);
           if (match != null) {
             _remember(trackId, match);
-            printINFO("Phase 2: Matched $trackId via artist hint '$hint' on SoundCloud: '${match.title}' by '${match.artist}'");
+            printINFO(
+                "Phase 2: Matched $trackId via artist hint '$hint' on SoundCloud: '${match.title}' by '${match.artist}'");
             return match;
           }
         } catch (e) {
@@ -769,55 +663,27 @@ class PlatformSearchService {
     }
 
     // 9. Clean Title Search on YouTube Music with High-Fidelity Title+Duration Matching
-    if (musicServicesAvailable) {
-      try {
-        final musicServices = Get.find<MusicServices>();
-        final res = await musicServices
-            .search(cleanTitle, filter: 'songs', limit: 8)
-            .timeout(const Duration(seconds: 5));
-        final ytTracks = _extractYtTracks(res);
-        final match = findBestMatch(ytTracks, originalTrack, allowFidelityTitleDurationMatch: true);
-        if (match != null) {
-          _remember(trackId, match);
-          printINFO("Phase 2: Matched $trackId via Clean Title on YouTube Music: '${match.title}' by '${match.artist}'");
-          return match;
-        }
-      } catch (e) {
-        printINFO("Phase 2 Clean Title YT Music error: $e");
-      }
+    final ytClean = await _searchYoutube(cleanTitle, filter: 'songs', limit: 8);
+    final matchClean = findBestMatch(ytClean, originalTrack,
+        allowFidelityTitleDurationMatch: true);
+    if (matchClean != null) {
+      _remember(trackId, matchClean);
+      printINFO(
+          "Phase 2: Matched $trackId via Clean Title on YouTube Music: '${matchClean.title}' by '${matchClean.artist}'");
+      return matchClean;
     }
 
-    // 10. Clean Title & Title + "unreleased" Search on YouTube (Direct YoutubeExplode)
+    // 10. Clean Title & Title + "unreleased" Search on YouTube
     final ytLeakQueries = ['$cleanTitle unreleased', cleanTitle];
     for (final qYT in ytLeakQueries) {
-      try {
-        final yt = YoutubeExplode();
-        try {
-          final searchResults =
-              await yt.search.search(qYT).timeout(const Duration(seconds: 5));
-          final ytCandidates = <MediaItem>[];
-          for (final v in searchResults) {
-            try {
-              ytCandidates.add(MediaItem(
-                id: v.id.value,
-                title: v.title,
-                artist: v.author,
-                duration: v.duration,
-              ));
-              if (ytCandidates.length >= 20) break;
-            } catch (_) {}
-          }
-          final match = findBestMatch(ytCandidates, originalTrack, allowFidelityTitleDurationMatch: true);
-          if (match != null) {
-            _remember(trackId, match);
-            printINFO("Phase 2: Matched $trackId via YouTube ($qYT): '${match.title}' by '${match.artist}'");
-            return match;
-          }
-        } finally {
-          yt.close();
-        }
-      } catch (e) {
-        printINFO("Phase 2 YouTube leak search error for '$qYT': $e");
+      final ytLeakCandidates = await _searchYoutube(qYT, limit: 15);
+      final matchLeak = findBestMatch(ytLeakCandidates, originalTrack,
+          allowFidelityTitleDurationMatch: true);
+      if (matchLeak != null) {
+        _remember(trackId, matchLeak);
+        printINFO(
+            "Phase 2: Matched $trackId via YouTube ($qYT): '${matchLeak.title}' by '${matchLeak.artist}'");
+        return matchLeak;
       }
     }
 

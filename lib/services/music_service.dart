@@ -222,7 +222,7 @@ class MusicServices extends getx.GetxService {
       bool shuffle = false,
       String? additionalParamsNext,
       bool onlyRelated = false}) async {
-    if (videoId.isNotEmpty && videoId.substring(0, 4) == "MPED") {
+    if (videoId.startsWith("MPED")) {
       videoId = videoId.substring(4);
     }
     final data = Map.from(_context);

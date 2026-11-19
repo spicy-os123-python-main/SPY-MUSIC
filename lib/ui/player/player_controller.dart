@@ -913,7 +913,7 @@ class PlayerController extends GetxController
   }
 
   void seekByIndex(int index) {
-    _audioHandler.customAction("playByIndex", {"index": index});
+    _audioHandler.customAction("playByIndex", {"index": index, "isSkip": true});
   }
 
   void toggleSkipSilence(bool enable) {

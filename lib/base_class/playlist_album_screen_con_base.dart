@@ -103,24 +103,22 @@ abstract class PlaylistAlbumScreenControllerBase extends GetxController {
     }
     if (id != "SongDownloads") await box.close();
 
-    // Apply saved or default sorting
+    // Apply saved or default sorting (by date added/downloaded)
     try {
-      if (Hive.isBoxOpen("Settings")) {
-        final setBox = Hive.box("Settings");
-        final savedSort = setBox.get("sort_type_$id");
-        final savedAsc = setBox.get("sort_asc_$id");
-        if (savedSort != null || id == "SongDownloads" || id == "LIBRP") {
-          final sortType = (savedSort is int &&
-                  savedSort >= 0 &&
-                  savedSort < SortType.values.length)
-              ? SortType.values[savedSort]
-              : SortType.Date;
-          final isAsc = (savedAsc is bool)
-              ? savedAsc
-              : (id == "SongDownloads" || id == "LIBRP" ? false : true);
-          sortSongsNVideos(loadedSongs, sortType, isAsc);
-        }
-      }
+      final setBox = Hive.isBoxOpen("Settings")
+          ? Hive.box("Settings")
+          : await Hive.openBox("Settings");
+      final savedSort = setBox.get("sort_type_$id");
+      final savedAsc = setBox.get("sort_asc_$id");
+      final sortType = (savedSort is int &&
+              savedSort >= 0 &&
+              savedSort < SortType.values.length)
+          ? SortType.values[savedSort]
+          : SortType.Date;
+      final isAsc = (savedAsc is bool)
+          ? savedAsc
+          : false; // Default: newest added/downloaded first
+      sortSongsNVideos(loadedSongs, sortType, isAsc);
     } catch (_) {}
 
     songList.value = loadedSongs;

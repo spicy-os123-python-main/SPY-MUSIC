@@ -193,8 +193,8 @@ void main() {
     test('AppVersion constants are valid and non-empty', () {
       expect(AppVersion.current.startsWith('v'), isTrue);
       expect(AppVersion.buildNumber, greaterThan(3000));
-      expect(AppVersion.cleanString(AppVersion.current), '1.12.98');
-      expect(AppVersion.full, 'v1.12.98+3104');
+      expect(AppVersion.cleanString(AppVersion.current), '1.12.99');
+      expect(AppVersion.full, 'v1.12.99+3105');
     });
 
     test('AppVersion.isNewer logic handles major, minor, patch and build numbers', () {
