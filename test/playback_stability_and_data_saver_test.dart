@@ -147,5 +147,34 @@ void main() {
       expect(matched!.title.toLowerCase(), contains('brand new car'));
       print('Matched leak: ${matched.title} by ${matched.artist} (${matched.id})');
     });
+
+    test('7. Normal song audio stream consumes strictly 1-3 MB data limit', () async {
+      final stream = await StreamProvider.fetch('hHtv2XMZlKs'); // Lucid Dreams
+      expect(stream.playable, isTrue);
+      final audio = stream.highestQualityAudio;
+      expect(audio, isNotNull);
+      print('Lucid Dreams audio stream: itag=${audio!.itag}, size=${audio.size} bytes (${(audio.size / (1024 * 1024)).toStringAsFixed(2)} MB)');
+      // Must be pure audio format (itag 250, 140, 251, 139, 249)
+      expect([250, 140, 251, 139, 249].contains(audio.itag), isTrue);
+      // Data volume must be approximately 1-3 MB (<= 3.5 MB max for full 4-minute studio master)
+      expect(audio.size, greaterThan(1000000)); // >= 1 MB
+      expect(audio.size, lessThan(3600000)); // <= 3.5 MB
+    });
+
+    test('8. Spotify track resolution resolves verified studio stream instantly', () async {
+      final spResults = await PlatformSearchService.searchSpotify('Juice WRLD Lucid Dreams', limit: 3);
+      expect(spResults, isNotEmpty);
+      final track = spResults.first;
+      final matched = await PlatformSearchService.resolveMatchedTrack(
+        track.id,
+        '${track.title} ${track.artist}',
+        originalTrack: track,
+      );
+      expect(matched, isNotNull);
+      expect(matched!.title.toLowerCase(), contains('lucid dreams'));
+      final stream = await StreamProvider.fetch(matched.id);
+      expect(stream.playable, isTrue);
+      expect(stream.highestQualityAudio, isNotNull);
+    });
   });
 }

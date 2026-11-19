@@ -1063,11 +1063,11 @@ class PlatformSearchService {
         }
       } else if (artistMatches) {
         if (normCand == normExp || normCand == normPrim) {
-          score += 45.0;
+          score += 60.0;
         } else if (normCand.contains(normPrim) || normExp.contains(normCand)) {
-          score += 35.0;
+          score += 45.0;
         } else if (rawTitleLower.contains(normPrim)) {
-          score += 28.0;
+          score += 20.0;
         }
         // Creator video boost: "by <Artist>" or "song by <Artist>"
         if (rawTitleLower.contains('by $normPrim') ||

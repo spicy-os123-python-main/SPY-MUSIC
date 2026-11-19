@@ -22,6 +22,37 @@ class StreamProvider {
   StreamProvider(
       {required this.playable, this.audioFormats, this.statusMSG = ""});
 
+  static List<Audio> _extractAudioFormats(StreamManifest res) {
+    final List<Audio> formats = [];
+    // 1. Pure audio streams (itag 250, 140, 251, 139, 249, etc.)
+    for (final a in res.audioOnly) {
+      formats.add(Audio(
+        itag: a.tag,
+        audioCodec: a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
+        bitrate: a.bitrate.bitsPerSecond,
+        duration: 0,
+        loudnessDb: 0.0,
+        url: a.url.toString(),
+        size: a.size.totalBytes,
+      ));
+    }
+    // 2. Muxed streams only as emergency last resort
+    for (final m in res.muxed) {
+      if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+        formats.add(Audio(
+          itag: m.tag,
+          audioCodec: Codec.mp4a,
+          bitrate: 128000,
+          duration: 0,
+          loudnessDb: 0.0,
+          url: m.url.toString(),
+          size: m.size.totalBytes,
+        ));
+      }
+    }
+    return formats;
+  }
+
   /// Fetch stream with verified playable cipher deciphering.
   /// Standard getManifest uses the official YouTube Web player with full watch page signature
   /// deciphering, which produces 100% playable 206 audio streams without 403 Forbidden errors.
@@ -39,38 +70,9 @@ class StreamProvider {
               ytClients: [YoutubeApiClient.androidSdkless],
               requireWatchPage: false,
             )
-            .timeout(const Duration(seconds: 12));
+            .timeout(const Duration(seconds: 6));
 
-        final List<Audio> formats = [];
-        // 1. Add pure audio streams
-        for (final a in res.audioOnly) {
-          formats.add(Audio(
-            itag: a.tag,
-            audioCodec:
-                a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
-            bitrate: a.bitrate.bitsPerSecond,
-            duration: 0,
-            loudnessDb: 0.0,
-            url: a.url.toString(),
-            size: a.size.totalBytes,
-          ));
-        }
-
-        // 2. Add itag 18 muxed stream only as emergency ratebypass fallback
-        for (final m in res.muxed) {
-          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
-            formats.add(Audio(
-              itag: m.tag,
-              audioCodec: Codec.mp4a,
-              bitrate: 128000,
-              duration: 0,
-              loudnessDb: 0.0,
-              url: m.url.toString(),
-              size: m.size.totalBytes,
-            ));
-          }
-        }
-
+        final formats = _extractAudioFormats(res);
         if (formats.isNotEmpty) {
           printINFO(
               "YouTube androidSdkless fast manifest successfully fetched ${formats.length} streams for $videoId");
@@ -93,34 +95,9 @@ class StreamProvider {
               ytClients: [YoutubeApiClient.ios],
               requireWatchPage: false,
             )
-            .timeout(const Duration(seconds: 10));
+            .timeout(const Duration(seconds: 5));
 
-        final List<Audio> formats = [];
-        for (final a in res.audioOnly) {
-          formats.add(Audio(
-            itag: a.tag,
-            audioCodec:
-                a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
-            bitrate: a.bitrate.bitsPerSecond,
-            duration: 0,
-            loudnessDb: 0.0,
-            url: a.url.toString(),
-            size: a.size.totalBytes,
-          ));
-        }
-        for (final m in res.muxed) {
-          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
-            formats.add(Audio(
-              itag: m.tag,
-              audioCodec: Codec.mp4a,
-              bitrate: 128000,
-              duration: 0,
-              loudnessDb: 0.0,
-              url: m.url.toString(),
-              size: m.size.totalBytes,
-            ));
-          }
-        }
+        final formats = _extractAudioFormats(res);
         if (formats.isNotEmpty) {
           printINFO(
               "YouTube iOS fallback successfully fetched ${formats.length} streams for $videoId");
@@ -135,42 +112,21 @@ class StreamProvider {
         printINFO("YouTube iOS fallback failed for $videoId: $e");
       }
 
-      // 3. Tertiary fallback: Android / AndroidMusic client fallback
+      // 3. Tertiary fallback: Android / AndroidMusic / AndroidVR client fallback
       try {
         final res = await yt.videos.streamsClient
             .getManifest(
               videoId,
-              ytClients: [YoutubeApiClient.android, YoutubeApiClient.androidMusic],
+              ytClients: [
+                YoutubeApiClient.android,
+                YoutubeApiClient.androidMusic,
+                YoutubeApiClient.androidVr,
+              ],
               requireWatchPage: false,
             )
-            .timeout(const Duration(seconds: 10));
+            .timeout(const Duration(seconds: 5));
 
-        final List<Audio> formats = [];
-        for (final a in res.audioOnly) {
-          formats.add(Audio(
-            itag: a.tag,
-            audioCodec:
-                a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
-            bitrate: a.bitrate.bitsPerSecond,
-            duration: 0,
-            loudnessDb: 0.0,
-            url: a.url.toString(),
-            size: a.size.totalBytes,
-          ));
-        }
-        for (final m in res.muxed) {
-          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
-            formats.add(Audio(
-              itag: m.tag,
-              audioCodec: Codec.mp4a,
-              bitrate: 128000,
-              duration: 0,
-              loudnessDb: 0.0,
-              url: m.url.toString(),
-              size: m.size.totalBytes,
-            ));
-          }
-        }
+        final formats = _extractAudioFormats(res);
         if (formats.isNotEmpty) {
           printINFO(
               "YouTube Android/Music fallback successfully fetched ${formats.length} streams for $videoId");
@@ -185,48 +141,22 @@ class StreamProvider {
         printINFO("YouTube Android/Music fallback failed for $videoId: $e");
       }
 
-      // If the video is definitively unplayable or unavailable, fail fast so auto-recovery runs immediately!
-      if (lastError is VideoUnplayableException ||
-          lastError is VideoUnavailableException) {
-        throw lastError!;
-      }
-
-      // 4. Quaternary fallback: watchpage deciphering (for signature cipher videos)
+      // 4. Quaternary fallback: watchpage deciphering (for signature cipher / VEVO / age-restricted videos)
       try {
         final res = await yt.videos.streamsClient
             .getManifest(
               videoId,
-              ytClients: [YoutubeApiClient.androidSdkless],
+              ytClients: [
+                YoutubeApiClient.tv,
+                YoutubeApiClient.safari,
+                YoutubeApiClient.mweb,
+                YoutubeApiClient.androidSdkless,
+              ],
               requireWatchPage: true,
             )
-            .timeout(const Duration(seconds: 12));
+            .timeout(const Duration(seconds: 7));
 
-        final List<Audio> formats = [];
-        for (final a in res.audioOnly) {
-          formats.add(Audio(
-            itag: a.tag,
-            audioCodec:
-                a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
-            bitrate: a.bitrate.bitsPerSecond,
-            duration: 0,
-            loudnessDb: 0.0,
-            url: a.url.toString(),
-            size: a.size.totalBytes,
-          ));
-        }
-        for (final m in res.muxed) {
-          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
-            formats.add(Audio(
-              itag: m.tag,
-              audioCodec: Codec.mp4a,
-              bitrate: 128000,
-              duration: 0,
-              loudnessDb: 0.0,
-              url: m.url.toString(),
-              size: m.size.totalBytes,
-            ));
-          }
-        }
+        final formats = _extractAudioFormats(res);
         if (formats.isNotEmpty) {
           printINFO(
               "YouTube watchPage fallback successfully fetched ${formats.length} streams for $videoId");
@@ -328,58 +258,82 @@ class StreamProvider {
   Audio? get highestQualityAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
 
-    // 1. High-quality pure AAC stream (itag 140 ~128k, pure audio ~3 MB, 0 video overhead)
-    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
-    if (aac140 != null) return aac140;
+    final pureAudio = audioFormats!
+        .where((item) => item.itag != 18 && item.itag != 22)
+        .toList();
 
-    // 2. High-bitrate pure Opus (itag 251 ~160k, pure audio ~3 MB)
-    final highOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
-    if (highOpus != null) return highOpus;
-
-    // 3. Medium Opus (itag 250 ~70k, ~1.8 MB)
-    final midOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
-    if (midOpus != null) return midOpus;
-
-    // 4. Low AAC (itag 139 ~48k, ~1.2 MB)
-    final lowAac = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
-    if (lowAac != null) return lowAac;
-
-    // 5. Low Opus (itag 249 ~50k, ~1.2 MB)
-    final lowOpus = audioFormats!.firstWhereOrNull((item) => item.itag == 249);
-    if (lowOpus != null) return lowOpus;
-
-    // 6. Any other pure audio stream
-    final pureAudio = audioFormats!.firstWhereOrNull((item) => item.itag != 18 && item.itag != 22);
-    if (pureAudio != null) return pureAudio;
-
-    // 7. Last resort emergency fallback: ratebypass muxed video stream (itag 18)
-    final rateBypass = audioFormats!.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
-
-    if (audioFormats!.isNotEmpty) {
-      final sorted = List<Audio>.from(audioFormats!)
-        ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
-      return sorted.first;
+    if (pureAudio.isEmpty) {
+      return audioFormats!.firstWhereOrNull(
+              (item) => item.itag == 18 || item.url.contains('ratebypass=yes')) ??
+          audioFormats!.first;
     }
 
-    return null;
+    // Strict 1-3 MB data limit per normal song (<= 3.25 MB)
+    final targetSizeStreams =
+        pureAudio.where((a) => a.size > 0 && a.size <= 3250000).toList();
+
+    if (targetSizeStreams.isNotEmpty) {
+      // 1. Transparent Opus 250 (~70k, ~1.5 - 2.2 MB per standard song)
+      final op250 = targetSizeStreams.firstWhereOrNull((a) => a.itag == 250);
+      if (op250 != null) return op250;
+
+      // 2. High-quality AAC 140 (when <= 3.25 MB)
+      final aac140 = targetSizeStreams.firstWhereOrNull((a) => a.itag == 140);
+      if (aac140 != null) return aac140;
+
+      // 3. High-quality Opus 251 (when <= 3.25 MB)
+      final op251 = targetSizeStreams.firstWhereOrNull((a) => a.itag == 251);
+      if (op251 != null) return op251;
+
+      // 4. Low Opus 249 (~50k, ~1.2 - 1.6 MB)
+      final op249 = targetSizeStreams.firstWhereOrNull((a) => a.itag == 249);
+      if (op249 != null) return op249;
+
+      // 5. Low AAC 139 (~48k, ~1.2 - 1.5 MB)
+      final aac139 = targetSizeStreams.firstWhereOrNull((a) => a.itag == 139);
+      if (aac139 != null) return aac139;
+
+      targetSizeStreams.sort((a, b) => b.bitrate.compareTo(a.bitrate));
+      return targetSizeStreams.first;
+    }
+
+    // Fallback if song is very long and all streams exceed 3.25 MB:
+    // Choose the most data-efficient pure audio format
+    final midOpus = pureAudio.firstWhereOrNull((item) => item.itag == 250);
+    if (midOpus != null) return midOpus;
+
+    final lowOpus = pureAudio.firstWhereOrNull((item) => item.itag == 249);
+    if (lowOpus != null) return lowOpus;
+
+    final lowAac = pureAudio.firstWhereOrNull((item) => item.itag == 139);
+    if (lowAac != null) return lowAac;
+
+    final aac140 = pureAudio.firstWhereOrNull((item) => item.itag == 140);
+    if (aac140 != null) return aac140;
+
+    final highOpus = pureAudio.firstWhereOrNull((item) => item.itag == 251);
+    if (highOpus != null) return highOpus;
+
+    return pureAudio.first;
   }
 
   Audio? get fallbackAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
-    // Alternative pure audio format with different codec/itag (Opus alternative to primary AAC)
-    final op251 = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
-    if (op251 != null) return op251;
-    final op250 = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
-    if (op250 != null) return op250;
-    final rateBypass = audioFormats!.firstWhereOrNull(
-        (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    if (rateBypass != null) return rateBypass;
-    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
-    if (aac140 != null) return aac140;
-    final aac139 = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
-    return aac139 ?? audioFormats!.first;
+    final primary = highestQualityAudio;
+    final primaryItag = primary?.itag;
+    final primaryUrl = primary?.url;
+
+    // Pick an alternative pure audio format with different itag/url
+    final altPure = audioFormats!.firstWhereOrNull(
+        (a) => a.itag != 18 && a.itag != 22 && a.itag != primaryItag && a.url != primaryUrl);
+    if (altPure != null) return altPure;
+
+    // If no alternative pure audio, try any format with different itag/url
+    final altAny = audioFormats!.firstWhereOrNull(
+        (a) => a.itag != primaryItag && a.url != primaryUrl);
+    if (altAny != null) return altAny;
+
+    return audioFormats!.first;
   }
 
   Audio? get highestBitrateMp4aAudio {

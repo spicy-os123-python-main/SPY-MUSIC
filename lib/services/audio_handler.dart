@@ -139,12 +139,13 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         handleAudioSessionActivation: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 5),
-          maxBufferDuration: Duration(seconds: 8),
-          bufferForPlaybackDuration: Duration(milliseconds: 1500),
-          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 2500),
+          minBufferDuration: Duration(seconds: 3),
+          maxBufferDuration: Duration(seconds: 6),
+          bufferForPlaybackDuration: Duration(milliseconds: 300),
+          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1000),
+          targetBufferBytes: 192 * 1024,
           prioritizeTimeOverSizeThresholds: true,
-          backBufferDuration: Duration(seconds: 2),
+          backBufferDuration: Duration(seconds: 1),
         )));
     if (GetPlatform.isAndroid || GetPlatform.isIOS) {
       _initAudioSession();
@@ -786,6 +787,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       if (existingIdx != -1) {
         newQueue[existingIdx] = currentItem;
         currentIndex = existingIdx;
+      } else {
+        newQueue.insert(0, currentItem);
+        currentIndex = 0;
       }
     }
     this.queue.add(newQueue);
@@ -1275,7 +1279,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
 
           final bool isSkip = extras['isSkip'] == true;
           if (isSkip) {
-            await Future.delayed(const Duration(milliseconds: 1300));
+            // Rapid-click micro-debounce (120ms): imperceptible to user for instant play,
+            // while discarding intermediate track network fetches on rapid double/triple clicks (0 KB).
+            await Future.delayed(const Duration(milliseconds: 120));
             if (reqId != _activePlayRequestId) {
               printINFO("Skipped past song index $safeIndex before playback debounce elapsed (0 KB downloaded)");
               return;
@@ -1777,7 +1783,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             isCached: isLocalFile,
           );
 
-          playbackState.add(playbackState.value.copyWith(queueIndex: 0));
+          playbackState.add(playbackState.value.copyWith(queueIndex: currentIndex));
           if (reqId != _activePlayRequestId) return;
           _isTriggeringNext = false;
           final audioSource = _createAudioSource(playableSong);

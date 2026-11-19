@@ -141,8 +141,8 @@ class DataUsageTracker extends GetxService {
       totalBytes = 1250000;
     }
 
-    // Realistic initial network buffer (~200 KB) when a track starts loading or skipping
-    final initialBurst = totalBytes > 200000 ? 200000 : totalBytes;
+    // Strict initial buffer clamp (<=150 KB) when a track starts loading or skipping
+    final initialBurst = totalBytes > 150000 ? 150000 : totalBytes;
     _currentTrackTotalBytes = totalBytes;
     _currentTrackReportedBytes = initialBurst;
 

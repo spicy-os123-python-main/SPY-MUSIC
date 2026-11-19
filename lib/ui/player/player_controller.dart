@@ -406,17 +406,17 @@ class PlayerController extends GetxController
               videoId: mediaItem?.id ?? "", radio: radio, playlistId: playlistid);
           if (reqId != _pushQueueRequestId) return;
           radioContinuationParam = content['additionalParamsForNext'];
-          await _audioHandler
-              .updateQueue(List<MediaItem>.from(content['tracks']));
-          if (isShuffleModeEnabled.isTrue) {
-            await _audioHandler.customAction("shuffleCmd", {"index": 0});
-          }
+          final tracks = List<MediaItem>.from(content['tracks'] ?? []);
+          if (tracks.isNotEmpty) {
+            await _audioHandler.updateQueue(tracks);
+            if (isShuffleModeEnabled.isTrue) {
+              await _audioHandler.customAction("shuffleCmd", {"index": 0});
+            }
 
-          // added here to broadcast current mediaitem via Audio Service as list is updated
-          // if radio is started on current playing song
-          if (radio && (currentSong.value?.id == mediaItem?.id)) {
-            _audioHandler
-                .customAction("upadateMediaItemInAudioService", {"index": 0});
+            if (radio && (currentSong.value?.id == mediaItem?.id)) {
+              _audioHandler
+                  .customAction("upadateMediaItemInAudioService", {"index": 0});
+            }
           }
         } catch (e) {
           printERROR("getWatchPlaylist error in pushSongToQueue: $e");
@@ -424,26 +424,19 @@ class PlayerController extends GetxController
       },
     ).then((value) async {
       if (reqId != _pushQueueRequestId) return;
-      if (playlistid != null) {
-        _playerPanelCheck();
-        await _audioHandler.customAction("playByIndex", {"index": 0});
-      } else {
-        if (Hive.box("AppPrefs").get("discoverContentType") == "BOLI") {
-          final sId = mediaItem?.id ?? '';
-          if (!sId.startsWith('sc_') && !sId.startsWith('sp_') && !sId.startsWith('az_')) {
-            Get.find<HomeScreenController>()
-                .changeDiscoverContent("BOLI", songId: sId);
-          }
+      if (Hive.box("AppPrefs").get("discoverContentType") == "BOLI") {
+        final sId = mediaItem?.id ?? '';
+        if (!sId.startsWith('sc_') && !sId.startsWith('sp_') && !sId.startsWith('az_')) {
+          Get.find<HomeScreenController>()
+              .changeDiscoverContent("BOLI", songId: sId);
         }
       }
     });
 
-    if (playlistid != null ||
-        (radio && (currentSong.value?.id == mediaItem?.id))) {
+    if (radio && (currentSong.value?.id == mediaItem?.id)) {
       return;
     }
 
-    //currentSong.value = mediaItem;
     _playerPanelCheck();
     await _audioHandler
         .customAction("setSourceNPlay", {'mediaItem': mediaItem});
