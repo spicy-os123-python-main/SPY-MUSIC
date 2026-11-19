@@ -28,7 +28,7 @@ import 'package:spymusic/services/stream_service.dart';
 // }
 
 Future<Map<String, dynamic>> getStreamInfo(String songId, dynamic token) async {
-  if (songId.substring(0, 4) == "MPED") {
+  if (songId.startsWith("MPED")) {
     songId = songId.substring(4);
   }
   BackgroundIsolateBinaryMessenger.ensureInitialized(token);

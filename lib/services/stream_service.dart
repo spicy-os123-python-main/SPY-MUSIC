@@ -39,7 +39,7 @@ class StreamProvider {
               ytClients: [YoutubeApiClient.androidSdkless, YoutubeApiClient.android],
               requireWatchPage: false,
             )
-            .timeout(const Duration(seconds: 5));
+            .timeout(const Duration(seconds: 4));
 
         final List<Audio> formats = [];
         // 1. Add pure audio streams
@@ -82,60 +82,10 @@ class StreamProvider {
         }
       } catch (e) {
         lastError = e;
-        printINFO("YouTube fast manifest failed for $videoId: $e, trying standard Android client...");
+        printINFO("YouTube fast manifest failed for $videoId: $e");
       }
 
-      // 2. Secondary fallback: Android client directly without watchpage
-      try {
-        final res = await yt.videos.streamsClient
-            .getManifest(
-              videoId,
-              ytClients: [YoutubeApiClient.android],
-              requireWatchPage: false,
-            )
-            .timeout(const Duration(seconds: 5));
-
-        final List<Audio> formats = [];
-        for (final a in res.audioOnly) {
-          formats.add(Audio(
-            itag: a.tag,
-            audioCodec:
-                a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
-            bitrate: a.bitrate.bitsPerSecond,
-            duration: 0,
-            loudnessDb: 0.0,
-            url: a.url.toString(),
-            size: a.size.totalBytes,
-          ));
-        }
-        for (final m in res.muxed) {
-          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
-            formats.add(Audio(
-              itag: m.tag,
-              audioCodec: Codec.mp4a,
-              bitrate: 128000,
-              duration: 0,
-              loudnessDb: 0.0,
-              url: m.url.toString(),
-              size: m.size.totalBytes,
-            ));
-          }
-        }
-        if (formats.isNotEmpty) {
-          printINFO(
-              "YouTube Android direct fallback successfully fetched ${formats.length} streams for $videoId");
-          return StreamProvider(
-            playable: true,
-            statusMSG: "OK",
-            audioFormats: formats,
-          );
-        }
-      } catch (e) {
-        lastError = e;
-        printINFO("YouTube Android direct fallback failed for $videoId: $e, trying isolated iOS client fallback...");
-      }
-
-      // 3. Tertiary fallback: iOS client alone (isolated so any 403 on video streams does not affect Android streams)
+      // 2. Secondary fallback: iOS client alone (isolated client fallback)
       try {
         final res = await yt.videos.streamsClient
             .getManifest(
@@ -143,7 +93,7 @@ class StreamProvider {
               ytClients: [YoutubeApiClient.ios],
               requireWatchPage: false,
             )
-            .timeout(const Duration(seconds: 5));
+            .timeout(const Duration(seconds: 3));
 
         final List<Audio> formats = [];
         for (final a in res.audioOnly) {
@@ -182,10 +132,16 @@ class StreamProvider {
         }
       } catch (e) {
         lastError = e;
-        printINFO("YouTube iOS fallback failed for $videoId: $e, trying watchPage deciphering fallback...");
+        printINFO("YouTube iOS fallback failed for $videoId: $e");
       }
 
-      // 4. Quaternary fallback: androidSdkless with watchpage deciphering
+      // If the video is definitively unplayable or unavailable, fail fast so auto-recovery runs immediately!
+      if (lastError is VideoUnplayableException ||
+          lastError is VideoUnavailableException) {
+        throw lastError!;
+      }
+
+      // 3. Tertiary fallback: watchpage deciphering (for signature cipher videos)
       try {
         final res = await yt.videos.streamsClient
             .getManifest(
@@ -193,7 +149,7 @@ class StreamProvider {
               ytClients: [YoutubeApiClient.androidSdkless, YoutubeApiClient.android],
               requireWatchPage: true,
             )
-            .timeout(const Duration(seconds: 8));
+            .timeout(const Duration(seconds: 5));
 
         final List<Audio> formats = [];
         for (final a in res.audioOnly) {
@@ -208,7 +164,6 @@ class StreamProvider {
             size: a.size.totalBytes,
           ));
         }
-        // Unconditionally add itag 18 muxed stream as reliable unthrottled ratebypass stream
         for (final m in res.muxed) {
           if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
             formats.add(Audio(
@@ -224,7 +179,7 @@ class StreamProvider {
         }
         if (formats.isNotEmpty) {
           printINFO(
-              "YouTube androidSdkless (watchPage) fallback successfully fetched ${formats.length} streams for $videoId");
+              "YouTube watchPage fallback successfully fetched ${formats.length} streams for $videoId");
           return StreamProvider(
             playable: true,
             statusMSG: "OK",
@@ -363,18 +318,18 @@ class StreamProvider {
 
   Audio? get fallbackAudio {
     if (audioFormats == null || audioFormats!.isEmpty) return null;
-    // Alternative pure audio format with different codec/itag
-    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
-    if (aac140 != null) return aac140;
+    // Alternative pure audio format with different codec/itag (Opus alternative to primary AAC)
     final op251 = audioFormats!.firstWhereOrNull((item) => item.itag == 251);
     if (op251 != null) return op251;
     final op250 = audioFormats!.firstWhereOrNull((item) => item.itag == 250);
     if (op250 != null) return op250;
-    final aac139 = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
-    if (aac139 != null) return aac139;
     final rateBypass = audioFormats!.firstWhereOrNull(
         (item) => item.itag == 18 || item.url.contains('ratebypass=yes'));
-    return rateBypass ?? audioFormats!.first;
+    if (rateBypass != null) return rateBypass;
+    final aac140 = audioFormats!.firstWhereOrNull((item) => item.itag == 140);
+    if (aac140 != null) return aac140;
+    final aac139 = audioFormats!.firstWhereOrNull((item) => item.itag == 139);
+    return aac139 ?? audioFormats!.first;
   }
 
   Audio? get highestBitrateMp4aAudio {

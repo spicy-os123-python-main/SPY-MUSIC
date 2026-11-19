@@ -1275,7 +1275,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             targetMediaItem: currentSong,
             generateNewUrl: isNewUrlReq,
             playRequestId: reqId,
-          ).timeout(const Duration(seconds: 12));
+          ).timeout(const Duration(seconds: 25));
 
           if (reqId != _activePlayRequestId) {
             return;
@@ -1395,10 +1395,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               audioSource,
               initialPosition: startPos,
             ).timeout(
-              const Duration(seconds: 12),
+              const Duration(seconds: 25),
               onTimeout: () {
                 throw TimeoutException(
-                    "Playback loading timed out after 12 seconds");
+                    "Playback loading timed out after 25 seconds");
               },
             );
           } catch (loadErr) {
@@ -1470,7 +1470,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   currentSong.id,
                   targetMediaItem: currentSong,
                   generateNewUrl: true,
-                ).timeout(const Duration(seconds: 12));
+                ).timeout(const Duration(seconds: 20));
                 if (freshStream.playable && freshStream.audio != null) {
                   final freshAudio = freshStream.audio!;
                   final freshSong = playableSong.copyWith(extras: {
@@ -1557,7 +1557,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 await _player.setAudioSource(
                   _createAudioSource(playableSong),
                   initialPosition: Duration.zero,
-                ).timeout(const Duration(seconds: 12));
+                ).timeout(const Duration(seconds: 20));
                 isSongLoading = false;
                 try {
                   final session = await AudioSession.instance;
@@ -1668,7 +1668,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             currMed.id,
             targetMediaItem: currMed,
             playRequestId: reqId,
-          ).timeout(const Duration(seconds: 12));
+          ).timeout(const Duration(seconds: 25));
 
           if (reqId != _activePlayRequestId) return;
           _isTriggeringNext = false;
@@ -1779,10 +1779,10 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               audioSource,
               initialPosition: Duration.zero,
             ).timeout(
-              const Duration(seconds: 12),
+              const Duration(seconds: 25),
               onTimeout: () {
                 throw TimeoutException(
-                    "Playback loading timed out after 12 seconds");
+                    "Playback loading timed out after 25 seconds");
               },
             );
           } catch (loadErr) {
@@ -1852,7 +1852,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   currMed.id,
                   targetMediaItem: currMed,
                   generateNewUrl: true,
-                ).timeout(const Duration(seconds: 12));
+                ).timeout(const Duration(seconds: 20));
                 if (freshStream.playable && freshStream.audio != null) {
                   final freshAudio = freshStream.audio!;
                   final freshSong = playableSong.copyWith(extras: {
@@ -1933,7 +1933,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 await _player.setAudioSource(
                   _createAudioSource(playableSong),
                   initialPosition: Duration.zero,
-                ).timeout(const Duration(seconds: 12));
+                ).timeout(const Duration(seconds: 20));
                 isSongLoading = false;
                 try {
                   final session = await AudioSession.instance;
@@ -2778,7 +2778,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       try {
         streamInfoJson = await Isolate.run(
           () => getStreamInfo(songId, token),
-        ).timeout(const Duration(seconds: 12));
+        ).timeout(const Duration(seconds: 15));
       } catch (e) {
         printERROR("YouTube stream lookup failed for $songId: $e");
         streamInfoJson = {"playable": false, "statusMSG": e.toString()};

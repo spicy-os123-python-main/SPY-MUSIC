@@ -62,8 +62,10 @@ class MusicServices extends getx.GetxService {
   ));
 
   Future<void> init({bool forceRefresh = false}) async {
-    final appPrefsBox = Hive.box('AppPrefs');
-    hlCode = appPrefsBox.get('contentLanguage') ?? "de";
+    if (Hive.isBoxOpen('AppPrefs')) {
+      final appPrefsBox = Hive.box('AppPrefs');
+      hlCode = appPrefsBox.get('contentLanguage') ?? "de";
+    }
   }
 
   set hlCode(String code) {

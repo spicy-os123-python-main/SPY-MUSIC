@@ -6,6 +6,7 @@ import 'package:spymusic/services/continuations.dart';
 import 'package:spymusic/services/soundcloud_service.dart';
 import 'package:spymusic/services/platform_search_service.dart';
 import 'package:spymusic/services/stream_service.dart';
+import 'package:spymusic/models/hm_streaming_data.dart';
 import 'package:spymusic/utils/helper.dart';
 import 'package:spymusic/ui/widgets/sort_widget.dart';
 import 'package:spymusic/models/media_Item_builder.dart';
@@ -656,6 +657,61 @@ void main() {
       activeRequestId = 3;
       expect(isCancelled(2), isTrue); // Second request cancelled immediately
       expect(isCancelled(3), isFalse);
+    });
+
+    test('getStreamInfo safely handles arbitrary ID lengths without RangeError', () {
+      String cleanId(String songId) {
+        if (songId.startsWith("MPED")) {
+          return songId.substring(4);
+        }
+        return songId;
+      }
+
+      expect(cleanId("MPEDxyz123"), equals("xyz123"));
+      expect(cleanId("a"), equals("a"));
+      expect(cleanId(""), equals(""));
+      expect(cleanId("123"), equals("123"));
+      expect(cleanId("sp_12345"), equals("sp_12345"));
+    });
+
+    test('HMStreamingData intelligent fallback returns alternative format on primary failure', () {
+      final formats = [
+        Audio(
+          itag: 140,
+          audioCodec: Codec.mp4a,
+          bitrate: 128000,
+          duration: 180000,
+          loudnessDb: 0.0,
+          url: 'https://googlevideo.com/videoplayback?itag=140',
+          size: 3 * 1024 * 1024,
+        ),
+        Audio(
+          itag: 251,
+          audioCodec: Codec.opus,
+          bitrate: 160000,
+          duration: 180000,
+          loudnessDb: 0.0,
+          url: 'https://googlevideo.com/videoplayback?itag=251',
+          size: 3 * 1024 * 1024,
+        ),
+      ];
+
+      final provider = StreamProvider(
+        playable: true,
+        statusMSG: 'OK',
+        audioFormats: formats,
+      );
+
+      final hmData = HMStreamingData.fromJson(provider.hmStreamingData);
+      expect(hmData.playable, isTrue);
+      expect(hmData.audio, isNotNull);
+      expect(hmData.audio!.itag, equals(140));
+
+      // Fallback for primary audio 140 must return Opus 251
+      final fallback = hmData.getFallbackFor(hmData.audio);
+      expect(fallback, isNotNull);
+      expect(fallback!.itag, isNot(equals(140)));
+      expect(fallback.url, isNot(equals(hmData.audio!.url)));
     });
   });
 }

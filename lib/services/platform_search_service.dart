@@ -469,6 +469,38 @@ class PlatformSearchService {
       }
     } catch (e) {
       printINFO("YouTube Music primary search error for $trackId: $e");
+      musicServicesAvailable = false;
+    }
+
+    // Direct YouTube Search for Official / Studio Track via YoutubeExplode (<1s fast path)
+    try {
+      final yt = YoutubeExplode();
+      try {
+        final qYT = '$cleanTitle $primaryArtist'.trim();
+        final searchResults =
+            await yt.search.search(qYT).timeout(const Duration(seconds: 4));
+        final ytCandidates = <MediaItem>[];
+        for (final v in searchResults.take(15)) {
+          try {
+            ytCandidates.add(MediaItem(
+              id: v.id.value,
+              title: v.title,
+              artist: v.author,
+              duration: v.duration,
+            ));
+          } catch (_) {}
+        }
+        final match = findBestMatch(ytCandidates, originalTrack);
+        if (match != null) {
+          _remember(trackId, match);
+          printINFO("Matched $trackId via direct YouTube search: '${match.title}' by '${match.artist}'");
+          return match;
+        }
+      } finally {
+        yt.close();
+      }
+    } catch (e) {
+      printINFO("Direct YouTube search error for $trackId: $e");
     }
 
     // FAST-PATH for Leaks / Pseudonym Tracks with Artist Hints:
