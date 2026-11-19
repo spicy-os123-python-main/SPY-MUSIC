@@ -479,7 +479,19 @@ class PlayerController extends GetxController
     });
 
     _playerPanelCheck();
-    await _audioHandler.updateQueue(mediaItems);
+    final String pName = playfrom?.name ?? '';
+    final List<MediaItem> enrichedItems = (pName.isNotEmpty)
+        ? mediaItems.map((item) {
+            if (item.extras?['playlistName'] == null ||
+                item.extras!['playlistName'].toString().isEmpty) {
+              final extras = Map<String, dynamic>.from(item.extras ?? {});
+              extras['playlistName'] = pName;
+              return item.copyWith(extras: extras);
+            }
+            return item;
+          }).toList()
+        : mediaItems;
+    await _audioHandler.updateQueue(enrichedItems);
     if (isShuffleModeEnabled.value) {
       await _audioHandler.customAction("shuffleCmd", {"index": safeIndex});
     }

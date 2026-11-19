@@ -118,9 +118,11 @@ class MediaItemBuilder {
     return MediaItem(
       id: trackId,
       title: (json["title"] ?? "Unbekannt").toString(),
-      duration: json['duration'] != null
+      duration: (json['duration'] != null && json['duration'] is int)
           ? Duration(seconds: json['duration'])
-          : toDuration(json['length'] ?? extrasMap['length']),
+          : (json['duration_seconds'] != null && json['duration_seconds'] is int)
+              ? Duration(seconds: json['duration_seconds'])
+              : toDuration(json['length'] ?? extrasMap['length']),
       album: albumName,
       artist: finalArtist,
       artUri: parsedArtUri,
@@ -213,6 +215,8 @@ class MediaItemBuilder {
       'url': mediaItem.extras?['url'],
       'trackDetails': mediaItem.extras?['trackDetails'],
       'year': mediaItem.extras?['year'],
+      'playlistName': mediaItem.extras?['playlistName'],
+      'searchQuery': mediaItem.extras?['searchQuery'],
       'extras': extrasMap,
     };
   }

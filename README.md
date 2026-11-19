@@ -9,17 +9,17 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk">
-    <img src="https://img.shields.io/badge/📲%20ANDROID%20DOWNLOAD-SPY--MUSIC%20(APK)-FF0055?style=for-the-badge&logo=android&logoColor=white" height="48" alt="Download SPY MUSIC APK" />
+  <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic-arm64-v8a.apk">
+    <img src="https://img.shields.io/badge/📲%20ANDROID%20DOWNLOAD-NEUESTE%20VERSION%20(APK)-FF0055?style=for-the-badge&logo=android&logoColor=white" height="48" alt="Download SPY MUSIC APK" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/SPY-MUSIC.ipa">
-    <img src="https://img.shields.io/badge/🍏%20IPHONE%20DOWNLOAD-SPY--MUSIC%20(IPA)-00D2FF?style=for-the-badge&logo=apple&logoColor=white" height="48" alt="Download SPY MUSIC IPA" />
+  <a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest">
+    <img src="https://img.shields.io/badge/🚀%20ALLE%20RELEASES-LATEST%20VERSION-00D2FF?style=for-the-badge&logo=github&logoColor=white" height="48" alt="GitHub Releases" />
   </a>
 </p>
 
 <p align="center">
-  👉 <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/spymusic-arm64-v8a.apk">Android APK herunterladen (12 MB)</a></b> &nbsp;•&nbsp; <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/v1.0.0/SPY-MUSIC.ipa">iPhone IPA herunterladen (27 MB)</a></b> 👈
+  👉 <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic-arm64-v8a.apk">Neueste Android APK (ARM64)</a></b> &nbsp;•&nbsp; <b><a href="https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic.apk">Universal APK (Alle Android-Geräte)</a></b> 👈
 </p>
 
 ---

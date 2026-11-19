@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart' hide Playlist;
 import '../ui/player/player_controller.dart';
 import 'music_service.dart';
 import 'soundcloud_service.dart';
@@ -440,18 +441,54 @@ class PlatformSearchService {
     return Get.put(MusicServices(), permanent: true);
   }
 
-  /// Search YouTube / YouTube Music using the official InnerTube API without HTML scrapers
+  /// Search YouTube / YouTube Music using the official InnerTube API with direct fallback
   static Future<List<MediaItem>> _searchYoutube(String query,
       {String? filter, int limit = 15}) async {
     try {
       final res = await _musicServices
           .search(query, filter: filter, limit: limit)
-          .timeout(const Duration(seconds: 4));
-      return _extractYtTracks(res);
+          .timeout(const Duration(seconds: 8));
+      final tracks = _extractYtTracks(res);
+      if (tracks.isNotEmpty) return tracks;
     } catch (e) {
-      printINFO("YouTube search error for '$query': $e");
-      return [];
+      printINFO("YouTube Music search error for '$query': $e");
     }
+
+    // Direct YouTube Search fallback via YoutubeExplode (<2s, works for unreleased leaks, creator uploads & topics)
+    try {
+      final yt = YoutubeExplode();
+      try {
+        final directResults = await yt.search
+            .search(query)
+            .timeout(const Duration(seconds: 7));
+        final ytExplodeTracks = <MediaItem>[];
+        for (final v in directResults.take(limit)) {
+          ytExplodeTracks.add(MediaItem(
+            id: v.id.value,
+            title: v.title,
+            artist: v.author,
+            duration: v.duration,
+            artUri: Uri.tryParse(v.thumbnails.highResUrl),
+            extras: {
+              'platform': 'YouTube',
+              'searchQuery': '${v.title} ${v.author}',
+              'artist': v.author,
+              'duration': v.duration?.inSeconds,
+            },
+          ));
+        }
+        if (ytExplodeTracks.isNotEmpty) {
+          printINFO("YouTube direct search recovered ${ytExplodeTracks.length} tracks for '$query'");
+          return ytExplodeTracks;
+        }
+      } finally {
+        yt.close();
+      }
+    } catch (e) {
+      printINFO("YouTube direct search error for '$query': $e");
+    }
+
+    return [];
   }
 
   /// Spotify and Amazon tracks carry official studio metadata (from Deezer/Spotify),
@@ -489,6 +526,24 @@ class PlatformSearchService {
         .trim();
     final artistHints = extractArtistHints(originalTrack);
 
+    // 0. ABSOLUTE TOP PRIORITY FOR LEAKS & PSEUDONYM TRACKS:
+    // If we have verified artist hints from playlist or album context (e.g. Juice WRLD),
+    // search with the clean title + top hint FIRST! This avoids wasting 20+ seconds on burner artist names like "Squish"!
+    if (artistHints.isNotEmpty) {
+      for (final hint in artistHints.take(3)) {
+        final qHint = '$cleanTitle $hint'.trim();
+        final ytHintFast = await _searchYoutube(qHint, limit: 15);
+        final matchHintFast = findBestMatch(ytHintFast, originalTrack,
+            allowFidelityTitleDurationMatch: true);
+        if (matchHintFast != null) {
+          _remember(trackId, matchHintFast);
+          printINFO(
+              "Fast-Path: Matched $trackId via artist hint '$hint' on YouTube: '${matchHintFast.title}' by '${matchHintFast.artist}'");
+          return matchHintFast;
+        }
+      }
+    }
+
     // 1. YouTube Music - Studio Tracks with Clean Title + Primary Artist
     final q1 = '$cleanTitle $primaryArtist'.trim();
     final ytTracks1 = await _searchYoutube(q1, filter: 'songs', limit: 8);
@@ -506,23 +561,6 @@ class PlatformSearchService {
       _remember(trackId, matchFast);
       printINFO("Matched $trackId via direct YouTube search: '${matchFast.title}' by '${matchFast.artist}'");
       return matchFast;
-    }
-
-    // FAST-PATH for Leaks / Pseudonym Tracks with Artist Hints:
-    // If primary search returned no songs and we have a verified artist hint from playlist/album,
-    // test the top hint on YouTube immediately (<1s) before slow multi-query fallbacks!
-    if (artistHints.isNotEmpty) {
-      final topHint = artistHints.first;
-      final qHint = '$cleanTitle $topHint'.trim();
-      final ytHintFast = await _searchYoutube(qHint, limit: 15);
-      final matchHintFast = findBestMatch(ytHintFast, originalTrack,
-          allowFidelityTitleDurationMatch: true);
-      if (matchHintFast != null) {
-        _remember(trackId, matchHintFast);
-        printINFO(
-            "Fast-Path: Matched $trackId via top artist hint '$topHint' on YouTube: '${matchHintFast.title}' by '${matchHintFast.artist}'");
-        return matchHintFast;
-      }
     }
 
     // 2. YouTube Music - Studio Tracks with All Artists if primary differed

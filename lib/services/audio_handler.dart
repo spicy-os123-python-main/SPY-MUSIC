@@ -141,8 +141,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             androidLoadControl: AndroidLoadControl(
           minBufferDuration: Duration(seconds: 5),
           maxBufferDuration: Duration(seconds: 8),
-          bufferForPlaybackDuration: Duration(milliseconds: 500),
-          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1000),
+          bufferForPlaybackDuration: Duration(milliseconds: 1500),
+          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 2500),
           prioritizeTimeOverSizeThresholds: true,
           backBufferDuration: Duration(seconds: 2),
         )));
@@ -571,6 +571,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       final targetFile = File("$_cacheDir/cachedSongs/$songId.mp3");
 
       final req = await client.getUrl(Uri.parse(url));
+      req.headers.set('Range', 'bytes=0-');
       final headers = buildStreamHeaders(url);
       headers?.forEach((key, value) {
         req.headers.set(key, value);
@@ -828,7 +829,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     if (url.contains('googlevideo.com') || url.contains('c=ANDROID')) {
       return const {
         'User-Agent':
-            'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+            'com.google.android.youtube/20.10.38 (Linux; U; Android 11)',
       };
     }
     return null;
@@ -1013,6 +1014,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     } catch (_) {}
     if (!loudnessNormalizationEnabled && _player.volume < 1.0) {
       await _player.setVolume(1.0);
+    }
+    if (_player.processingState == ProcessingState.completed) {
+      await _player.seek(Duration.zero);
     }
     if (currentSongUrl == null ||
         (GetPlatform.isDesktop &&
@@ -1283,7 +1287,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             targetMediaItem: currentSong,
             generateNewUrl: isNewUrlReq,
             playRequestId: reqId,
-          ).timeout(const Duration(seconds: 25));
+          ).timeout(const Duration(seconds: 35));
 
           if (reqId != _activePlayRequestId) {
             return;
@@ -1299,13 +1303,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                 errorCode: 404,
                 errorMessage: streamInfo.statusMSG,
                 playing: false));
-            if (queue.value.length > 1 && !_isTriggeringNext) {
-              Future.delayed(const Duration(milliseconds: 1200), () {
-                if (reqId == _activePlayRequestId && !_player.playing) {
-                  skipToNext();
-                }
-              });
-            }
+            // User requirement: "der soll nicht ausweichen entweder funktioniren oder nicht"
+            // Do NOT automatically skip to next song on playback error.
             return;
           }
 

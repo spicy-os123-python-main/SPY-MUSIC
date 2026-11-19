@@ -31,15 +31,15 @@ class StreamProvider {
     try {
       Object? lastError;
 
-      // 1. Primary: androidSdkless + android direct fast manifest (<1s, pure audio 1-3 MB, no PO Token, no deciphering)
+      // 1. Primary: androidSdkless direct fast manifest (<1s, pure audio 1-3 MB, no PO Token, no deciphering)
       try {
         final res = await yt.videos.streamsClient
             .getManifest(
               videoId,
-              ytClients: [YoutubeApiClient.androidSdkless, YoutubeApiClient.android],
+              ytClients: [YoutubeApiClient.androidSdkless],
               requireWatchPage: false,
             )
-            .timeout(const Duration(seconds: 4));
+            .timeout(const Duration(seconds: 12));
 
         final List<Audio> formats = [];
         // 1. Add pure audio streams
@@ -93,7 +93,7 @@ class StreamProvider {
               ytClients: [YoutubeApiClient.ios],
               requireWatchPage: false,
             )
-            .timeout(const Duration(seconds: 3));
+            .timeout(const Duration(seconds: 10));
 
         final List<Audio> formats = [];
         for (final a in res.audioOnly) {
@@ -135,21 +135,71 @@ class StreamProvider {
         printINFO("YouTube iOS fallback failed for $videoId: $e");
       }
 
+      // 3. Tertiary fallback: Android / AndroidMusic client fallback
+      try {
+        final res = await yt.videos.streamsClient
+            .getManifest(
+              videoId,
+              ytClients: [YoutubeApiClient.android, YoutubeApiClient.androidMusic],
+              requireWatchPage: false,
+            )
+            .timeout(const Duration(seconds: 10));
+
+        final List<Audio> formats = [];
+        for (final a in res.audioOnly) {
+          formats.add(Audio(
+            itag: a.tag,
+            audioCodec:
+                a.audioCodec.contains('mp') ? Codec.mp4a : Codec.opus,
+            bitrate: a.bitrate.bitsPerSecond,
+            duration: 0,
+            loudnessDb: 0.0,
+            url: a.url.toString(),
+            size: a.size.totalBytes,
+          ));
+        }
+        for (final m in res.muxed) {
+          if (m.tag == 18 || m.url.toString().contains('ratebypass=yes')) {
+            formats.add(Audio(
+              itag: m.tag,
+              audioCodec: Codec.mp4a,
+              bitrate: 128000,
+              duration: 0,
+              loudnessDb: 0.0,
+              url: m.url.toString(),
+              size: m.size.totalBytes,
+            ));
+          }
+        }
+        if (formats.isNotEmpty) {
+          printINFO(
+              "YouTube Android/Music fallback successfully fetched ${formats.length} streams for $videoId");
+          return StreamProvider(
+            playable: true,
+            statusMSG: "OK",
+            audioFormats: formats,
+          );
+        }
+      } catch (e) {
+        lastError = e;
+        printINFO("YouTube Android/Music fallback failed for $videoId: $e");
+      }
+
       // If the video is definitively unplayable or unavailable, fail fast so auto-recovery runs immediately!
       if (lastError is VideoUnplayableException ||
           lastError is VideoUnavailableException) {
         throw lastError!;
       }
 
-      // 3. Tertiary fallback: watchpage deciphering (for signature cipher videos)
+      // 4. Quaternary fallback: watchpage deciphering (for signature cipher videos)
       try {
         final res = await yt.videos.streamsClient
             .getManifest(
               videoId,
-              ytClients: [YoutubeApiClient.androidSdkless, YoutubeApiClient.android],
+              ytClients: [YoutubeApiClient.androidSdkless],
               requireWatchPage: true,
             )
-            .timeout(const Duration(seconds: 5));
+            .timeout(const Duration(seconds: 12));
 
         final List<Audio> formats = [];
         for (final a in res.audioOnly) {

@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spymusic/models/media_Item_builder.dart';
 import 'package:spymusic/services/music_service.dart';
 import 'package:spymusic/services/platform_search_service.dart';
 import 'package:spymusic/services/stream_service.dart';
@@ -14,15 +15,15 @@ void main() {
   group('Playback Stability & Data Saver Tests', () {
     test('1. YouTube Music API searches without HTML scrapers', () async {
       final ms = MusicServices();
-      final res = await ms.search('Brand New Car Squish', filter: 'songs', limit: 5);
+      final res = await ms.search('Lucid Dreams Juice WRLD', filter: 'songs', limit: 5);
       final songs = res['Songs'] as List? ?? [];
       expect(songs, isNotEmpty);
       expect(
-        songs.any((s) => (s as MediaItem).title.toLowerCase().contains('brand new car')),
+        songs.any((s) => (s as MediaItem).title.toLowerCase().contains('lucid dreams')),
         isTrue,
       );
       final match = songs.firstWhere(
-        (s) => (s as MediaItem).title.toLowerCase().contains('brand new car'),
+        (s) => (s as MediaItem).title.toLowerCase().contains('lucid dreams'),
       ) as MediaItem;
       print('Found YTM song: ${match.title} by ${match.artist} (${match.id})');
     });
@@ -101,6 +102,50 @@ void main() {
 
       expect(list.first.id, '2');
       expect(list.last.id, '1');
+    });
+
+    test('5. MediaItemBuilder preserves playlistName and searchQuery', () {
+      const item = MediaItem(
+        id: 'sp_test_id',
+        title: 'Brand New Car',
+        artist: 'Squish',
+        duration: Duration(seconds: 183),
+        extras: {
+          'playlistName': 'Juice wrld xxxtentacion Lil peep',
+          'searchQuery': 'Brand New Car Squish',
+        },
+      );
+
+      final json = MediaItemBuilder.toJson(item);
+      expect(json['playlistName'], 'Juice wrld xxxtentacion Lil peep');
+      expect(json['searchQuery'], 'Brand New Car Squish');
+
+      final reconstructed = MediaItemBuilder.fromJson(json);
+      expect(reconstructed.extras?['playlistName'], 'Juice wrld xxxtentacion Lil peep');
+      expect(reconstructed.extras?['searchQuery'], 'Brand New Car Squish');
+      expect(reconstructed.duration?.inSeconds, 183);
+    });
+
+    test('6. Fast-path artist hint matching resolves Brand New Car by Squish', () async {
+      const item = MediaItem(
+        id: 'sp_brand_new_car_leak',
+        title: 'Brand New Car',
+        artist: 'Squish',
+        duration: Duration(minutes: 3, seconds: 3),
+        extras: {
+          'playlistName': 'Juice wrld xxxtentacion Lil peep',
+        },
+      );
+
+      final matched = await PlatformSearchService.resolveMatchedTrack(
+        item.id,
+        'Brand New Car Squish',
+        originalTrack: item,
+      );
+
+      expect(matched, isNotNull);
+      expect(matched!.title.toLowerCase(), contains('brand new car'));
+      print('Matched leak: ${matched.title} by ${matched.artist} (${matched.id})');
     });
   });
 }
