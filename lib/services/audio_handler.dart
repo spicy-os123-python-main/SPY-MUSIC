@@ -830,11 +830,15 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       return const {
         'User-Agent':
             'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
+        'user-agent':
+            'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
       };
     }
     if (url.contains('googlevideo.com') || url.contains('c=ANDROID')) {
       return const {
         'User-Agent':
+            'com.google.android.youtube/20.10.38 (Linux; U; Android 11)',
+        'user-agent':
             'com.google.android.youtube/20.10.38 (Linux; U; Android 11)',
       };
     }
@@ -2647,7 +2651,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           ('${targetSong?.title ?? ''} $artistName').trim();
 
       final bool fullSongsEnabled = Hive.box("AppPrefs")
-              .get("fullSongsForSpotifyAmazon", defaultValue: false) ==
+              .get("fullSongsForSpotifyAmazon", defaultValue: true) ==
           true;
 
       if (!fullSongsEnabled) {

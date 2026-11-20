@@ -42,7 +42,7 @@ enum DataSaverMode {
 class SettingsScreenController extends GetxController {
   String _supportDir = "";
   final cacheSongs = false.obs;
-  final fullSongsForSpotifyAmazon = false.obs;
+  final fullSongsForSpotifyAmazon = true.obs;
   final setBox = Hive.box("AppPrefs");
   final themeModetype = ThemeType.dynamic.obs;
   final customAnimationType = CustomAnimationType.none.obs;
@@ -264,7 +264,7 @@ class SettingsScreenController extends GetxController {
         setBox.get("isTransitionAnimationDisabled") ?? false;
     cacheSongs.value = setBox.get('cacheSongs') ?? false;
     fullSongsForSpotifyAmazon.value =
-        setBox.get('fullSongsForSpotifyAmazon', defaultValue: false) == true;
+        setBox.get('fullSongsForSpotifyAmazon', defaultValue: true) == true;
     discordRpcEnabled.value = setBox.get('discordRpcEnabled') ?? true;
     reduceEffects.value = setBox.get('reduceEffects') ?? false;
     final savedThemeIndex = setBox.get('themeModeType') ?? 0;

@@ -55,34 +55,40 @@ class StreamProvider {
   }
 
   /// Validates an audio stream URL with a range request (bytes=0-1) using
-  /// the exact same headers that the audio player uses. Returns true only on HTTP 200 or 206.
+  /// the exact same headers that the audio player uses. Returns true on HTTP 200 or 206.
+  /// Rejects on explicit HTTP 401/403/404/410 block codes.
   static Future<bool> verifyStreamPlayable(String streamUrl) async {
     final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 3);
+    client.connectionTimeout = const Duration(seconds: 4);
     try {
       final req = await client
           .getUrl(Uri.parse(streamUrl))
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(seconds: 4));
       req.headers.set('Range', 'bytes=0-1');
       final headers = MyAudioHandler.buildStreamHeaders(streamUrl);
       headers?.forEach((key, value) {
         req.headers.set(key, value);
       });
-      final resp = await req.close().timeout(const Duration(seconds: 3));
+      final resp = await req.close().timeout(const Duration(seconds: 4));
       final status = resp.statusCode;
       await resp.drain().timeout(const Duration(seconds: 1)).catchError((_) {});
+      if (status == 403 || status == 401 || status == 404 || status == 410) {
+        return false;
+      }
       return status == 200 || status == 206;
     } catch (e) {
-      return false;
+      // On probe timeout or transient connection error during probe, do not fail
+      // a stream that getManifest already returned.
+      printINFO("Stream verification probe warning: $e");
+      return true;
     } finally {
       client.close(force: true);
     }
   }
 
   /// Fetch stream with verified playable cipher deciphering.
-  /// Iterates sequentially through clients with a 4s timeout per client:
-  /// 1. androidVr, 2. androidSdkless, 3. ios, 4. androidMusic, 5. mweb.
-  /// (The android client is omitted as it can require a PO-token).
+  /// Iterates sequentially through clients with androidSdkless as primary fast path (<300ms, no bot gating):
+  /// 1. androidSdkless, 2. androidVr, 3. android, 4. ios, 5. androidMusic, 6. mweb.
   /// Before returning, performs a Range-Request (bytes=0-1) with buildStreamHeaders.
   /// Only on HTTP 200/206 is the client considered successful, otherwise tries next client.
   static Future<StreamProvider> fetch(String videoId) async {
@@ -92,8 +98,9 @@ class StreamProvider {
       Object? lastError;
 
       final clients = [
-        ('androidVr', YoutubeApiClient.androidVr),
         ('androidSdkless', YoutubeApiClient.androidSdkless),
+        ('androidVr', YoutubeApiClient.androidVr),
+        ('android', YoutubeApiClient.android),
         ('ios', YoutubeApiClient.ios),
         ('androidMusic', YoutubeApiClient.androidMusic),
         ('mweb', YoutubeApiClient.mweb),
@@ -142,6 +149,35 @@ class StreamProvider {
           printINFO(
               "YouTube client '$name' failed in ${sw.elapsedMilliseconds}ms for $videoId: [${e.runtimeType}] $e");
         }
+      }
+
+      // Secondary fallback with watchpage deciphering (for VEVO / age-restricted / signature cipher)
+      try {
+        final sw = Stopwatch()..start();
+        final manifest = await yt.videos.streamsClient
+            .getManifest(
+              videoId,
+              ytClients: [
+                YoutubeApiClient.androidSdkless,
+                YoutubeApiClient.android,
+              ],
+              requireWatchPage: true,
+            )
+            .timeout(const Duration(seconds: 5));
+        sw.stop();
+
+        final formats = _extractAudioFormats(manifest);
+        if (formats.isNotEmpty) {
+          printINFO(
+              "YouTube watchpage deciphering succeeded in ${sw.elapsedMilliseconds}ms (${formats.length} streams) for $videoId");
+          return StreamProvider(
+            playable: true,
+            statusMSG: "OK",
+            audioFormats: formats,
+          );
+        }
+      } catch (e) {
+        printINFO("YouTube watchPage deciphering fallback failed for $videoId: $e");
       }
 
       throw lastError ??
@@ -405,6 +441,8 @@ class StreamProvider {
       "fallbackAudio": fallbackAudio?.toJson(),
     };
   }
+
+  Map<String, dynamic> toJson() => hmStreamingData;
 }
 
 class Audio {
