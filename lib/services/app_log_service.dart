@@ -24,7 +24,7 @@ class AppLogEntry {
 
 class AppLogService {
   static final List<AppLogEntry> _logs = [];
-  static const int _maxLogs = 120;
+  static const int _maxLogs = 400;
 
   static void add(String level, dynamic message, {String tag = 'SPY MUSIC'}) {
     if (message == null) return;

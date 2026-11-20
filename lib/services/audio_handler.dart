@@ -32,6 +32,8 @@ import '/services/utils.dart';
 import '/services/discord_service.dart';
 import '../ui/screens/Settings/settings_screen_controller.dart';
 import '../ui/screens/Library/library_controller.dart';
+import '../models/music_source.dart';
+import '../ui/widgets/platform_selector_widget.dart';
 // ignore: unused_import, implementation_imports, depend_on_referenced_packages
 import "package:media_kit/src/player/platform_player.dart" show MPVLogLevel;
 
@@ -2382,6 +2384,87 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
     return super.stop();
   }
 
+  static final List<DateTime> _recentYouTubeFailures = [];
+
+  static void recordYouTubeFailure() {
+    final now = DateTime.now();
+    _recentYouTubeFailures.add(now);
+    _recentYouTubeFailures.removeWhere(
+        (t) => now.difference(t) > const Duration(minutes: 10));
+    printINFO(
+        "Recorded YouTube failure (count in last 10m: ${_recentYouTubeFailures.length})");
+  }
+
+  static void recordYouTubeSuccess() {
+    final now = DateTime.now();
+    _recentYouTubeFailures.removeWhere(
+        (t) => now.difference(t) > const Duration(minutes: 10));
+  }
+
+  static bool get isYouTubeCircuitBreakerTripped {
+    final now = DateTime.now();
+    _recentYouTubeFailures.removeWhere(
+        (t) => now.difference(t) > const Duration(minutes: 10));
+    return _recentYouTubeFailures.length >= 2;
+  }
+
+  static bool get isAllInOneActive {
+    try {
+      if (Get.isRegistered<PlatformSelectorController>()) {
+        return Get.find<PlatformSelectorController>().selectedSource.value ==
+            MusicSource.all;
+      }
+    } catch (_) {}
+    return true;
+  }
+
+  Future<HMStreamingData?> _trySoundCloudFallback(MediaItem song,
+      {int? playRequestId}) async {
+    final rawTitle = song.title;
+    final rawArtist = song.artist ?? '';
+    final query = '$rawTitle $rawArtist'.trim();
+    if (query.isEmpty) return null;
+
+    try {
+      final scTracks = await SoundCloudService()
+          .searchTracks(query, limit: 6)
+          .timeout(const Duration(seconds: 4));
+      final match = PlatformSearchService.findBestMatch(scTracks, song,
+          strictSpeedCheck: true);
+      if (match != null && match.id.startsWith("sc_")) {
+        printINFO(
+            "Circuit breaker / All-In-One: Matched to SoundCloud fallback: ${match.title} (${match.id})");
+        final scStreamUrl = await SoundCloudService.resolveStreamUrl(
+          match.id,
+          transcodingUrl: match.extras?['transcodingUrl'] as String?,
+          trackAuthorization: match.extras?['track_authorization'] as String?,
+        );
+        if (scStreamUrl != null && scStreamUrl.isNotEmpty) {
+          final audio = Audio(
+            audioCodec: Codec.mp4a,
+            bitrate: 160000,
+            loudnessDb: 0,
+            duration: match.duration?.inMilliseconds ??
+                song.duration?.inMilliseconds ??
+                0,
+            size: 0,
+            url: scStreamUrl,
+            itag: 140,
+          );
+          return HMStreamingData(
+            playable: true,
+            statusMSG: "OK",
+            lowQualityAudio: audio,
+            highQualityAudio: audio,
+          );
+        }
+      }
+    } catch (e) {
+      printINFO("SoundCloud fallback lookup encountered: $e");
+    }
+    return null;
+  }
+
 // Work around used [useNewInstanceOfExplode = false] to Fix Connection closed before full header was received issue
   Future<HMStreamingData> checkNGetUrl(String songId,
       {MediaItem? targetMediaItem,
@@ -2389,7 +2472,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       bool offlineReplacementUrl = false,
       bool allowFallback = true,
       int? playRequestId}) async {
-    printINFO("Requested id : $songId");
+    final bool effectiveAllowFallback = allowFallback && isAllInOneActive;
+    printINFO("Requested id : $songId (effectiveAllowFallback: $effectiveAllowFallback)");
 
     if (playRequestId != null && playRequestId != _activePlayRequestId) {
       return HMStreamingData(playable: false, statusMSG: "Cancelled");
@@ -2551,49 +2635,85 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       );
     }
 
-    // Spotify / Amazon Native Track Full-Length Stream Resolution
-    // Never plays 30s catalog preview clips (cdnt-preview / itunes previewUrl / scdn preview).
-    // Resolves the verified studio track via PlatformSearchService -> full audio stream.
+    // Spotify / Amazon Native Track Stream Resolution
+    // Grundregel: Jede Plattform benutzt nur ihre eigene Quelle.
+    // Default: Spielt 30s-Deezer-Vorschau direkt (GET https://api.deezer.com/track/<id>).
+    // Links laufen ab, deshalb nicht cachen, sondern jedes Mal frisch holen.
+    // resolveMatchedTrack nur benutzen, wenn "fullSongsForSpotifyAmazon" an ist (SoundCloud zuerst, dann YouTube).
     if (songId.startsWith("sp_") || songId.startsWith("az_")) {
-      printINFO("Resolving full-length stream for platform track: $songId");
+      printINFO("Resolving stream for platform track: $songId");
       final artistName = getSafeSongArtist(targetSong, fallback: '');
       final query = (targetSong?.extras?['searchQuery'] as String?) ??
           ('${targetSong?.title ?? ''} $artistName').trim();
 
-      if (generateNewUrl) {
-        PlatformSearchService.invalidateMatch(songId);
+      final bool fullSongsEnabled = Hive.box("AppPrefs")
+              .get("fullSongsForSpotifyAmazon", defaultValue: false) ==
+          true;
+
+      if (!fullSongsEnabled) {
+        // Direct Deezer preview playback (30s) - fresh lookup every time, never cached
+        final streamUrl = await PlatformSearchService.getDeezerStreamUrl(
+          songId,
+          query: query,
+        );
+
+        if (streamUrl != null && streamUrl.isNotEmpty) {
+          const durationMs = 30000;
+          final previewAudio = Audio(
+            audioCodec: Codec.mp4a,
+            bitrate: 128000,
+            loudnessDb: 0,
+            duration: durationMs,
+            size: 0,
+            url: streamUrl,
+            itag: 140,
+          );
+
+          if (targetSong != null &&
+              (targetSong.duration == null ||
+                  targetSong.duration!.inSeconds != 30)) {
+            final updatedExtras =
+                Map<String, dynamic>.from(targetSong.extras ?? {});
+            updatedExtras['url'] = streamUrl;
+            updatedExtras['length'] = '0:30';
+            final updatedSong = targetSong.copyWith(
+              duration: const Duration(seconds: 30),
+              extras: updatedExtras,
+            );
+            if (currentIndex >= 0 &&
+                currentIndex < queue.value.length &&
+                queue.value[currentIndex].id == targetSong.id) {
+              queue.value[currentIndex] = updatedSong;
+            }
+            mediaItem.add(updatedSong);
+          }
+
+          return HMStreamingData(
+            playable: true,
+            statusMSG: "OK",
+            lowQualityAudio: previewAudio,
+            midQualityAudio: previewAudio,
+            highQualityAudio: previewAudio,
+          );
+        }
+
+        // Deezer lookup failed: only fall back if All-In-One is enabled!
+        if (effectiveAllowFallback) {
+          printINFO(
+              "Deezer preview failed, attempting All-In-One fallback matching...");
+        } else {
+          return HMStreamingData(
+            playable: false,
+            statusMSG: _isGerman
+                ? "Deezer: Stream nicht verfügbar für '${targetSong?.title ?? songId}'."
+                : "Deezer: Stream unavailable for '${targetSong?.title ?? songId}'.",
+          );
+        }
       }
 
-      // Check cached full song on disk (>=800 KB to reject any legacy 30s MP3 preview)
-      final platformCachePath = "$_cacheDir/cachedSongs/$songId.mp3";
-      final platformCacheFile = File(platformCachePath);
-      if (platformCacheFile.existsSync() &&
-          platformCacheFile.lengthSync() < 800 * 1024) {
-        try {
-          platformCacheFile.deleteSync();
-        } catch (_) {}
-      }
-      if (!offlineReplacementUrl &&
-          !generateNewUrl &&
-          platformCacheFile.existsSync() &&
-          platformCacheFile.lengthSync() >= 800 * 1024) {
-        final durationMs = targetSong?.duration?.inMilliseconds ?? 0;
-        final cachedAudio = Audio(
-          audioCodec: Codec.mp4a,
-          bitrate: 128000,
-          loudnessDb: 0,
-          duration: durationMs,
-          size: platformCacheFile.lengthSync(),
-          url: "file://$platformCachePath",
-          itag: 140,
-        );
-        return HMStreamingData(
-          playable: true,
-          statusMSG: "OK",
-          lowQualityAudio: cachedAudio,
-          midQualityAudio: cachedAudio,
-          highQualityAudio: cachedAudio,
-        );
+      // Either fullSongsEnabled is true, OR All-In-One fallback is permitted
+      if (generateNewUrl) {
+        PlatformSearchService.invalidateMatch(songId);
       }
 
       if (playRequestId != null && playRequestId != _activePlayRequestId) {
@@ -2601,7 +2721,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
 
       if (query.isNotEmpty) {
-        MediaItem? matchedItem = await PlatformSearchService.resolveMatchedTrack(
+        MediaItem? matchedItem =
+            await PlatformSearchService.resolveMatchedTrack(
           songId,
           query,
           originalTrack: targetSong,
@@ -2618,7 +2739,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             matchedItem.id,
             generateNewUrl: generateNewUrl,
             targetMediaItem: matchedItem,
-            allowFallback: allowFallback,
+            allowFallback: effectiveAllowFallback,
             playRequestId: playRequestId,
           );
 
@@ -2627,23 +2748,26 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             try {
               Hive.box("SongsUrlCache").delete(matchedItem.id);
             } catch (_) {}
-            final retryMatch = await PlatformSearchService.resolveMatchedTrack(
-              songId,
-              query,
-              originalTrack: targetSong,
-            );
-            if (retryMatch != null &&
-                !retryMatch.id.startsWith("sp_") &&
-                !retryMatch.id.startsWith("az_") &&
-                retryMatch.id != matchedItem.id) {
-              matchedItem = retryMatch;
-              resolved = await checkNGetUrl(
-                retryMatch.id,
-                generateNewUrl: true,
-                targetMediaItem: retryMatch,
-                allowFallback: allowFallback,
-                playRequestId: playRequestId,
+            if (effectiveAllowFallback) {
+              final retryMatch =
+                  await PlatformSearchService.resolveMatchedTrack(
+                songId,
+                query,
+                originalTrack: targetSong,
               );
+              if (retryMatch != null &&
+                  !retryMatch.id.startsWith("sp_") &&
+                  !retryMatch.id.startsWith("az_") &&
+                  retryMatch.id != matchedItem.id) {
+                matchedItem = retryMatch;
+                resolved = await checkNGetUrl(
+                  retryMatch.id,
+                  generateNewUrl: true,
+                  targetMediaItem: retryMatch,
+                  allowFallback: effectiveAllowFallback,
+                  playRequestId: playRequestId,
+                );
+              }
             }
           }
 
@@ -2682,8 +2806,8 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       return HMStreamingData(
         playable: false,
         statusMSG: _isGerman
-            ? "Vollständiger Audio-Stream für '${targetSong?.title ?? songId}' konnte nicht geladen werden."
-            : "Full audio stream for '${targetSong?.title ?? songId}' could not be loaded.",
+            ? "Spotify: Stream nicht verfügbar für '${targetSong?.title ?? songId}'."
+            : "Spotify: Stream unavailable for '${targetSong?.title ?? songId}'.",
       );
     }
 
@@ -2795,6 +2919,21 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       if (playRequestId != null && playRequestId != _activePlayRequestId) {
         return HMStreamingData(playable: false, statusMSG: "Cancelled");
       }
+
+      // Circuit Breaker: nur für All-In-One!
+      // Ist die YouTube-Auflösung in den letzten 10 Minuten mehrfach gescheitert, zuerst SoundCloud nehmen.
+      if (effectiveAllowFallback &&
+          isYouTubeCircuitBreakerTripped &&
+          targetSong != null) {
+        printINFO(
+            "Circuit breaker active: YouTube failed multiple times in last 10m -> trying SoundCloud first for ${targetSong.title}");
+        final scCircuitMatch = await _trySoundCloudFallback(targetSong,
+            playRequestId: playRequestId);
+        if (scCircuitMatch != null && scCircuitMatch.playable) {
+          return scCircuitMatch;
+        }
+      }
+
       Map<String, dynamic> streamInfoJson;
       try {
         final cleanSongId =
@@ -2808,10 +2947,26 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
       }
       streamInfo = HMStreamingData.fromJson(streamInfoJson);
       if (streamInfo.playable) {
+        recordYouTubeSuccess();
         songsUrlCacheBox.put(songId, streamInfoJson);
       } else {
+        recordYouTubeFailure();
+
+        // Grundregel: Jede Plattform benutzt nur ihre eigene Quelle.
+        // Retry und Fallback NUR ausführen, wenn der All-In-One-Button gewählt ist!
+        if (!effectiveAllowFallback) {
+          printINFO(
+              "YouTube stream failed and All-In-One not selected (allowFallback=false). Returning error directly without platform fallback.");
+          return HMStreamingData(
+            playable: false,
+            statusMSG: _isGerman
+                ? "YouTube: Stream nicht verfügbar (${streamInfo.statusMSG})"
+                : "YouTube: Stream unavailable (${streamInfo.statusMSG})",
+          );
+        }
+
         printINFO(
-            "Primary YouTube stream unavailable for $songId (${streamInfo.statusMSG}). Attempting smart auto-recovery...");
+            "Primary YouTube stream unavailable for $songId (${streamInfo.statusMSG}). All-In-One active: attempting recovery...");
         final String rawTitle = targetSong?.title ?? '';
         final String rawArtist = targetSong?.artist ?? '';
 
@@ -2856,7 +3011,9 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
               final candidateId = candidate.id;
               final origDur = targetSong?.duration?.inSeconds ?? 0;
               final candDur = candidate.duration?.inSeconds ?? 0;
-              if (origDur > 0 && candDur > 0 && (origDur - candDur).abs() > 35) {
+              if (origDur > 0 &&
+                  candDur > 0 &&
+                  (origDur - candDur).abs() > 35) {
                 continue;
               }
 
@@ -2877,6 +3034,17 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             }
           } catch (e) {
             printERROR("YouTube alternative search error: $e");
+          }
+        }
+
+        // 2. Second recovery attempt for All-In-One: SoundCloud fallback
+        if (streamInfo?.playable != true && targetSong != null) {
+          final scRecovery = await _trySoundCloudFallback(targetSong,
+              playRequestId: playRequestId);
+          if (scRecovery != null && scRecovery.playable) {
+            printINFO(
+                "Successfully recovered track via SoundCloud in All-In-One mode: ${targetSong.title}");
+            return scRecovery;
           }
         }
 

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../ui/screens/Settings/settings_screen_controller.dart';
 import '../utils/helper.dart';
+import 'audio_handler.dart';
 
 bool get _isGerman {
   try {
@@ -53,113 +54,94 @@ class StreamProvider {
     return formats;
   }
 
+  /// Validates an audio stream URL with a range request (bytes=0-1) using
+  /// the exact same headers that the audio player uses. Returns true only on HTTP 200 or 206.
+  static Future<bool> verifyStreamPlayable(String streamUrl) async {
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 3);
+    try {
+      final req = await client
+          .getUrl(Uri.parse(streamUrl))
+          .timeout(const Duration(seconds: 3));
+      req.headers.set('Range', 'bytes=0-1');
+      final headers = MyAudioHandler.buildStreamHeaders(streamUrl);
+      headers?.forEach((key, value) {
+        req.headers.set(key, value);
+      });
+      final resp = await req.close().timeout(const Duration(seconds: 3));
+      final status = resp.statusCode;
+      await resp.drain().timeout(const Duration(seconds: 1)).catchError((_) {});
+      return status == 200 || status == 206;
+    } catch (e) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   /// Fetch stream with verified playable cipher deciphering.
-  /// Standard getManifest uses the official YouTube Web player with full watch page signature
-  /// deciphering, which produces 100% playable 206 audio streams without 403 Forbidden errors.
+  /// Iterates sequentially through clients with a 4s timeout per client:
+  /// 1. androidVr, 2. androidSdkless, 3. ios, 4. androidMusic, 5. mweb.
+  /// (The android client is omitted as it can require a PO-token).
+  /// Before returning, performs a Range-Request (bytes=0-1) with buildStreamHeaders.
+  /// Only on HTTP 200/206 is the client considered successful, otherwise tries next client.
   static Future<StreamProvider> fetch(String videoId) async {
     final yt = YoutubeExplode();
 
     try {
       Object? lastError;
 
-      // 1. Primary: androidSdkless direct fast manifest (<1s, pure audio 1-3 MB, no PO Token, no deciphering)
-      try {
-        final res = await yt.videos.streamsClient
-            .getManifest(
-              videoId,
-              ytClients: [YoutubeApiClient.androidSdkless],
-              requireWatchPage: false,
-            )
-            .timeout(const Duration(seconds: 6));
+      final clients = [
+        ('androidVr', YoutubeApiClient.androidVr),
+        ('androidSdkless', YoutubeApiClient.androidSdkless),
+        ('ios', YoutubeApiClient.ios),
+        ('androidMusic', YoutubeApiClient.androidMusic),
+        ('mweb', YoutubeApiClient.mweb),
+      ];
 
-        final formats = _extractAudioFormats(res);
-        if (formats.isNotEmpty) {
+      for (final (name, client) in clients) {
+        final sw = Stopwatch()..start();
+        try {
+          final manifest = await yt.videos.streamsClient
+              .getManifest(
+                videoId,
+                ytClients: [client],
+                requireWatchPage: false,
+              )
+              .timeout(const Duration(seconds: 4));
+          sw.stop();
+
+          final formats = _extractAudioFormats(manifest);
+          if (formats.isNotEmpty) {
+            final candidate = StreamProvider(
+              playable: true,
+              statusMSG: "OK",
+              audioFormats: formats,
+            );
+            final testAudio = candidate.highestQualityAudio ?? formats.first;
+            final isVerified = await verifyStreamPlayable(testAudio.url);
+            if (isVerified) {
+              printINFO(
+                  "YouTube client '$name' succeeded in ${sw.elapsedMilliseconds}ms (${formats.length} streams, range verified) for $videoId");
+              return candidate;
+            } else {
+              printINFO(
+                  "YouTube client '$name' range check failed in ${sw.elapsedMilliseconds}ms (not 200/206), trying next client...");
+              lastError = VideoUnavailableException(
+                  "Client $name range check failed (HTTP 403 / non-206)");
+            }
+          } else {
+            printINFO(
+                "YouTube client '$name' returned 0 audio formats in ${sw.elapsedMilliseconds}ms for $videoId");
+            lastError =
+                VideoUnavailableException("Client $name returned 0 audio formats");
+          }
+        } catch (e) {
+          sw.stop();
+          lastError = e;
           printINFO(
-              "YouTube androidSdkless fast manifest successfully fetched ${formats.length} streams for $videoId");
-          return StreamProvider(
-            playable: true,
-            statusMSG: "OK",
-            audioFormats: formats,
-          );
+              "YouTube client '$name' failed in ${sw.elapsedMilliseconds}ms for $videoId: [${e.runtimeType}] $e");
         }
-      } catch (e) {
-        lastError = e;
-        printINFO("YouTube fast manifest failed for $videoId: $e");
-      }
-
-      // 2. Secondary fallback: Android client standalone (reliable 6 pure audio streams, no PO Token/cipher blocks)
-      try {
-        final res = await yt.videos.streamsClient
-            .getManifest(
-              videoId,
-              ytClients: [YoutubeApiClient.android],
-              requireWatchPage: false,
-            )
-            .timeout(const Duration(seconds: 5));
-
-        final formats = _extractAudioFormats(res);
-        if (formats.isNotEmpty) {
-          printINFO(
-              "YouTube Android standalone fallback successfully fetched ${formats.length} streams for $videoId");
-          return StreamProvider(
-            playable: true,
-            statusMSG: "OK",
-            audioFormats: formats,
-          );
-        }
-      } catch (e) {
-        lastError = e;
-        printINFO("YouTube Android fallback failed for $videoId: $e");
-      }
-
-      // 3. Tertiary fallback: androidSdkless with watchpage deciphering (for VEVO / age-restricted / signature cipher)
-      try {
-        final res = await yt.videos.streamsClient
-            .getManifest(
-              videoId,
-              ytClients: [YoutubeApiClient.androidSdkless],
-              requireWatchPage: true,
-            )
-            .timeout(const Duration(seconds: 6));
-
-        final formats = _extractAudioFormats(res);
-        if (formats.isNotEmpty) {
-          printINFO(
-              "YouTube androidSdkless watchPage fallback successfully fetched ${formats.length} streams for $videoId");
-          return StreamProvider(
-            playable: true,
-            statusMSG: "OK",
-            audioFormats: formats,
-          );
-        }
-      } catch (e) {
-        lastError = e;
-        printINFO("YouTube androidSdkless watchPage fallback failed for $videoId: $e");
-      }
-
-      // 4. Quaternary fallback: Android client with watchpage deciphering
-      try {
-        final res = await yt.videos.streamsClient
-            .getManifest(
-              videoId,
-              ytClients: [YoutubeApiClient.android],
-              requireWatchPage: true,
-            )
-            .timeout(const Duration(seconds: 6));
-
-        final formats = _extractAudioFormats(res);
-        if (formats.isNotEmpty) {
-          printINFO(
-              "YouTube Android watchPage fallback successfully fetched ${formats.length} streams for $videoId");
-          return StreamProvider(
-            playable: true,
-            statusMSG: "OK",
-            audioFormats: formats,
-          );
-        }
-      } catch (e) {
-        lastError = e;
-        printINFO("YouTube Android watchPage fallback failed for $videoId: $e");
       }
 
       throw lastError ??
@@ -225,8 +207,9 @@ class StreamProvider {
       final manifest = await yt.videos.streamsClient.getManifest(
         cleanId,
         ytClients: [
+          YoutubeApiClient.androidVr,
           YoutubeApiClient.androidSdkless,
-          YoutubeApiClient.android,
+          YoutubeApiClient.ios,
         ],
         requireWatchPage: false,
       );

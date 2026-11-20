@@ -522,7 +522,20 @@ class SettingsScreen extends StatelessWidget {
                           () => CustSwitch(
                               value: settingsController.cacheSongs.value,
                               onChanged:
-                                  settingsController.toggleCachingSongsValue),
+                                   settingsController.toggleCachingSongsValue),
+                        )),
+                    ListTile(
+                        contentPadding:
+                            const EdgeInsets.only(left: 5, right: 10),
+                        title: Text("fullSongsForSpotifyAmazon".tr),
+                        subtitle: Text("fullSongsForSpotifyAmazonDes".tr,
+                            style: Theme.of(context).textTheme.bodyMedium),
+                        trailing: Obx(
+                          () => CustSwitch(
+                              value: settingsController
+                                  .fullSongsForSpotifyAmazon.value,
+                              onChanged: settingsController
+                                  .toggleFullSongsForSpotifyAmazon),
                         )),
                   if (!isDesktop)
                     ListTile(

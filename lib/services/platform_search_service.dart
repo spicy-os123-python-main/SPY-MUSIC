@@ -526,7 +526,28 @@ class PlatformSearchService {
         .trim();
     final artistHints = extractArtistHints(originalTrack);
 
-    // 0. ABSOLUTE TOP PRIORITY FOR LEAKS & PSEUDONYM TRACKS:
+    // 0. TOP PRIORITY: SoundCloud match FIRST as requested ("zuerst SoundCloud matchen, danach YouTube")
+    if (!skipSoundCloud) {
+      try {
+        final qSC = '$cleanTitle $primaryArtist'.trim();
+        final scTracks = await SoundCloudService()
+            .searchTracks(qSC, limit: 8)
+            .timeout(const Duration(seconds: 4));
+        final match =
+            findBestMatch(scTracks, originalTrack, strictSpeedCheck: true);
+        if (match != null) {
+          _remember(trackId, match);
+          printINFO(
+              "Matched $trackId to SoundCloud (Primary): '${match.title}' by '${match.artist}'");
+          return match;
+        }
+        printINFO("No suitable SoundCloud match for $trackId ('$qSC'), checking YouTube...");
+      } catch (e) {
+        printERROR("SoundCloud primary match failed for $trackId: $e");
+      }
+    }
+
+    // 0.1 ABSOLUTE TOP PRIORITY FOR LEAKS & PSEUDONYM TRACKS:
     // If we have verified artist hints from playlist or album context (e.g. Juice WRLD),
     // search with the clean title + top hint FIRST! This avoids wasting 20+ seconds on burner artist names like "Squish"!
     if (artistHints.isNotEmpty) {
