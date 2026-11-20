@@ -139,13 +139,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         handleAudioSessionActivation: false,
         audioLoadConfiguration: const AudioLoadConfiguration(
             androidLoadControl: AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 3),
-          maxBufferDuration: Duration(seconds: 6),
-          bufferForPlaybackDuration: Duration(milliseconds: 300),
-          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1000),
-          targetBufferBytes: 192 * 1024,
+          minBufferDuration: Duration(seconds: 20),
+          maxBufferDuration: Duration(seconds: 60),
+          bufferForPlaybackDuration: Duration(milliseconds: 500),
+          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1500),
           prioritizeTimeOverSizeThresholds: true,
-          backBufferDuration: Duration(seconds: 1),
+          backBufferDuration: Duration.zero,
         )));
     if (GetPlatform.isAndroid || GetPlatform.isIOS) {
       _initAudioSession();
