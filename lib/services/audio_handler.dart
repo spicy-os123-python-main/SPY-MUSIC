@@ -34,6 +34,7 @@ import '../ui/screens/Settings/settings_screen_controller.dart';
 import '../ui/screens/Library/library_controller.dart';
 import '../models/music_source.dart';
 import '../ui/widgets/platform_selector_widget.dart';
+import 'youtube_client_sync.dart';
 // ignore: unused_import, implementation_imports, depend_on_referenced_packages
 import "package:media_kit/src/player/platform_player.dart" show MPVLogLevel;
 
@@ -825,23 +826,12 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   /// Builds required mobile client User-Agent headers for googlevideo.com streams.
+  /// Looks up dynamically synced client User-Agent or falls back to official mobile UA.
   /// Strictly uses a single 'User-Agent' key so just_audio's Android plugin sets
   /// the player's User-Agent cleanly without leaving duplicate lower-case headers
   /// in defaultRequestProperties which triggers HTTP 400/403 blocks on googlevideo CDN.
   static Map<String, String>? buildStreamHeaders(String url) {
-    if (url.contains('c=IOS')) {
-      return const {
-        'User-Agent':
-            'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
-      };
-    }
-    if (url.contains('googlevideo.com') || url.contains('c=ANDROID')) {
-      return const {
-        'User-Agent':
-            'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
-      };
-    }
-    return null;
+    return YoutubeClientSync.instance.buildStreamHeaders(url);
   }
 
   File? _resolveLocalFile(String rawPath, {String? songId, String? title}) {

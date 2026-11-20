@@ -4,6 +4,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../ui/screens/Settings/settings_screen_controller.dart';
 import '../utils/helper.dart';
 import 'audio_handler.dart';
+import 'youtube_client_sync.dart';
 
 bool get _isGerman {
   try {
@@ -87,25 +88,34 @@ class StreamProvider {
   }
 
   /// Fetch stream with verified playable cipher deciphering.
-  /// Iterates sequentially through clients with androidSdkless as primary fast path (<300ms, no bot gating):
-  /// 1. androidSdkless, 2. androidVr, 3. android, 4. ios, 5. androidMusic, 6. mweb.
-  /// Before returning, performs a Range-Request (bytes=0-1) with buildStreamHeaders.
-  /// Only on HTTP 200/206 is the client considered successful, otherwise tries next client.
+  /// Uses dynamically synced YouTube clients from YoutubeClientSync:
+  /// - Max 3 clients tested sequentially.
+  /// - 4s timeout per client, overall 15s budget.
+  /// - Range request verification (bytes=0-1).
+  /// - Self-adapting priority: records success/failure per client.
+  /// - Built-in androidSdkless as emergency last reserve.
+  /// - If all fail: triggers immediate client re-sync and reports
+  ///   "YouTube blockiert gerade alle Clients".
   static Future<StreamProvider> fetch(String videoId) async {
     final yt = YoutubeExplode();
+    final totalSw = Stopwatch()..start();
 
     try {
-      Object? lastError;
+      // 1. Get active clients from YoutubeClientSync (max 3, self-adapting)
+      final activeClients = YoutubeClientSync.instance.getActiveClients();
+      final clientsToTry = <(String, YoutubeApiClient)>[];
 
-      final clients = [
-        ('androidSdkless', YoutubeApiClient.androidSdkless),
-        ('ios', YoutubeApiClient.ios),
-        ('androidMusic', YoutubeApiClient.androidMusic),
-        ('androidVr', YoutubeApiClient.androidVr),
-        ('mweb', YoutubeApiClient.mweb),
-      ];
+      for (final sc in activeClients) {
+        clientsToTry.add((sc.key, sc.toYoutubeApiClient()));
+      }
 
-      for (final (name, client) in clients) {
+      for (final (key, client) in clientsToTry) {
+        if (totalSw.elapsedMilliseconds >= 13500) {
+          printINFO(
+              "StreamProvider.fetch: time budget exhausted (${totalSw.elapsedMilliseconds}ms), skipping remaining clients");
+          break;
+        }
+
         final sw = Stopwatch()..start();
         try {
           final manifest = await yt.videos.streamsClient
@@ -128,62 +138,102 @@ class StreamProvider {
             final isVerified = await verifyStreamPlayable(testAudio.url);
             if (isVerified) {
               printINFO(
-                  "YouTube client '$name' succeeded in ${sw.elapsedMilliseconds}ms (${formats.length} streams, range verified) for $videoId");
+                  "YouTube client '$key' succeeded in ${sw.elapsedMilliseconds}ms (${formats.length} streams, range verified) for $videoId");
+              YoutubeClientSync.instance.recordSuccess(key);
               return candidate;
             } else {
               printINFO(
-                  "YouTube client '$name' range check failed in ${sw.elapsedMilliseconds}ms (not 200/206), trying next client...");
-              lastError = VideoUnavailableException(
-                  "Client $name range check failed (HTTP 403 / non-206)");
+                  "YouTube client '$key' range check failed in ${sw.elapsedMilliseconds}ms (not 200/206/30x), trying next client...");
+              YoutubeClientSync.instance.recordFailure(key);
             }
           } else {
             printINFO(
-                "YouTube client '$name' returned 0 audio formats in ${sw.elapsedMilliseconds}ms for $videoId");
-            lastError =
-                VideoUnavailableException("Client $name returned 0 audio formats");
+                "YouTube client '$key' returned 0 audio formats in ${sw.elapsedMilliseconds}ms for $videoId");
+            YoutubeClientSync.instance.recordFailure(key);
           }
         } catch (e) {
           sw.stop();
-          lastError = e;
+          YoutubeClientSync.instance.recordFailure(key);
           printINFO(
-              "YouTube client '$name' failed in ${sw.elapsedMilliseconds}ms for $videoId: [${e.runtimeType}] $e");
+              "YouTube client '$key' failed in ${sw.elapsedMilliseconds}ms for $videoId: [${e.runtimeType}] $e");
+        }
+      }
+
+      // Emergency reserve: if none of the synced clients succeeded and time remains,
+      // try built-in androidSdkless as last reserve
+      if (totalSw.elapsedMilliseconds < 14000) {
+        try {
+          final sw = Stopwatch()..start();
+          final manifest = await yt.videos.streamsClient
+              .getManifest(
+                videoId,
+                ytClients: [YoutubeApiClient.androidSdkless],
+                requireWatchPage: false,
+              )
+              .timeout(const Duration(seconds: 4));
+          sw.stop();
+
+          final formats = _extractAudioFormats(manifest);
+          if (formats.isNotEmpty) {
+            final candidate = StreamProvider(
+              playable: true,
+              statusMSG: "OK",
+              audioFormats: formats,
+            );
+            final testAudio = candidate.highestQualityAudio ?? formats.first;
+            final isVerified = await verifyStreamPlayable(testAudio.url);
+            if (isVerified) {
+              printINFO(
+                  "YouTube built-in reserve 'androidSdkless' succeeded in ${sw.elapsedMilliseconds}ms (${formats.length} streams) for $videoId");
+              YoutubeClientSync.instance.recordSuccess('androidSdkless');
+              return candidate;
+            }
+          }
+        } catch (e) {
+          printINFO("YouTube built-in reserve failed for $videoId: $e");
         }
       }
 
       // Secondary fallback with watchpage deciphering (for VEVO / age-restricted / signature cipher)
-      try {
-        final sw = Stopwatch()..start();
-        final manifest = await yt.videos.streamsClient
-            .getManifest(
-              videoId,
-              ytClients: [
-                YoutubeApiClient.androidSdkless,
-                YoutubeApiClient.android,
-              ],
-              requireWatchPage: true,
-            )
-            .timeout(const Duration(seconds: 5));
-        sw.stop();
+      if (totalSw.elapsedMilliseconds < 14000) {
+        try {
+          final sw = Stopwatch()..start();
+          final manifest = await yt.videos.streamsClient
+              .getManifest(
+                videoId,
+                ytClients: [
+                  YoutubeApiClient.androidSdkless,
+                  YoutubeApiClient.android,
+                ],
+                requireWatchPage: true,
+              )
+              .timeout(const Duration(seconds: 4));
+          sw.stop();
 
-        final formats = _extractAudioFormats(manifest);
-        if (formats.isNotEmpty) {
-          printINFO(
-              "YouTube watchpage deciphering succeeded in ${sw.elapsedMilliseconds}ms (${formats.length} streams) for $videoId");
-          return StreamProvider(
-            playable: true,
-            statusMSG: "OK",
-            audioFormats: formats,
-          );
+          final formats = _extractAudioFormats(manifest);
+          if (formats.isNotEmpty) {
+            printINFO(
+                "YouTube watchpage deciphering succeeded in ${sw.elapsedMilliseconds}ms (${formats.length} streams) for $videoId");
+            return StreamProvider(
+              playable: true,
+              statusMSG: "OK",
+              audioFormats: formats,
+            );
+          }
+        } catch (e) {
+          printINFO("YouTube watchPage deciphering fallback failed for $videoId: $e");
         }
-      } catch (e) {
-        printINFO("YouTube watchPage deciphering fallback failed for $videoId: $e");
       }
 
-      throw lastError ??
-          VideoUnavailableException(
-              _isGerman
-                  ? 'YouTube sperrt diesen Stream mit HTTP 403'
-                  : 'YouTube blocks this stream with HTTP 403');
+      // If all clients failed: trigger immediate outage sync and report user-specified message
+      YoutubeClientSync.instance.onYouTubeTotalOutage();
+      final allBlockedMsg = _isGerman
+          ? "YouTube blockiert gerade alle Clients"
+          : "YouTube is currently blocking all clients";
+      return StreamProvider(
+        playable: false,
+        statusMSG: allBlockedMsg,
+      );
     } catch (e, stack) {
       printERROR("StreamProvider.fetch YouTube error for $videoId: $e (Type: ${e.runtimeType})\n$stack");
 

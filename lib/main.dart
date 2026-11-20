@@ -28,6 +28,7 @@ import 'utils/system_tray.dart';
 import 'utils/update_check_flag_file.dart';
 import 'services/playlist_repair_service.dart';
 import 'services/device_music_service.dart';
+import 'services/youtube_client_sync.dart';
 import 'utils/helper.dart';
 
 Future<void> main() async {
@@ -86,6 +87,11 @@ Future<void> main() async {
       await DeviceMusicService.instance.scanDeviceSongs();
     } catch (e) {
       debugPrint('Device music scan on launch: $e');
+    }
+    try {
+      await YoutubeClientSync.instance.initAndSyncOnLaunch();
+    } catch (e) {
+      debugPrint('YoutubeClientSync on launch: $e');
     }
   });
 }

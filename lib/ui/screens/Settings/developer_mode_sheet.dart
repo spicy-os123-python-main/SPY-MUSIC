@@ -7,6 +7,7 @@ import '../../../services/app_secrets.dart';
 import '../../../services/data_usage_tracker.dart';
 import '../../../services/love_mode_service.dart';
 import '../../../services/music_service.dart';
+import '../../../services/youtube_client_sync.dart';
 import '../../widgets/snackbar.dart';
 import 'settings_screen_controller.dart';
 
@@ -876,6 +877,28 @@ class DeveloperModeSheet extends StatelessWidget {
                           ),
                           const Divider(height: 16),
 
+                          // YouTube Client Sync Status Button
+                          _buildActionButton(
+                            context,
+                            icon: Icons.sync_rounded,
+                            label: "Client-Sync",
+                            subtitle: YoutubeClientSync.instance.statusDescription,
+                            color: Colors.cyanAccent,
+                            onTap: () async {
+                              await YoutubeClientSync.instance.sync(force: true);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  snackbar(
+                                    context,
+                                    "Client-Sync: ${YoutubeClientSync.instance.statusDescription}",
+                                    size: SanckBarSize.BIG,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                          const Divider(height: 16),
+
                           // Copy Error Logs Button
                           _buildActionButton(
                             context,
@@ -1112,6 +1135,8 @@ Source: ${tracker.lastTrackSource.value}
 Disk Cache:
 - Images: ${tracker.diskImageCacheMb.value.toStringAsFixed(1)} MB
 - Audio: ${tracker.diskAudioCacheMb.value.toStringAsFixed(1)} MB
+
+YouTube Client Sync: ${YoutubeClientSync.instance.statusDescription}
 =======================================
 """;
   }
