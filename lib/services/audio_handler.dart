@@ -825,21 +825,20 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
   }
 
   /// Builds required mobile client User-Agent headers for googlevideo.com streams.
+  /// Strictly uses a single 'User-Agent' key so just_audio's Android plugin sets
+  /// the player's User-Agent cleanly without leaving duplicate lower-case headers
+  /// in defaultRequestProperties which triggers HTTP 400/403 blocks on googlevideo CDN.
   static Map<String, String>? buildStreamHeaders(String url) {
     if (url.contains('c=IOS')) {
       return const {
         'User-Agent':
-            'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
-        'user-agent':
             'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
       };
     }
     if (url.contains('googlevideo.com') || url.contains('c=ANDROID')) {
       return const {
         'User-Agent':
-            'com.google.android.youtube/20.10.38 (Linux; U; Android 11)',
-        'user-agent':
-            'com.google.android.youtube/20.10.38 (Linux; U; Android 11)',
+            'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
       };
     }
     return null;
@@ -1442,46 +1441,80 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             }
 
             bool streamLoaded = false;
-            // 1. Retry with fallback stream format (e.g. Opus 251 or ratebypass 18)
-            final fallback = streamInfo.getFallbackFor(streamInfo.audio);
-            if (fallback != null && fallback.url != streamAudioUrl) {
-              printINFO(
-                  "Primary audio failed with $loadErr, switching to fallback stream (${fallback.itag}) for ${currentSong.id}");
-              final fallbackSong = playableSong.copyWith(extras: {
-                ...Map<String, dynamic>.from(playableSong.extras ?? {}),
-                'url': fallback.url,
-                'size': fallback.size,
-                'codec': fallback.audioCodec.name,
-              });
-              currentSongUrl = fallback.url;
-              if (currentIndex < queue.value.length) {
-                queue.value[currentIndex] = fallbackSong;
-              }
-              mediaItem.add(fallbackSong);
-              DataUsageTracker.instance.recordAudioStream(
-                title: fallbackSong.title,
-                artist: fallbackSong.artist ?? '',
-                itag: fallback.itag,
-                codec: fallback.audioCodec.name,
-                bitrate: fallback.bitrate,
-                sizeBytes: fallback.size,
-                durationSeconds: fallbackSong.duration?.inSeconds ?? 0,
-                source: fallback.url.contains('googlevideo.com')
-                    ? ((fallback.itag == 18 || fallback.itag == 22)
-                        ? 'YouTube (Muxed Fallback)'
-                        : 'YouTube (Pure Audio)')
-                    : 'Direct Audio',
-                isCached: false,
-              );
+
+            // 0. Immediate retry without custom headers (if custom UA triggered 400/403 on this CDN node)
+            if (streamAudioUrl.contains('googlevideo.com')) {
               try {
+                printINFO("Retrying YouTube stream without custom headers for ${currentSong.id}...");
+                final cleanSource = AudioSource.uri(
+                  Uri.parse(streamAudioUrl),
+                  tag: playableSong,
+                );
                 await _player.setAudioSource(
-                  _createAudioSource(fallbackSong),
+                  cleanSource,
                   initialPosition: startPos,
                 ).timeout(const Duration(seconds: 10));
                 streamLoaded = true;
-              } catch (fallbackErr) {
-                if (_isInterruptionOrCancellation(fallbackErr, reqId)) return;
-                printINFO("Fallback stream (${fallback.itag}) also failed: $fallbackErr");
+              } catch (cleanErr) {
+                if (_isInterruptionOrCancellation(cleanErr, reqId)) return;
+                printINFO("Clean headers retry also failed: $cleanErr");
+              }
+            }
+
+            // 1. Retry with fallback stream format (e.g. Opus 251 or ratebypass 18)
+            if (!streamLoaded) {
+              final fallback = streamInfo.getFallbackFor(streamInfo.audio);
+              if (fallback != null && fallback.url != streamAudioUrl) {
+                printINFO(
+                    "Primary audio failed with $loadErr, switching to fallback stream (${fallback.itag}) for ${currentSong.id}");
+                final fallbackSong = playableSong.copyWith(extras: {
+                  ...Map<String, dynamic>.from(playableSong.extras ?? {}),
+                  'url': fallback.url,
+                  'size': fallback.size,
+                  'codec': fallback.audioCodec.name,
+                });
+                currentSongUrl = fallback.url;
+                if (currentIndex < queue.value.length) {
+                  queue.value[currentIndex] = fallbackSong;
+                }
+                mediaItem.add(fallbackSong);
+                DataUsageTracker.instance.recordAudioStream(
+                  title: fallbackSong.title,
+                  artist: fallbackSong.artist ?? '',
+                  itag: fallback.itag,
+                  codec: fallback.audioCodec.name,
+                  bitrate: fallback.bitrate,
+                  sizeBytes: fallback.size,
+                  durationSeconds: fallbackSong.duration?.inSeconds ?? 0,
+                  source: fallback.url.contains('googlevideo.com')
+                      ? ((fallback.itag == 18 || fallback.itag == 22)
+                          ? 'YouTube (Muxed Fallback)'
+                          : 'YouTube (Pure Audio)')
+                      : 'Direct Audio',
+                  isCached: false,
+                );
+                try {
+                  await _player.setAudioSource(
+                    _createAudioSource(fallbackSong),
+                    initialPosition: startPos,
+                  ).timeout(const Duration(seconds: 10));
+                  streamLoaded = true;
+                } catch (fallbackErr) {
+                  if (_isInterruptionOrCancellation(fallbackErr, reqId)) return;
+                  printINFO("Fallback stream (${fallback.itag}) also failed: $fallbackErr");
+                  // Also try fallback without headers
+                  try {
+                    final cleanFallbackSource = AudioSource.uri(
+                      Uri.parse(fallback.url),
+                      tag: fallbackSong,
+                    );
+                    await _player.setAudioSource(
+                      cleanFallbackSource,
+                      initialPosition: startPos,
+                    ).timeout(const Duration(seconds: 8));
+                    streamLoaded = true;
+                  } catch (_) {}
+                }
               }
             }
 
@@ -1507,11 +1540,24 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                     queue.value[currentIndex] = freshSong;
                   }
                   mediaItem.add(freshSong);
-                  await _player.setAudioSource(
-                    _createAudioSource(freshSong),
-                    initialPosition: startPos,
-                  ).timeout(const Duration(seconds: 10));
-                  streamLoaded = true;
+                  try {
+                    await _player.setAudioSource(
+                      _createAudioSource(freshSong),
+                      initialPosition: startPos,
+                    ).timeout(const Duration(seconds: 10));
+                    streamLoaded = true;
+                  } catch (freshHdrErr) {
+                    if (_isInterruptionOrCancellation(freshHdrErr, reqId)) return;
+                    final cleanFreshSource = AudioSource.uri(
+                      Uri.parse(freshAudio.url),
+                      tag: freshSong,
+                    );
+                    await _player.setAudioSource(
+                      cleanFreshSource,
+                      initialPosition: startPos,
+                    ).timeout(const Duration(seconds: 8));
+                    streamLoaded = true;
+                  }
                 }
               } catch (freshErr) {
                 if (_isInterruptionOrCancellation(freshErr, reqId)) return;
@@ -1830,44 +1876,78 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             }
 
             bool streamLoaded = false;
-            // 1. Retry with fallback stream format (e.g. Opus 251 or ratebypass 18)
-            final fallback = streamInfo.getFallbackFor(streamInfo.audio);
-            if (fallback != null && fallback.url != currentSongUrl) {
-              printINFO(
-                  "Primary audio failed with $loadErr, switching to fallback stream (${fallback.itag}) for ${currMed.id}");
-              final fallbackSong = playableSong.copyWith(extras: {
-                ...Map<String, dynamic>.from(playableSong.extras ?? {}),
-                'url': fallback.url,
-                'size': fallback.size,
-                'codec': fallback.audioCodec.name,
-              });
-              currentSongUrl = fallback.url;
-              queue.add([fallbackSong]);
-              mediaItem.add(fallbackSong);
-              DataUsageTracker.instance.recordAudioStream(
-                title: fallbackSong.title,
-                artist: fallbackSong.artist ?? '',
-                itag: fallback.itag,
-                codec: fallback.audioCodec.name,
-                bitrate: fallback.bitrate,
-                sizeBytes: fallback.size,
-                durationSeconds: fallbackSong.duration?.inSeconds ?? 0,
-                source: fallback.url.contains('googlevideo.com')
-                    ? ((fallback.itag == 18 || fallback.itag == 22)
-                        ? 'YouTube (Muxed Fallback)'
-                        : 'YouTube (Pure Audio)')
-                    : 'Direct Audio',
-                isCached: false,
-              );
+
+            // 0. Immediate retry without custom headers (if custom UA triggered 400/403 on this CDN node)
+            if (currentSongUrl != null && currentSongUrl!.contains('googlevideo.com')) {
               try {
+                printINFO("Retrying YouTube stream without custom headers for ${currMed.id}...");
+                final cleanSource = AudioSource.uri(
+                  Uri.parse(currentSongUrl!),
+                  tag: playableSong,
+                );
                 await _player.setAudioSource(
-                  _createAudioSource(fallbackSong),
+                  cleanSource,
                   initialPosition: Duration.zero,
                 ).timeout(const Duration(seconds: 10));
                 streamLoaded = true;
-              } catch (fallbackErr) {
-                if (_isInterruptionOrCancellation(fallbackErr, reqId)) return;
-                printINFO("Fallback stream (${fallback.itag}) also failed: $fallbackErr");
+              } catch (cleanErr) {
+                if (_isInterruptionOrCancellation(cleanErr, reqId)) return;
+                printINFO("Clean headers retry also failed: $cleanErr");
+              }
+            }
+
+            // 1. Retry with fallback stream format (e.g. Opus 251 or ratebypass 18)
+            if (!streamLoaded) {
+              final fallback = streamInfo.getFallbackFor(streamInfo.audio);
+              if (fallback != null && fallback.url != currentSongUrl) {
+                printINFO(
+                    "Primary audio failed with $loadErr, switching to fallback stream (${fallback.itag}) for ${currMed.id}");
+                final fallbackSong = playableSong.copyWith(extras: {
+                  ...Map<String, dynamic>.from(playableSong.extras ?? {}),
+                  'url': fallback.url,
+                  'size': fallback.size,
+                  'codec': fallback.audioCodec.name,
+                });
+                currentSongUrl = fallback.url;
+                queue.add([fallbackSong]);
+                mediaItem.add(fallbackSong);
+                DataUsageTracker.instance.recordAudioStream(
+                  title: fallbackSong.title,
+                  artist: fallbackSong.artist ?? '',
+                  itag: fallback.itag,
+                  codec: fallback.audioCodec.name,
+                  bitrate: fallback.bitrate,
+                  sizeBytes: fallback.size,
+                  durationSeconds: fallbackSong.duration?.inSeconds ?? 0,
+                  source: fallback.url.contains('googlevideo.com')
+                      ? ((fallback.itag == 18 || fallback.itag == 22)
+                          ? 'YouTube (Muxed Fallback)'
+                          : 'YouTube (Pure Audio)')
+                      : 'Direct Audio',
+                  isCached: false,
+                );
+                try {
+                  await _player.setAudioSource(
+                    _createAudioSource(fallbackSong),
+                    initialPosition: Duration.zero,
+                  ).timeout(const Duration(seconds: 10));
+                  streamLoaded = true;
+                } catch (fallbackErr) {
+                  if (_isInterruptionOrCancellation(fallbackErr, reqId)) return;
+                  printINFO("Fallback stream (${fallback.itag}) also failed: $fallbackErr");
+                  // Also try fallback without headers
+                  try {
+                    final cleanFallbackSource = AudioSource.uri(
+                      Uri.parse(fallback.url),
+                      tag: fallbackSong,
+                    );
+                    await _player.setAudioSource(
+                      cleanFallbackSource,
+                      initialPosition: Duration.zero,
+                    ).timeout(const Duration(seconds: 8));
+                    streamLoaded = true;
+                  } catch (_) {}
+                }
               }
             }
 
@@ -1891,11 +1971,24 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
                   currentSongUrl = freshAudio.url;
                   queue.add([freshSong]);
                   mediaItem.add(freshSong);
-                  await _player.setAudioSource(
-                    _createAudioSource(freshSong),
-                    initialPosition: Duration.zero,
-                  ).timeout(const Duration(seconds: 10));
-                  streamLoaded = true;
+                  try {
+                    await _player.setAudioSource(
+                      _createAudioSource(freshSong),
+                      initialPosition: Duration.zero,
+                    ).timeout(const Duration(seconds: 10));
+                    streamLoaded = true;
+                  } catch (freshHdrErr) {
+                    if (_isInterruptionOrCancellation(freshHdrErr, reqId)) return;
+                    final cleanFreshSource = AudioSource.uri(
+                      Uri.parse(freshAudio.url),
+                      tag: freshSong,
+                    );
+                    await _player.setAudioSource(
+                      cleanFreshSource,
+                      initialPosition: Duration.zero,
+                    ).timeout(const Duration(seconds: 8));
+                    streamLoaded = true;
+                  }
                 }
               } catch (freshErr) {
                 if (_isInterruptionOrCancellation(freshErr, reqId)) return;
@@ -2943,7 +3036,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
         final cleanSongId =
             songId.startsWith("MPED") ? songId.substring(4) : songId;
         final providerRes = await StreamProvider.fetch(cleanSongId)
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 25));
         streamInfoJson = providerRes.hmStreamingData;
       } catch (e) {
         printERROR("YouTube stream lookup failed for $songId: $e");

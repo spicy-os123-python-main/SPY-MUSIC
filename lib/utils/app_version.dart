@@ -2,8 +2,8 @@
 /// Keeps the application version synchronized and prevents stale version lookups.
 class AppVersion {
   /// The compiled application version (matches pubspec.yaml)
-  static const String current = "v1.12.106";
-  static const int buildNumber = 3112;
+  static const String current = "v1.12.107";
+  static const int buildNumber = 3113;
 
   static String _loadedVersion = current;
 

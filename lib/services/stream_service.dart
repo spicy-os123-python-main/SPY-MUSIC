@@ -75,7 +75,7 @@ class StreamProvider {
       if (status == 403 || status == 401 || status == 404 || status == 410) {
         return false;
       }
-      return status == 200 || status == 206;
+      return status == 200 || status == 206 || (status >= 300 && status < 400);
     } catch (e) {
       // On probe timeout or transient connection error during probe, do not fail
       // a stream that getManifest already returned.
@@ -99,10 +99,9 @@ class StreamProvider {
 
       final clients = [
         ('androidSdkless', YoutubeApiClient.androidSdkless),
-        ('androidVr', YoutubeApiClient.androidVr),
-        ('android', YoutubeApiClient.android),
         ('ios', YoutubeApiClient.ios),
         ('androidMusic', YoutubeApiClient.androidMusic),
+        ('androidVr', YoutubeApiClient.androidVr),
         ('mweb', YoutubeApiClient.mweb),
       ];
 
@@ -332,6 +331,24 @@ class StreamProvider {
     final primary = highestQualityAudio;
     final primaryItag = primary?.itag;
     final primaryUrl = primary?.url;
+
+    // Cross-codec resilience: if primary is Opus, prioritize pure AAC 140/139
+    if (primary?.audioCodec == Codec.opus) {
+      final aac = audioFormats!.firstWhereOrNull((a) =>
+          a.audioCodec == Codec.mp4a &&
+          a.itag != 18 &&
+          a.itag != 22 &&
+          a.url != primaryUrl);
+      if (aac != null) return aac;
+    } else {
+      // If primary is AAC, prioritize pure Opus 250/251/249
+      final op = audioFormats!.firstWhereOrNull((a) =>
+          a.audioCodec == Codec.opus &&
+          a.itag != 18 &&
+          a.itag != 22 &&
+          a.url != primaryUrl);
+      if (op != null) return op;
+    }
 
     // Pick an alternative pure audio format with different itag/url
     final altPure = audioFormats!.firstWhereOrNull(
