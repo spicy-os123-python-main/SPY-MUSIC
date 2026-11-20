@@ -37,13 +37,20 @@ class HomeScreenController extends GetxController {
   List<MediaItem> _cachedSpotifyHits = const [];
   int _platformRequestId = 0;
   MusicSource _activeSource = MusicSource.all;
+  final availableUpdate = Rxn<Map<String, dynamic>>();
 
   @override
   onInit() {
     super.onInit();
     loadContent();
     _loadSpotifyHomeShelf();
-    if (updateCheckFlag) _checkNewVersion();
+    if (updateCheckFlag) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          _checkNewVersion();
+        });
+      });
+    }
     Future.delayed(const Duration(seconds: 4), () {
       BackupService().checkAndRunAutoBackup();
     });
@@ -385,7 +392,6 @@ class HomeScreenController extends GetxController {
   Future<void> _checkNewVersion() async {
     showVersionDialog.value =
         Hive.box("AppPrefs").get("newVersionVisibility") ?? true;
-    if (!showVersionDialog.isTrue) return;
 
     try {
       final settings = Get.find<SettingsScreenController>();
@@ -393,17 +399,25 @@ class HomeScreenController extends GetxController {
       final details =
           await checkAppUpdateDetails(currentVer: settings.currentVersion.value);
 
-      if (details['hasUpdate'] == true && Get.context != null) {
-        final dismissedVersion =
-            Hive.box("AppPrefs").get("dismissedUpdateVersion");
-        if (dismissedVersion != null &&
-            dismissedVersion.toString() == details['latest']?.toString()) {
-          return;
+      if (details['hasUpdate'] == true) {
+        availableUpdate.value = details;
+
+        if (showVersionDialog.isTrue) {
+          final dismissedVersion =
+              Hive.box("AppPrefs").get("dismissedUpdateVersion");
+          if (dismissedVersion != null &&
+              dismissedVersion.toString() == details['latest']?.toString()) {
+            return;
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (Get.context != null) {
+              showDialog(
+                context: Get.context!,
+                builder: (context) => AppUpdateDialog(updateDetails: details),
+              );
+            }
+          });
         }
-        showDialog(
-          context: Get.context!,
-          builder: (context) => AppUpdateDialog(updateDetails: details),
-        );
       }
     } catch (e) {
       printWarning("Home screen update check error: $e");

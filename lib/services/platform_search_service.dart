@@ -926,14 +926,16 @@ class PlatformSearchService {
     final bool durationEstimated = original.extras?['durationEstimated'] == true;
     int expectedDurationSec =
         durationEstimated ? 0 : (original.duration?.inSeconds ?? 0);
-    if (!durationEstimated &&
-        expectedDurationSec == 0 &&
-        original.extras != null) {
-      if (original.extras!['duration'] is int) {
-        expectedDurationSec = original.extras!['duration'] as int;
-      } else if (original.extras!['length'] != null) {
+    if (expectedDurationSec >= 43200) {
+      expectedDurationSec = 0; // Heal corrupted >12h durations
+    }
+    if (!durationEstimated && original.extras != null) {
+      if (original.extras!['length'] != null) {
         final parsed = _parseDurationString(original.extras!['length']?.toString());
-        if (parsed != null) expectedDurationSec = parsed;
+        if (parsed != null && parsed > 0 && parsed < 43200) expectedDurationSec = parsed;
+      } else if (expectedDurationSec == 0 && original.extras!['duration'] is int) {
+        final raw = original.extras!['duration'] as int;
+        if (raw > 0 && raw < 43200) expectedDurationSec = raw;
       }
     }
 
@@ -948,12 +950,16 @@ class PlatformSearchService {
       if (cTitle.isEmpty) continue;
       final cArtist = candidate.artist ?? '';
       int cDurationSec = candidate.duration?.inSeconds ?? 0;
-      if (cDurationSec == 0 && candidate.extras != null) {
-        if (candidate.extras!['duration'] is int) {
-          cDurationSec = candidate.extras!['duration'] as int;
-        } else if (candidate.extras!['length'] != null) {
+      if (cDurationSec >= 43200) {
+        cDurationSec = 0;
+      }
+      if (candidate.extras != null) {
+        if (candidate.extras!['length'] != null) {
           final parsed = _parseDurationString(candidate.extras!['length']?.toString());
-          if (parsed != null) cDurationSec = parsed;
+          if (parsed != null && parsed > 0 && parsed < 43200) cDurationSec = parsed;
+        } else if (cDurationSec == 0 && candidate.extras!['duration'] is int) {
+          final raw = candidate.extras!['duration'] as int;
+          if (raw > 0 && raw < 43200) cDurationSec = raw;
         }
       }
 

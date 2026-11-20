@@ -115,14 +115,42 @@ class MediaItemBuilder {
 
     final finalArtist = isValidArtist(artistName) ? artistName : null;
 
+    int? rawDuration;
+    if (json['duration'] != null && json['duration'] is int) {
+      rawDuration = json['duration'] as int;
+    } else if (json['duration_seconds'] != null && json['duration_seconds'] is int) {
+      rawDuration = json['duration_seconds'] as int;
+    }
+
+    final String? lengthStr = (json['length'] ?? extrasMap['length'])?.toString();
+    final Duration? lengthDuration = toDuration(lengthStr);
+
+    Duration? resolvedDuration;
+    if (lengthDuration != null && lengthDuration.inSeconds > 0) {
+      // Formatted length string (e.g. "3:45") is the most authoritative human-readable duration.
+      // If raw duration is missing, <= 0, > 24 hours, or desynced by > 30s, trust lengthDuration!
+      if (rawDuration == null ||
+          rawDuration <= 0 ||
+          rawDuration > 86400 ||
+          (rawDuration - lengthDuration.inSeconds).abs() > 30) {
+        resolvedDuration = lengthDuration;
+      } else {
+        resolvedDuration = Duration(seconds: rawDuration);
+      }
+    } else if (rawDuration != null && rawDuration > 0) {
+      if (rawDuration > 86400) {
+        // Handle millisecond values stored from older releases
+        final asSec = rawDuration ~/ 1000;
+        resolvedDuration = (asSec > 0 && asSec < 86400) ? Duration(seconds: asSec) : null;
+      } else {
+        resolvedDuration = Duration(seconds: rawDuration);
+      }
+    }
+
     return MediaItem(
       id: trackId,
       title: (json["title"] ?? "Unbekannt").toString(),
-      duration: (json['duration'] != null && json['duration'] is int)
-          ? Duration(seconds: json['duration'])
-          : (json['duration_seconds'] != null && json['duration_seconds'] is int)
-              ? Duration(seconds: json['duration_seconds'])
-              : toDuration(json['length'] ?? extrasMap['length']),
+      duration: resolvedDuration,
       album: albumName,
       artist: finalArtist,
       artUri: parsedArtUri,

@@ -748,10 +748,11 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           duration == Duration.zero ||
           duration.inSeconds == 0) return;
       final currentSong = currQueue[currentIndex];
-      // Only set duration from player if metadata did not already have a valid non-zero duration
+      // Only set duration from player if metadata did not already have a valid non-zero duration (or if corrupted >= 12h)
       if (currentSong.duration == null ||
           currentSong.duration == Duration.zero ||
-          currentSong.duration!.inSeconds == 0) {
+          currentSong.duration!.inSeconds == 0 ||
+          currentSong.duration!.inHours >= 12) {
         final newMediaItem = currentSong.copyWith(duration: duration);
         queue.value[currentIndex] = newMediaItem;
         mediaItem.add(newMediaItem);
@@ -1322,14 +1323,18 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           final queueCurrentSong = (matchingQueueIdx != -1)
               ? queue.value[matchingQueueIdx]
               : currentSong;
-          final Duration? resolvedDuration =
-              (queueCurrentSong.duration != null &&
-                      queueCurrentSong.duration!.inSeconds > 0 &&
-                      queueCurrentSong.extras?['durationEstimated'] != true)
-                  ? queueCurrentSong.duration
-                  : ((streamInfo.audio?.duration ?? 0) > 0
-                      ? Duration(milliseconds: streamInfo.audio!.duration)
-                      : queueCurrentSong.duration);
+          final bool hasReliableDuration = queueCurrentSong.duration != null &&
+              queueCurrentSong.duration!.inSeconds > 0 &&
+              queueCurrentSong.duration!.inHours < 12 &&
+              queueCurrentSong.extras?['durationEstimated'] != true;
+          final Duration? resolvedDuration = hasReliableDuration
+              ? queueCurrentSong.duration
+              : ((streamInfo.audio?.duration ?? 0) > 0
+                  ? Duration(milliseconds: streamInfo.audio!.duration)
+                  : (queueCurrentSong.duration != null &&
+                          queueCurrentSong.duration!.inHours < 12
+                      ? queueCurrentSong.duration
+                      : null));
           final streamAudioUrl = streamInfo.audio?.url ?? '';
           currentSongUrl = streamAudioUrl;
           final updatedExtras =
@@ -1701,14 +1706,18 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
           final effectiveSong =
               (mediaItem.value?.id == currMed.id ? mediaItem.value : null) ??
                   currMed;
-          final Duration? resolvedDuration =
-              (effectiveSong.duration != null &&
-                      effectiveSong.duration!.inSeconds > 0 &&
-                      effectiveSong.extras?['durationEstimated'] != true)
-                  ? effectiveSong.duration
-                  : ((streamInfo.audio?.duration ?? 0) > 0
-                      ? Duration(milliseconds: streamInfo.audio!.duration)
-                      : effectiveSong.duration);
+          final bool hasReliableDuration = effectiveSong.duration != null &&
+              effectiveSong.duration!.inSeconds > 0 &&
+              effectiveSong.duration!.inHours < 12 &&
+              effectiveSong.extras?['durationEstimated'] != true;
+          final Duration? resolvedDuration = hasReliableDuration
+              ? effectiveSong.duration
+              : ((streamInfo.audio?.duration ?? 0) > 0
+                  ? Duration(milliseconds: streamInfo.audio!.duration)
+                  : (effectiveSong.duration != null &&
+                          effectiveSong.duration!.inHours < 12
+                      ? effectiveSong.duration
+                      : null));
           final updatedExtras =
               Map<String, dynamic>.from(effectiveSong.extras ?? {});
           updatedExtras['url'] = currentSongUrl;
@@ -2643,6 +2652,7 @@ class MyAudioHandler extends BaseAudioHandler with GetxServiceMixin {
             final bool targetHasReliableDuration =
                 targetSong?.duration != null &&
                     targetSong!.duration!.inSeconds > 0 &&
+                    targetSong.duration!.inHours < 12 &&
                     targetSong.extras?['durationEstimated'] != true;
             final int fullDurationMs = targetHasReliableDuration
                 ? targetSong.duration!.inMilliseconds

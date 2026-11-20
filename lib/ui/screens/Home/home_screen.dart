@@ -18,6 +18,7 @@ import '../../widgets/daily_mixes_widget.dart';
 import 'home_screen_controller.dart';
 import '../../widgets/platform_selector_widget.dart';
 import '../../widgets/spy_music_header_widget.dart';
+import '../../widgets/update_banner_widget.dart';
 import '../../widgets/watchtime_home_widget.dart';
 import '../../themes/components/themed_stagger.dart';
 import '../Settings/settings_screen.dart';
@@ -205,6 +206,7 @@ class Body extends StatelessWidget {
                         }
                         final items = [
                           const SpyMusicHeaderWidget(),
+                          const UpdateBannerWidget(),
                           const PlatformSelectorWidget(),
                           const WatchtimeHomeWidget(),
                           const DailyMixesWidget(),

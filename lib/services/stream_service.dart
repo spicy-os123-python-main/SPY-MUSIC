@@ -87,12 +87,12 @@ class StreamProvider {
         printINFO("YouTube fast manifest failed for $videoId: $e");
       }
 
-      // 2. Secondary fallback: iOS client alone (isolated client fallback)
+      // 2. Secondary fallback: Android client standalone (reliable 6 pure audio streams, no PO Token/cipher blocks)
       try {
         final res = await yt.videos.streamsClient
             .getManifest(
               videoId,
-              ytClients: [YoutubeApiClient.ios],
+              ytClients: [YoutubeApiClient.android],
               requireWatchPage: false,
             )
             .timeout(const Duration(seconds: 5));
@@ -100,7 +100,7 @@ class StreamProvider {
         final formats = _extractAudioFormats(res);
         if (formats.isNotEmpty) {
           printINFO(
-              "YouTube iOS fallback successfully fetched ${formats.length} streams for $videoId");
+              "YouTube Android standalone fallback successfully fetched ${formats.length} streams for $videoId");
           return StreamProvider(
             playable: true,
             statusMSG: "OK",
@@ -109,57 +109,23 @@ class StreamProvider {
         }
       } catch (e) {
         lastError = e;
-        printINFO("YouTube iOS fallback failed for $videoId: $e");
+        printINFO("YouTube Android fallback failed for $videoId: $e");
       }
 
-      // 3. Tertiary fallback: Android / AndroidMusic / AndroidVR client fallback
+      // 3. Tertiary fallback: androidSdkless with watchpage deciphering (for VEVO / age-restricted / signature cipher)
       try {
         final res = await yt.videos.streamsClient
             .getManifest(
               videoId,
-              ytClients: [
-                YoutubeApiClient.android,
-                YoutubeApiClient.androidMusic,
-                YoutubeApiClient.androidVr,
-              ],
-              requireWatchPage: false,
-            )
-            .timeout(const Duration(seconds: 5));
-
-        final formats = _extractAudioFormats(res);
-        if (formats.isNotEmpty) {
-          printINFO(
-              "YouTube Android/Music fallback successfully fetched ${formats.length} streams for $videoId");
-          return StreamProvider(
-            playable: true,
-            statusMSG: "OK",
-            audioFormats: formats,
-          );
-        }
-      } catch (e) {
-        lastError = e;
-        printINFO("YouTube Android/Music fallback failed for $videoId: $e");
-      }
-
-      // 4. Quaternary fallback: watchpage deciphering (for signature cipher / VEVO / age-restricted videos)
-      try {
-        final res = await yt.videos.streamsClient
-            .getManifest(
-              videoId,
-              ytClients: [
-                YoutubeApiClient.tv,
-                YoutubeApiClient.safari,
-                YoutubeApiClient.mweb,
-                YoutubeApiClient.androidSdkless,
-              ],
+              ytClients: [YoutubeApiClient.androidSdkless],
               requireWatchPage: true,
             )
-            .timeout(const Duration(seconds: 7));
+            .timeout(const Duration(seconds: 6));
 
         final formats = _extractAudioFormats(res);
         if (formats.isNotEmpty) {
           printINFO(
-              "YouTube watchPage fallback successfully fetched ${formats.length} streams for $videoId");
+              "YouTube androidSdkless watchPage fallback successfully fetched ${formats.length} streams for $videoId");
           return StreamProvider(
             playable: true,
             statusMSG: "OK",
@@ -168,7 +134,32 @@ class StreamProvider {
         }
       } catch (e) {
         lastError = e;
-        printINFO("YouTube watchPage fallback failed for $videoId: $e");
+        printINFO("YouTube androidSdkless watchPage fallback failed for $videoId: $e");
+      }
+
+      // 4. Quaternary fallback: Android client with watchpage deciphering
+      try {
+        final res = await yt.videos.streamsClient
+            .getManifest(
+              videoId,
+              ytClients: [YoutubeApiClient.android],
+              requireWatchPage: true,
+            )
+            .timeout(const Duration(seconds: 6));
+
+        final formats = _extractAudioFormats(res);
+        if (formats.isNotEmpty) {
+          printINFO(
+              "YouTube Android watchPage fallback successfully fetched ${formats.length} streams for $videoId");
+          return StreamProvider(
+            playable: true,
+            statusMSG: "OK",
+            audioFormats: formats,
+          );
+        }
+      } catch (e) {
+        lastError = e;
+        printINFO("YouTube Android watchPage fallback failed for $videoId: $e");
       }
 
       throw lastError ??
