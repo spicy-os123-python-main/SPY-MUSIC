@@ -5,6 +5,7 @@ import 'package:audio_service/audio_service.dart' show MediaItem;
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import '../services/app_log_service.dart';
+import '../services/app_update_service.dart';
 import '../services/discord_webhook_service.dart';
 import '../ui/screens/Settings/settings_screen_controller.dart';
 import 'app_version.dart';
@@ -232,8 +233,10 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
   String body = "";
   String htmlUrl =
       "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest";
-  String downloadUrl =
+  String arm64Url =
       "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic-arm64-v8a.apk";
+  String armV7Url =
+      "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic-armeabi-v7a.apk";
   String universalUrl =
       "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic.apk";
   String ipaUrl =
@@ -259,7 +262,9 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
         final download = a['browser_download_url']?.toString();
         if (download != null) {
           if (name.contains('arm64-v8a') && name.endsWith('.apk')) {
-            downloadUrl = download;
+            arm64Url = download;
+          } else if (name.contains('armeabi-v7a') && name.endsWith('.apk')) {
+            armV7Url = download;
           } else if (name == 'spymusic.apk' ||
               (name.endsWith('.apk') && !name.contains('arm'))) {
             universalUrl = download;
@@ -309,8 +314,10 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
           latestTag = extractedTag.startsWith('v') ? extractedTag : 'v$extractedTag';
           htmlUrl =
               "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/tag/$latestTag";
-          downloadUrl =
+          arm64Url =
               "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/$latestTag/spymusic-arm64-v8a.apk";
+          armV7Url =
+              "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/$latestTag/spymusic-armeabi-v7a.apk";
           universalUrl =
               "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/$latestTag/spymusic.apk";
           ipaUrl =
@@ -338,8 +345,10 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
           latestTag = firstTag.startsWith('v') ? firstTag : 'v$firstTag';
           htmlUrl =
               "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/tag/$latestTag";
-          downloadUrl =
+          arm64Url =
               "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/$latestTag/spymusic-arm64-v8a.apk";
+          armV7Url =
+              "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/$latestTag/spymusic-armeabi-v7a.apk";
           universalUrl =
               "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/download/$latestTag/spymusic.apk";
           ipaUrl =
@@ -354,6 +363,26 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
     }
   }
 
+  // 4. Auto-detect optimal ABI for current device to eliminate Parse Errors
+  List<String> supportedAbis = [];
+  try {
+    supportedAbis = await AppUpdateService.getSupportedAbis();
+  } catch (_) {}
+
+  String recommendedUrl = universalUrl;
+  String recommendedAbi = "Universal";
+
+  if (supportedAbis.contains('arm64-v8a')) {
+    recommendedUrl = arm64Url;
+    recommendedAbi = "arm64-v8a";
+  } else if (supportedAbis.contains('armeabi-v7a')) {
+    recommendedUrl = armV7Url;
+    recommendedAbi = "armeabi-v7a";
+  } else {
+    recommendedUrl = universalUrl;
+    recommendedAbi = "Universal";
+  }
+
   final bool hasUpdate = AppVersion.isNewer(latestTag, currentVer);
 
   return {
@@ -364,10 +393,14 @@ Future<Map<String, dynamic>> checkAppUpdateDetails({String? currentVer}) async {
     'current': currentVer,
     'body': body,
     'htmlUrl': htmlUrl,
-    'downloadUrl': downloadUrl,
+    'downloadUrl': recommendedUrl,
+    'arm64Url': arm64Url,
+    'armV7Url': armV7Url,
     'universalUrl': universalUrl,
     'ipaUrl': ipaUrl,
     'updatedAt': updatedAt,
+    'deviceAbis': supportedAbis,
+    'recommendedAbi': recommendedAbi,
   };
 }
 

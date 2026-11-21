@@ -193,8 +193,8 @@ void main() {
     test('AppVersion constants are valid and non-empty', () {
       expect(AppVersion.current.startsWith('v'), isTrue);
       expect(AppVersion.buildNumber, greaterThan(3000));
-      expect(AppVersion.cleanString(AppVersion.current), '1.12.108');
-      expect(AppVersion.full, 'v1.12.108+3114');
+      expect(AppVersion.cleanString(AppVersion.current), '1.12.109');
+      expect(AppVersion.full, 'v1.12.109+3115');
     });
 
     test('AppVersion.isNewer logic handles major, minor, patch and build numbers', () {
@@ -218,7 +218,8 @@ void main() {
         expect(result['hasUpdate'], isFalse);
       }
       expect(result['downloadUrl'], isNotNull);
-      expect((result['downloadUrl'] as String).contains('spymusic-arm64-v8a.apk'), isTrue);
+      expect((result['arm64Url'] as String).contains('spymusic-arm64-v8a.apk'), isTrue);
+      expect((result['universalUrl'] as String).contains('spymusic.apk'), isTrue);
     });
   });
 }

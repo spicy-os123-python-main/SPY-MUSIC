@@ -98,8 +98,9 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
     final isSuccess = widget.updateDetails['success'] != false && widget.updateDetails['error'] == null;
     final errorMsg = widget.updateDetails['error']?.toString();
     final releaseBody = widget.updateDetails['body']?.toString() ?? '';
-    final arm64Url = widget.updateDetails['downloadUrl']?.toString() ??
-        "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic-arm64-v8a.apk";
+    final recommendedUrl = widget.updateDetails['downloadUrl']?.toString() ??
+        "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic.apk";
+    final recommendedAbi = widget.updateDetails['recommendedAbi']?.toString() ?? "Universal";
     final universalUrl = widget.updateDetails['universalUrl']?.toString() ??
         "https://github.com/spicy-os123-python-main/SPY-MUSIC/releases/latest/download/spymusic.apk";
     final htmlUrl = widget.updateDetails['htmlUrl']?.toString() ??
@@ -197,6 +198,10 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
             _buildInfoRow("installedVersion".tr, current),
             const SizedBox(height: 6),
             _buildInfoRow("latestRelease".tr, latest),
+            if (Platform.isAndroid) ...[
+              const SizedBox(height: 6),
+              _buildInfoRow("Geräte-Architektur", recommendedAbi),
+            ],
 
             if (!isSuccess && errorMsg != null) ...[
               const SizedBox(height: 10),
@@ -231,16 +236,44 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
                       _errorMessage!,
                       style: const TextStyle(color: Colors.redAccent, fontSize: 11.5),
                     ),
-                    const SizedBox(height: 6),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.redAccent),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      ),
-                      onPressed: () => AppUpdateService.openInBrowser(arm64Url),
-                      icon: const Icon(Icons.open_in_browser_rounded, size: 14),
-                      label: Text("browserDownload".tr, style: const TextStyle(fontSize: 11)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        if (_errorMessage!.contains("Unbekannte Apps") ||
+                            _errorMessage!.toLowerCase().contains("permission"))
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            ),
+                            onPressed: () => AppUpdateService.openInstallPermissionSettings(),
+                            icon: const Icon(Icons.security_rounded, size: 14),
+                            label: const Text("Einstellungen öffnen", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF00D2FF),
+                            side: const BorderSide(color: Color(0xFF00D2FF)),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          ),
+                          onPressed: () => _startInAppDownload(universalUrl),
+                          icon: const Icon(Icons.all_inclusive_rounded, size: 14),
+                          label: const Text("Universal-APK versuchen", style: TextStyle(fontSize: 11)),
+                        ),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.redAccent),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          ),
+                          onPressed: () => AppUpdateService.openInBrowser(universalUrl),
+                          icon: const Icon(Icons.open_in_browser_rounded, size: 14),
+                          label: Text("browserDownload".tr, style: const TextStyle(fontSize: 11)),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -340,7 +373,7 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
             if (hasUpdate && !_isDownloading) ...[
               const SizedBox(height: 16),
               if (Platform.isAndroid) ...[
-                // Primary: One-Click Direct In-App Download & Install
+                // Primary: One-Click Direct In-App Download & Install (optimized for this device)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -352,10 +385,12 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: () => _startInAppDownload(arm64Url),
+                    onPressed: () => _startInAppDownload(recommendedUrl),
                     icon: const Icon(Icons.install_mobile_rounded, size: 20),
                     label: Text(
-                      "directUpdateInstall".tr,
+                      recommendedAbi != "Universal"
+                          ? "${"directUpdateInstall".tr} ($recommendedAbi)"
+                          : "directUpdateInstall".tr,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13.5,
@@ -380,7 +415,7 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
                       onPressed: () => Platform.isAndroid
                           ? _startInAppDownload(universalUrl)
                           : AppUpdateService.openInBrowser(universalUrl),
-                      icon: const Icon(Icons.download_rounded, size: 16),
+                      icon: const Icon(Icons.all_inclusive_rounded, size: 16),
                       label: const Text(
                         "Universal APK",
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
@@ -398,7 +433,7 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      onPressed: () => AppUpdateService.openInBrowser(arm64Url),
+                      onPressed: () => AppUpdateService.openInBrowser(recommendedUrl),
                       icon: const Icon(Icons.open_in_browser_rounded, size: 16),
                       label: Text(
                         "browserDownload".tr,
