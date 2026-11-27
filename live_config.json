@@ -1,0 +1,10 @@
+{
+  "configVersion": 1,
+  "season": "winter",
+  "winterUpdateEnabled": true,
+  "santaHatEnabled": true,
+  "snowEnabled": true,
+  "minSplashMs": 3200,
+  "bannerText": ""
+}
+
